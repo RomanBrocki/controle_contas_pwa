@@ -77,13 +77,45 @@ body, #root { background: var(--bg); color: var(--text); }
 .btn.ghost { background:transparent; border:1px solid var(--border); color:var(--text); }
 .btn.danger { background:var(--danger); color:#0a0a0a; }
 .badge { background:var(--chip); color:var(--muted); border-radius:9999px; padding:4px 8px; font-size:12px; }
-.overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; }
-.modal { background:rgba(20,25,35,.9); border-radius:20px; border:1px solid var(--border); padding:24px; backdrop-filter:blur(8px); animation: pop-in .18s ease; }
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: #000 !important;     /* opaco de verdade */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2147483647 !important;   /* garante que fica acima de tudo */
+}
+
+/* Base opaca (sem vidro) */
+.modal {
+  background: var(--surface);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  padding: 24px;
+  animation: pop-in .18s ease;
+}
+/* Vidro (use .modal.glass onde quiser translucidez) */
+.modal.glass {
+  background: rgba(20,25,35,.9);
+  backdrop-filter: blur(8px);
+}
+.theme-light .modal.glass {
+  background: rgba(255,255,255,.95);
+}
+
+/* Opaco explícito (use .modal.solid para forçar) */
+.modal.solid {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  backdrop-filter: none !important;
+  opacity: 1 !important;
+}
+
 input.input, select.select { background: #0c0f14; color: var(--text); border:1px solid var(--border); border-radius:12px; padding:10px 12px; }
 /* Ajustes de campo no tema claro para contraste adequado */
 .theme-light input.input, .theme-light select.select { background: #ffffff; color: #0b1220; border-color: #d7e0ea; }
-.theme-light .modal { background: rgba(255,255,255,.95); color:#0b1220; }
-.theme-light .overlay { background: rgba(0,0,0,.35); }
+.theme-light .modal { background: #fff !important; color:#0b1220; }
 
 /* Brand */
 .brand { font-size: 2.125rem; font-weight: 800; letter-spacing:.5px; background: linear-gradient(90deg, var(--primary), var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 24px rgba(34,211,238,.25); }
@@ -109,7 +141,6 @@ html { background: var(--bg); }
     padding: 16px;
     overflow: auto;
   }
-  .overlay { background: rgba(0,0,0,.45); }
   .brand { font-size: clamp(1.5rem, 6vw, 2rem); }
 }
 
@@ -121,6 +152,77 @@ html { background: var(--bg); }
 /* toques mais confortáveis em qualquer tela */
 .btn { min-height: 40px; }
 .input, .select { min-height: 40px; }
+
+/* Centraliza o grid principal e limita largura */
+main.grid { max-width: 72rem; margin-inline: auto; }
+
+/* Evita título “espremido” no modal e melhora respiro */
+.modal h2 { margin: 0 0 12px; line-height: 1.2; }
+
+/* Garante que o conteúdo do modal role e o rodapé fique visível */
+.modal { display: flex; flex-direction: column; }
+.modal .content { flex: 1 1 auto; overflow: auto; }
+.modal .footer { margin-top: 12px; }
+
+/* Botões de ação sempre “tocáveis” */
+.modal .footer .btn { min-height: 40px; }
+
+/* Extra: espaço no fundo para não “sumir” botão em telas pequenas */
+@media (max-width: 767.98px) {
+  .modal { padding-bottom: 16px; }
+}
+
+/* ===== Sub-bloco de seleção de mês/ano (reutilizável) ===== */
+.subpick {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  margin-top: 6px;
+}
+.subpick h3 {
+  text-align: center;
+  font-weight: 600;
+  margin: 0 0 10px 0;
+  letter-spacing: .2px;
+}
+.subpick .row {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* ano | mês lado a lado também no mobile */
+  gap: 8px;
+}
+.subpick .cell { display: flex; align-items: center; gap: 6px; }
+.subpick label { font-size: .9rem; opacity: .75; white-space: nowrap; }
+
+/* === Modal "Contas Pendentes" totalmente opaco === */
+.modal.solid {
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
+  opacity: 1 !important;
+  backdrop-filter: none !important;
+  box-shadow: 0 0 24px rgba(0,0,0,0.4); /* leve destaque para não "fundir" com o fundo */
+}
+
+/* Tema claro: fundo branco real, sem alpha */
+body.theme-light .modal.solid {
+  background-color: #ffffff !important;
+}
+
+/* Tema synth: leve brilho ciano */
+body.theme-synth .modal.solid {
+  background-color: #101a1f !important;
+  box-shadow: 0 0 24px rgba(45,212,191,.25);
+}
+
+/* Tema gunmetal: fundo uniforme, mais contraste */
+body.theme-gunmetal .modal.solid {
+  background-color: #141923 !important;
+}
+
+/* Overlay mais escura/sem transparência visível para o lembrete */
+.overlay.hard { background: rgba(0,0,0,0.88) !important; }
+
+
 
 `}</style>
       );
@@ -234,25 +336,25 @@ html { background: var(--bg); }
         <div className={`theme-${theme} min-h-screen relative p-4 md:p-6`}>
           <div className="mx-auto w-full max-w-5xl">
           {/* Header */}
-          <header className="flex justify-between items-center mb-6">
-            <h1 className="brand">💸 Controle de Contas</h1>
-            <div className="flex gap-2 items-center">
-              <button className={`btn primary ${activeId==='new' ? 'pop' : ''}`} onClick={()=>openNew()}>+ Nova Conta</button>
-              <button className="btn ghost" onClick={()=>{ setReportsTab('home'); setShowReports(true); }}>📊 Relatórios</button>
-              <select className="btn ghost" value={theme} onChange={e=>setTheme(e.target.value)}>
+          <header className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center mb-6">
+            <h1 className="brand text-center md:text-left w-full">💸 Controle de Contas</h1>
+            <div className="flex flex-col gap-2 w-full sm:grid sm:grid-cols-2 md:flex md:flex-row md:items-center">
+              <button className={`btn primary w-full md:w-auto ${activeId==='new' ? 'pop' : ''}`} onClick={()=>openNew()}>+ Nova Conta</button>
+              <button className="btn ghost w-full md:w-auto" onClick={()=>{ setReportsTab('home'); setShowReports(true); }}>📊 Relatórios</button>
+              <select className="btn ghost w-full md:w-auto" value={theme} onChange={e=>setTheme(e.target.value)}>
                 <option value="gunmetal">Gunmetal Neon</option>
                 <option value="synth">Synthwave Teal</option>
                 <option value="light">Claro Metálico</option>
               </select>
             </div>
           </header>
-        </div>{/* /max-w wrapper */}
+        
 
           {/* Overlay pós-login */}
           {showOverlay && (
-            <div className="overlay" onClick={()=>setShowOverlay(false)}>
-              <div className="modal max-w-md w-full" onClick={(e)=>e.stopPropagation()}>
-                <h2 className="text-lg font-semibold mb-3">Contas pendentes do mês anterior</h2>
+            <div className="overlay hard" onClick={()=>setShowOverlay(false)}>
+              <div className="modal solid max-w-md w-full" onClick={(e)=>e.stopPropagation()}>
+                <h2 className="text-lg font-semibold mb-3">💰 Contas Pendentes</h2>
                 <ul className="space-y-2 mb-4">
                   <li className="card flex justify-between items-center">
                     <div>
@@ -319,6 +421,7 @@ html { background: var(--bg); }
               contasDistinct={Array.from(new Set(itens.map(i=> i.nome)))}
             />
           )}
+          </div>{/* /max-w wrapper */}
         </div>
       );
     }
@@ -467,6 +570,36 @@ html { background: var(--bg); }
         </div>
       );
     }
+    function MonthPickerBlock({
+      title,
+      year, setYear,
+      month, setMonth,
+      years,
+      monthOptions,
+      idPrefix
+    }) {
+      return (
+        <div className="subpick">
+          <h3>{title}</h3>
+          <div className="row">
+            <div className="cell">
+              <label htmlFor={`${idPrefix}-ano`}>Ano</label>
+              <select id={`${idPrefix}-ano`} className="select"
+                      value={year} onChange={e=>setYear(Number(e.target.value))}>
+                {years.map(y=> <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <div className="cell" style={{justifyContent:'flex-end'}}>
+              <label htmlFor={`${idPrefix}-mes`}>Mês</label>
+              <select id={`${idPrefix}-mes`} className="select"
+                      value={month} onChange={e=>setMonth(Number(e.target.value))}>
+                {monthOptions(year)}
+              </select>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     function ReportsModal({ tab, onChangeTab, onClose, years, monthsByYear, currentYear, currentMonth, contasDistinct }){
       // Estados sincronizados com a tela principal ao abrir
@@ -517,7 +650,8 @@ html { background: var(--bg); }
 
       return (
         <div className="overlay" onClick={onClose}>
-          <div className={`modal ${tab==='home' ? 'max-w-md' : 'max-w-3xl'} w-full pop`} onClick={e=>e.stopPropagation()}>
+          <div className={`modal glass ${tab==='home' ? 'max-w-md' : 'max-w-3xl'} w-full pop`} onClick={e=>e.stopPropagation()}>
+
             {/* Header */}
             <div className="flex items-center gap-3 mb-3">
               <h3 className="text-lg font-semibold">Relatórios</h3>
@@ -537,85 +671,127 @@ html { background: var(--bg); }
 
             {/* MENSAL */}
             {tab==='mensal' && (
-              <div className="grid gap-3">
-                <div className="flex gap-2 items-center">
-                  <label className="text-sm opacity-70">Ano</label>
-                  <select className="select" value={mensalYear} onChange={e=>setMensalYear(Number(e.target.value))}>
-                    {years.map(y=> <option key={y} value={y}>{y}</option>)}
-                  </select>
-                  <label className="text-sm opacity-70">Mês</label>
-                  <select className="select" value={mensalMonth} onChange={e=>setMensalMonth(Number(e.target.value))}>
-                    {monthOptions(mensalYear)}
-                  </select>
-                  <div className="ml-auto flex gap-2">
-                    <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
-                    <button className="btn primary">Gerar PDF</button>
+              <>
+                <div className="content">
+                  <MonthPickerBlock
+                    title="Selecione o mês"
+                    year={mensalYear} setYear={setMensalYear}
+                    month={mensalMonth} setMonth={setMensalMonth}
+                    years={years}
+                    monthOptions={monthOptions}
+                    idPrefix="mensal"
+                  />
+                  <div className="text-sm opacity-70" style={{marginTop:12}}>
+                    Gera: Pizza do mês + Resumo por pessoa + Balanço divididas + Listagem com links.
                   </div>
                 </div>
-                <div className="text-sm opacity-70">Gera: Pizza do mês + Resumo por pessoa + Balanço divididas + Listagem com links.</div>
-              </div>
+                <div className="footer flex gap-2 justify-end">
+                  <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
+                  <button className="btn primary">Gerar PDF</button>
+                </div>
+              </>
             )}
+
 
             {/* PERÍODO */}
             {tab==='periodo' && (
-              <div className="grid gap-3">
-                <div className="flex flex-wrap gap-2 items-center">
-                  <label className="text-sm opacity-70">De</label>
-                  <select className="select" value={pStartYear} onChange={e=>setPStartYear(Number(e.target.value))}>{years.map(y=> <option key={y} value={y}>{y}</option>)}</select>
-                  <select className="select" value={pStartMonth} onChange={e=>setPStartMonth(Number(e.target.value))}>{monthOptions(pStartYear)}</select>
-                  <label className="text-sm opacity-70">Até</label>
-                  <select className="select" value={pEndYear} onChange={e=>setPEndYear(Number(e.target.value))}>{years.map(y=> <option key={y} value={y}>{y}</option>)}</select>
-                  <select className="select" value={pEndMonth} onChange={e=>setPEndMonth(Number(e.target.value))}>{monthOptions(pEndYear)}</select>
-                  <div className="ml-auto flex gap-2">
-                    <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
-                    <button className="btn primary">Gerar PDF</button>
+              <>
+                <div className="content">
+                  <MonthPickerBlock
+                    title="Selecione início"
+                    year={pStartYear} setYear={setPStartYear}
+                    month={pStartMonth} setMonth={setPStartMonth}
+                    years={years}
+                    monthOptions={monthOptions}
+                    idPrefix="periodo-inicio"
+                  />
+                  <MonthPickerBlock
+                    title="Selecione final"
+                    year={pEndYear} setYear={setPEndYear}
+                    month={pEndMonth} setMonth={setPEndMonth}
+                    years={years}
+                    monthOptions={monthOptions}
+                    idPrefix="periodo-fim"
+                  />
+                  <div className="text-sm opacity-70" style={{marginTop:12}}>
+                    Consolidado do período.
                   </div>
                 </div>
-                <div className="text-sm opacity-70">Consolidado do período.</div>
-              </div>
+                <div className="footer flex gap-2 justify-end">
+                  <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
+                  <button className="btn primary">Gerar PDF</button>
+                </div>
+              </>
             )}
+
 
             {/* COMPARATIVOS */}
             {tab==='comparativos' && (
-              <div className="grid gap-4">
-                <div className="card" style={{background:'transparent', border:'1px dashed var(--border)'}}>
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <label className="text-sm opacity-70">Alcance</label>
-                    <select className="select" value={cmpRange} onChange={e=>setCmpRange(e.target.value)}>
-                      <option value="mes">Mês único</option>
-                      <option value="periodo">Período</option>
-                    </select>
-                    {cmpRange==='mes' ? (
-                      <>
-                        <label className="text-sm opacity-70">Ano</label>
-                        <select className="select" value={cmpYear} onChange={e=>setCmpYear(Number(e.target.value))}>{years.map(y=> <option key={y} value={y}>{y}</option>)}</select>
-                        <label className="text-sm opacity-70">Mês</label>
-                        <select className="select" value={cmpMonth} onChange={e=>setCmpMonth(Number(e.target.value))}>{monthOptions(cmpYear)}</select>
-                      </>
-                    ) : (
-                      <>
-                        <label className="text-sm opacity-70">De</label>
-                        <select className="select" value={cmpStartYear} onChange={e=>setCmpStartYear(Number(e.target.value))}>{years.map(y=> <option key={y} value={y}>{y}</option>)}</select>
-                        <select className="select" value={cmpStartMonth} onChange={e=>setCmpStartMonth(Number(e.target.value))}>{monthOptions(cmpStartYear)}</select>
-                        <label className="text-sm opacity-70">Até</label>
-                        <select className="select" value={cmpEndYear} onChange={e=>setCmpEndYear(Number(e.target.value))}>{years.map(y=> <option key={y} value={y}>{y}</option>)}</select>
-                        <select className="select" value={cmpEndMonth} onChange={e=>setCmpEndMonth(Number(e.target.value))}>{monthOptions(cmpEndYear)}</select>
-                      </>
-                    )}
-                    <label className="text-sm opacity-70">Tipo</label>
-                    <select className="select" value={cmpType} onChange={e=>setCmpType(e.target.value)}>
-                      <option value="linhas">Linhas</option>
-                      <option value="barras">Barras</option>
-                      <option value="pizza">Pizza</option>
-                    </select>
-                    <div className="ml-auto flex gap-2">
-                      <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
-                      <button className="btn primary">Gerar PDF</button>
+              <>
+                <div className="content">
+                  {/* Alcance sozinho */}
+                  <div className="subpick">
+                    <h3>Alcance</h3>
+                    <div className="row">
+                      <div className="cell" style={{gridColumn:'1 / -1'}}>
+                        <label className="text-sm opacity-70" htmlFor="cmp-range">Tipo</label>
+                        <select id="cmp-range" className="select"
+                                value={cmpRange} onChange={e=>setCmpRange(e.target.value)}>
+                          <option value="mes">Mês único</option>
+                          <option value="periodo">Período</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="mt-3">
-                    <div className="mb-2 opacity-70 text-sm">Contas do período (seleção múltipla)</div>
+                  {cmpRange==='mes' ? (
+                    <MonthPickerBlock
+                      title="Selecione o mês"
+                      year={cmpYear} setYear={setCmpYear}
+                      month={cmpMonth} setMonth={setCmpMonth}
+                      years={years}
+                      monthOptions={monthOptions}
+                      idPrefix="cmp-mes"
+                    />
+                  ) : (
+                    <>
+                      <MonthPickerBlock
+                        title="Selecione início"
+                        year={cmpStartYear} setYear={setCmpStartYear}
+                        month={cmpStartMonth} setMonth={setCmpStartMonth}
+                        years={years}
+                        monthOptions={monthOptions}
+                        idPrefix="cmp-inicio"
+                      />
+                      <MonthPickerBlock
+                        title="Selecione final"
+                        year={cmpEndYear} setYear={setCmpEndYear}
+                        month={cmpEndMonth} setMonth={setCmpEndMonth}
+                        years={years}
+                        monthOptions={monthOptions}
+                        idPrefix="cmp-fim"
+                      />
+                    </>
+                  )}
+
+                  {/* Tipo de gráfico */}
+                  <div className="subpick">
+                    <h3>Tipo de gráfico</h3>
+                    <div className="row">
+                      <div className="cell" style={{gridColumn:'1 / -1'}}>
+                        <select className="select"
+                                value={cmpType} onChange={e=>setCmpType(e.target.value)}>
+                          <option value="linhas">Linhas</option>
+                          <option value="barras">Barras</option>
+                          <option value="pizza">Pizza</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Seleção de contas */}
+                  <div className="subpick">
+                    <h3>Contas (seleção múltipla)</h3>
                     <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2">
                       {contasDistinct.map(name => (
                         <label key={name} className="card flex items-center gap-2">
@@ -625,10 +801,21 @@ html { background: var(--bg); }
                       ))}
                     </div>
                   </div>
+
+                  <div className="text-sm opacity-70" style={{marginTop:12}}>
+                    (Opcional) visualizar gráfico antes do download.
+                  </div>
                 </div>
-                <div className="text-sm opacity-70">(Opcional futuramente) visualizar gráfico antes do download.</div>
-              </div>
+
+                {/* Botões abaixo */}
+                <div className="footer flex flex-wrap gap-2 justify-end">
+                  <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
+                  <button className="btn ghost">Gerar gráfico</button>
+                  <button className="btn primary">Gerar PDF</button>
+                </div>
+              </>
             )}
+
           </div>
         </div>
       );
