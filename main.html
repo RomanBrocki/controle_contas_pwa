@@ -260,6 +260,8 @@ body.theme-gunmetal .modal.solid {
         </div>
       );
     }
+    // Top 10 tipos de conta (mock)
+    const COMMON_TYPES = ['Energia','Internet','Água','Condomínio','Escola','Celular','Transporte','Mercado','Streaming','IPTU'];
 
     function PostLoginMock() {
       const [theme, setTheme] = React.useState('gunmetal');
@@ -502,10 +504,72 @@ body.theme-gunmetal .modal.solid {
           <div className="modal max-w-lg w-full pop" onClick={e=>e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-3">{mode==='new' ? 'Nova Conta' : 'Editar Conta'}</h3>
             <form className="space-y-3" onSubmit={e=>e.preventDefault()}>
+              {/* Tipo de conta: Top10 + “Outro…” */}
               <div>
-                <label className="text-sm opacity-80">Nome</label>
-                <input className="w-full input" placeholder="Energia" value={form.nome} onChange={e=>upd('nome', e.target.value)} />
+                <label className="text-sm opacity-80">Tipo de conta</label>
+
+                {/* SELECT sempre aparece primeiro; input só aparece se escolher “Outro…” */}
+                <select
+                  className="w-full select"
+                  value={form.nome || ''}
+                  onChange={e=>{
+                    const v = e.target.value;
+                    if (v === '__outro') {
+                      // não escrever “de cara”: zera o nome e mostra o input
+                      upd('nome','');
+                      // marca um flag leve só para renderizar o input abaixo
+                      // (sem criar campo novo no form, para manter o resto intacto)
+                      e.target.dataset._outro = '1';
+                      const host = e.target.closest('div');
+                      const input = host?.querySelector('[data-nome-outro]');
+                      if (input) input.style.display = '';
+                    } else {
+                      // escolheu uma opção do Top10 (ou a opção “(atual)”)
+                      upd('nome', v);
+                      // esconde o input “Outro”
+                      const host = e.target.closest('div');
+                      const input = host?.querySelector('[data-nome-outro]');
+                      if (input) input.style.display = 'none';
+                    }
+                  }}
+                >
+                  <option value="">Selecione…</option>
+
+                  {/* Se estiver editando e o nome atual NÃO estiver no Top10, mostra opção “(atual)” */}
+                  {(initial.nome && !COMMON_TYPES.includes(initial.nome)) ? (
+                    <option value={initial.nome}>{initial.nome} (atual)</option>
+                  ) : null}
+
+                  {COMMON_TYPES.map(n => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                  <option value="__outro">Outro…</option>
+                </select>
+
+                {/* Input “Outro…” (inicialmente oculto) */}
+                <div data-nome-outro style={{display: 'none', marginTop: '8px'}}>
+                  <input
+                    className="w-full input"
+                    placeholder="Digite o tipo de conta"
+                    value={form.nome}
+                    onChange={e=>upd('nome', e.target.value)}
+                  />
+                  <div className="text-xs opacity-70 mt-1">Campo obrigatório</div>
+                  <button
+                    type="button"
+                    className="btn ghost mt-2"
+                    onClick={(e)=>{
+                      // volta ao seletor e esconde o input
+                      upd('nome','');
+                      const host = e.currentTarget.closest('div[data-nome-outro]');
+                      if (host) host.style.display = 'none';
+                    }}
+                  >
+                    Voltar ao seletor
+                  </button>
+                </div>
               </div>
+
               <div>
                 <label className="text-sm opacity-80">Valor</label>
                 <input className="w-full input" placeholder="R$ 0,00" value={form.valor} onChange={e=>upd('valor', e.target.value)} />
