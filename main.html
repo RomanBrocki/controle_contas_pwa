@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Controle de Contas — Mock PWA</title>
+
+  <!-- Tailwind (utilitários como flex/grid/gap/...) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React 18 + ReactDOM (UMD) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <!-- Babel para transformar JSX no navegador (apenas para protótipo) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    /* Evita flash branco ao carregar */
+    html, body, #root { height: 100%; margin:0; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+    
+  <script type="text/babel">
+    // ====== APP (mesmo mock do canvas) ======
+    function App() {
+      return (
+        <div className="min-h-screen">
+          <StyleTag />
+          <PostLoginMock />
+        </div>
+      );
+    }
+
+    function StyleTag() {
+      return (
+        <style>{`
+:root {
+  --radius: 16px;
+
+}
+
+/* ==== THEMES ==== */
+.theme-gunmetal {
+  --bg: #0e1218; --surface: #141923; --text: #e5e7eb; --muted: #93a1b1;
+  --primary: #22d3ee; --primary-600: #06b6d4; --accent: #ff38a1; --danger: #ef4444;
+  --border: #232a36; --chip: #1a2130; --glow: 0 0 24px rgba(34,211,238,.25), 0 0 4px rgba(34,211,238,.4);
+}
+.theme-synth {
+  --bg: #0a1114; --surface: #101a1f; --text: #e6fffb; --muted: #8abcb6;
+  --primary: #2dd4bf; --primary-600: #14b8a6; --accent: #f472b6; --danger: #ef4444;
+  --border: #1b2a2f; --chip: #0f1a1e; --glow: 0 0 18px rgba(45,212,191,.22);
+}
+/* Light metálico — foco em contraste e superfícies prateadas */
+.theme-light {
+  --bg: #edf1f5; /* steel 50 */
+  --surface: #ffffff; /* metal plate */
+  --text: #0b1220;
+  --muted: #475569;
+  --primary: #3b82f6;
+  --primary-600: #2563eb;
+  --accent: #22c55e;
+  --danger: #dc2626;
+  --border: #d7e0ea; /* hairline cool gray */
+  --chip: #f5f7fa; /* light chip */
+  --glow: 0 0 16px rgba(59,130,246,.20);
+}
+
+/* ==== BASE ==== */
+* { box-sizing: border-box; }
+body, #root { background: var(--bg); color: var(--text); }
+.card { background: var(--surface); border:1px solid var(--border); border-radius: var(--radius); padding:16px; transition: transform .15s ease, box-shadow .2s ease; }
+.btn { border-radius: 9999px; padding: 8px 14px; font-weight:600; }
+.btn.primary { background: var(--primary); color:#0a0a0a; box-shadow: var(--glow); }
+.btn.ghost { background:transparent; border:1px solid var(--border); color:var(--text); }
+.btn.danger { background:var(--danger); color:#0a0a0a; }
+.badge { background:var(--chip); color:var(--muted); border-radius:9999px; padding:4px 8px; font-size:12px; }
+.overlay { position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; }
+.modal { background:rgba(20,25,35,.9); border-radius:20px; border:1px solid var(--border); padding:24px; backdrop-filter:blur(8px); animation: pop-in .18s ease; }
+input.input, select.select { background: #0c0f14; color: var(--text); border:1px solid var(--border); border-radius:12px; padding:10px 12px; }
+/* Ajustes de campo no tema claro para contraste adequado */
+.theme-light input.input, .theme-light select.select { background: #ffffff; color: #0b1220; border-color: #d7e0ea; }
+.theme-light .modal { background: rgba(255,255,255,.95); color:#0b1220; }
+.theme-light .overlay { background: rgba(0,0,0,.35); }
+
+/* Brand */
+.brand { font-size: 2.125rem; font-weight: 800; letter-spacing:.5px; background: linear-gradient(90deg, var(--primary), var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 24px rgba(34,211,238,.25); }
+
+/* Animations */
+@keyframes pop-in { from { opacity:0; transform: scale(.98); } to { opacity:1; transform: scale(1); } }
+.pop { animation: pop-in .18s ease; }
+.pulse { box-shadow: 0 0 0 0 rgba(34,211,238,.35); animation: pulse 600ms ease-out; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(34,211,238,.45); transform: scale(1.01);} 100% { box-shadow: 0 0 0 12px rgba(34,211,238,0); transform: scale(1);} }
+
+/* ==== RESPONSIVO & AJUSTES MÓVEIS ==== */
+
+/* garante que o “fundo de fora” siga o tema (corrige o Claro Metálico) */
+html { background: var(--bg); }
+
+/* mobile-first: modal full-screen no celular */
+@media (max-width: 767.98px) {
+  .modal {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;      /* ignora max-w-lg em telas pequenas */
+    border-radius: 0;
+    padding: 16px;
+    overflow: auto;
+  }
+  .overlay { background: rgba(0,0,0,.45); }
+  .brand { font-size: clamp(1.5rem, 6vw, 2rem); }
+}
+
+/* telas médias+ : modal confortável e rolável se precisar */
+@media (min-width: 768px) {
+  .modal { max-height: 90vh; overflow: auto; }
+}
+
+/* toques mais confortáveis em qualquer tela */
+.btn { min-height: 40px; }
+.input, .select { min-height: 40px; }
+
+`}</style>
+      );
+    }
+
+    function parseBRL(str){
+      const s = String(str).replace(/[^\d,]/g, '').replace(/\.(?=\d)/g,'');
+      return Number(s.replace(',', '.')) || 0;
+    }
+
+    function monthNamePT(m){
+      return new Date(2025, m-1, 1).toLocaleString('pt-BR', { month:'long' }).replace(/^./, c=>c.toUpperCase());
+    }
+
+    function todayISO(){
+      const d = new Date();
+      return d.toISOString().slice(0,10); // yyyy-mm-dd
+    }
+
+    function parseBRtoISO(ddmmyyyy){
+      const m = String(ddmmyyyy||'').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if (!m) return '';
+      const [,dd,mm,yyyy] = m;
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function CanvasPlaceholder({ aspect='16/9' }){
+      return (
+        <div className="w-full" style={{aspectRatio: aspect}}>
+          <div className="w-full h-full" style={{
+            borderRadius: 12,
+            border: '1px dashed var(--border)',
+            background: 'repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 8px, rgba(255,255,255,.02) 8px 16px)'
+          }}/>
+        </div>
+      );
+    }
+
+    function PostLoginMock() {
+      const [theme, setTheme] = React.useState('gunmetal');
+      const [showOverlay, setShowOverlay] = React.useState(true);
+      const [editing, setEditing] = React.useState(null); // {mode:'edit'|'new', item:{...}}
+      const [activeId, setActiveId] = React.useState(null); // anima o card clicado
+      const [showReports, setShowReports] = React.useState(false);
+      const [reportsTab, setReportsTab] = React.useState('home'); // 'mensal' | 'periodo' | 'comparativos'
+
+      // Years e meses disponíveis (mock). Ordem de meses: DESC
+      const years = React.useMemo(()=>[2025, 2024], []);
+      const monthsByYear = React.useMemo(()=>({
+        2025: [10,9,8,7,6,5,4,3,2,1],
+        2024: [12,11,10,9]
+      }),[]);
+
+      const [yearSel, setYearSel] = React.useState(2025);
+      const [monthSel, setMonthSel] = React.useState(10); // outubro atual
+
+      React.useEffect(()=>{
+        const avail = monthsByYear[yearSel] || [];
+        if (!avail.includes(monthSel)) {
+          setMonthSel(avail[0] || monthSel); // mais recente do ano
+        }
+      }, [yearSel]);
+
+      // Mock de itens do mês (8 contas)
+      const itens = React.useMemo(()=>[
+        { id:1, nome:'Energia', instancia:'Residencial', valor:'R$ 320,40', data:'10/10/2025', quem:'Roman', dividida:true, links:{ boleto:'https://onedrive.live.com/', comp:'https://onedrive.live.com/' } },
+        { id:2, nome:'Internet', instancia:'Vivo 500', valor:'R$ 120,00', data:'05/10/2025', quem:'Tati', dividida:false, links:{ boleto:'https://onedrive.live.com/', comp:'https://onedrive.live.com/' } },
+        { id:3, nome:'Escola', instancia:'Mensalidade', valor:'R$ 1.250,00', data:'02/10/2025', quem:'Roman', dividida:true, links:{} },
+        { id:4, nome:'Água', instancia:'SABESP', valor:'R$ 89,10', data:'09/10/2025', quem:'Roman', dividida:false, links:{} },
+        { id:5, nome:'Condomínio', instancia:'Ed. Aurora', valor:'R$ 780,00', data:'01/10/2025', quem:'Tati', dividida:true, links:{} },
+        { id:6, nome:'Transporte', instancia:'Combustível', valor:'R$ 420,00', data:'12/10/2025', quem:'Roman', dividida:false, links:{} },
+        { id:7, nome:'Streaming', instancia:'Netflix', valor:'R$ 39,90', data:'15/10/2025', quem:'Tati', dividida:false, links:{} },
+        { id:8, nome:'Celular', instancia:'Plano Família', valor:'R$ 199,00', data:'18/10/2025', quem:'Roman', dividida:true, links:{} },
+      ],[]);
+
+      // Mock de "quem pagou" vindo do DB
+      const payersDB = React.useMemo(()=>['Roman','Tati'], []);
+
+      const totalMes = React.useMemo(()=> itens.reduce((acc,i)=> acc + parseBRL(i.valor), 0), [itens]);
+      const contasDistinct = React.useMemo(()=> Array.from(new Set(itens.map(i=> i.nome))), [itens]);
+
+      function popCard(id){
+        setActiveId(id);
+        setTimeout(()=> setActiveId(null), 650);
+      }
+
+      function openNew(prefill){
+        popCard('new');
+        setEditing({
+          mode:'new',
+          item: {
+            id:null,
+            nome: prefill?.nome || '',
+            valor:'',
+            data: todayISO(),
+            instancia: prefill?.instancia || '',
+            quem: prefill?.quem || '',
+            dividida: !!prefill?.dividida,
+            links: { boleto:'', comp:'' }
+          }
+        });
+      }
+
+      function openEdit(item){
+        popCard(item.id);
+        const isoDate = parseBRtoISO(item.data) || todayISO();
+        setEditing({ mode:'edit', item: { ...JSON.parse(JSON.stringify(item)), data: isoDate } });
+      }
+
+      return (
+        <div className={`theme-${theme} min-h-screen relative p-4 md:p-6`}>
+          <div className="mx-auto w-full max-w-5xl">
+          {/* Header */}
+          <header className="flex justify-between items-center mb-6">
+            <h1 className="brand">💸 Controle de Contas</h1>
+            <div className="flex gap-2 items-center">
+              <button className={`btn primary ${activeId==='new' ? 'pop' : ''}`} onClick={()=>openNew()}>+ Nova Conta</button>
+              <button className="btn ghost" onClick={()=>{ setReportsTab('home'); setShowReports(true); }}>📊 Relatórios</button>
+              <select className="btn ghost" value={theme} onChange={e=>setTheme(e.target.value)}>
+                <option value="gunmetal">Gunmetal Neon</option>
+                <option value="synth">Synthwave Teal</option>
+                <option value="light">Claro Metálico</option>
+              </select>
+            </div>
+          </header>
+        </div>{/* /max-w wrapper */}
+
+          {/* Overlay pós-login */}
+          {showOverlay && (
+            <div className="overlay" onClick={()=>setShowOverlay(false)}>
+              <div className="modal max-w-md w-full" onClick={(e)=>e.stopPropagation()}>
+                <h2 className="text-lg font-semibold mb-3">Contas pendentes do mês anterior</h2>
+                <ul className="space-y-2 mb-4">
+                  <li className="card flex justify-between items-center">
+                    <div>
+                      <strong>Energia</strong><br/>
+                      <span className="text-sm opacity-70">R$ 320,40 • 10/09/2025</span>
+                    </div>
+                    <button className="btn primary" onClick={()=>{ setShowOverlay(false); openNew({nome:'Energia', instancia:'Residencial', quem:'Roman', dividida:true}); }}>Lançar agora</button>
+                  </li>
+                  <li className="card flex justify-between items-center">
+                    <div>
+                      <strong>Internet</strong><br/>
+                      <span className="text-sm opacity-70">R$ 120,00 • 05/09/2025</span>
+                    </div>
+                    <button className="btn primary" onClick={()=>{ setShowOverlay(false); openNew({nome:'Internet', instancia:'Vivo 500', quem:'Tati'}); }}>Lançar agora</button>
+                  </li>
+                </ul>
+                <button className="btn ghost w-full" onClick={()=>setShowOverlay(false)}>Sair</button>
+              </div>
+            </div>
+          )}
+
+          {/* Resumo do mês + seletor ano/mês (meses DESC e nomes apenas) */}
+          <section className="card mb-6 flex flex-wrap items-center gap-4">
+            <div>
+              <div className="text-sm opacity-70">Total do mês</div>
+              <div className="text-2xl font-semibold" style={{textShadow:'var(--glow)'}}>
+                {totalMes.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}
+              </div>
+            </div>
+            <div className="ml-auto flex items-center gap-2">
+              <label className="text-sm opacity-70">Ano</label>
+              <select className="select" value={yearSel} onChange={e=>setYearSel(Number(e.target.value))}>
+                {years.map(y=> <option key={y} value={y}>{y}</option>)}
+              </select>
+              <label className="text-sm opacity-70">Mês</label>
+              <select className="select" value={monthSel} onChange={e=>setMonthSel(Number(e.target.value))}>
+                {(monthsByYear[yearSel]||[]).map(m=> (
+                  <option key={m} value={m}>{monthNamePT(m)}</option>
+                ))}
+              </select>
+            </div>
+          </section>
+
+          {/* Lista de contas (8 itens) */}
+          <main className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {itens.map((i)=> (
+              <ContaCard key={i.id} active={activeId===i.id} {...i} onEdit={()=>openEdit(i)} />
+            ))}
+          </main>
+
+          {editing && (
+            <EditPopup data={editing} payers={payersDB} onClose={()=>setEditing(null)} />
+          )}
+
+          {showReports && (
+            <ReportsModal
+              tab={reportsTab}
+              onChangeTab={setReportsTab}
+              onClose={()=>setShowReports(false)}
+              years={years}
+              monthsByYear={monthsByYear}
+              currentYear={yearSel}
+              currentMonth={monthSel}
+              contasDistinct={Array.from(new Set(itens.map(i=> i.nome)))}
+            />
+          )}
+        </div>
+      );
+    }
+
+    function ContaCard({ nome, instancia, valor, data, quem, dividida, links, onEdit, active }) {
+      return (
+        <article className={`card space-y-2 ${active ? 'pulse' : ''}`}>
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-lg font-semibold">{nome}</h3>
+              <div className="text-sm opacity-70">{instancia}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-lg font-semibold" style={{textShadow:'var(--glow)'}}>{valor}</div>
+              <div className="text-xs opacity-70">{data}</div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 items-center">
+            <span className="badge">{dividida ? 'Dividida' : 'Não dividida'}</span>
+            <span className="badge">{quem}</span>
+            {links?.boleto && (
+              <a className="btn ghost" href={links.boleto} target="_blank" rel="noreferrer">Boleto</a>
+            )}
+            {links?.comp && (
+              <a className="btn ghost" href={links.comp} target="_blank" rel="noreferrer">Comprovante</a>
+            )}
+            <div className="ml-auto flex gap-2">
+              <button className="btn ghost" onClick={onEdit}>Editar</button>
+            </div>
+          </div>
+        </article>
+      );
+    }
+
+    function EditPopup({ data, payers, onClose }) {
+      const { mode, item: initial } = data;
+      const [form, setForm] = React.useState(()=>({
+        nome: initial.nome || '',
+        valor: initial.valor || '',
+        data: initial.data || todayISO(),
+        instancia: initial.instancia || '',
+        quem: initial.quem || '',
+        quemOutro: '',
+        quemMode: initial.quem && payers.includes(initial.quem) ? 'select' : (initial.quem ? 'outro' : 'select'),
+        dividida: !!initial.dividida,
+        boleto: initial.links?.boleto || '',
+        comp: initial.links?.comp || ''
+      }));
+
+      const pristine = React.useMemo(()=>{
+        const canonicalQuem = form.quemMode==='outro' ? form.quemOutro : form.quem;
+        const a = JSON.stringify({
+          nome: initial.nome||'', valor: initial.valor||'', data: initial.data || todayISO(),
+          instancia: initial.instancia||'', quem: initial.quem||'', dividida: !!initial.dividida,
+          boleto: initial.links?.boleto||'', comp: initial.links?.comp||''
+        });
+        const b = JSON.stringify({
+          nome: form.nome||'', valor: form.valor||'', data: form.data||'',
+          instancia: form.instancia||'', quem: canonicalQuem||'', dividida: !!form.dividida,
+          boleto: form.boleto||'', comp: form.comp||''
+        });
+        return a===b;
+      }, [form, initial]);
+
+      const isQuemValid = form.quemMode==='select' ? !!form.quem : !!form.quemOutro.trim();
+      const isNomeValid = !!form.nome.trim();
+      const isValorValid = !!form.valor.trim();
+      const isFormValid = isQuemValid && isNomeValid && isValorValid;
+
+      function upd(k,v){ setForm(f=>({...f,[k]:v})); }
+      const setQuemMode = (mode)=> upd('quemMode', mode);
+
+      function onSubmit(){ if(!isFormValid) return; onClose(); }
+      function onDelete(){ onClose(); }
+
+      return (
+        <div className="overlay" onClick={onClose}>
+          <div className="modal max-w-lg w-full pop" onClick={e=>e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-3">{mode==='new' ? 'Nova Conta' : 'Editar Conta'}</h3>
+            <form className="space-y-3" onSubmit={e=>e.preventDefault()}>
+              <div>
+                <label className="text-sm opacity-80">Nome</label>
+                <input className="w-full input" placeholder="Energia" value={form.nome} onChange={e=>upd('nome', e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm opacity-80">Valor</label>
+                <input className="w-full input" placeholder="R$ 0,00" value={form.valor} onChange={e=>upd('valor', e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm opacity-80">Data de pagamento</label>
+                <input type="date" className="w-full input" value={form.data} onChange={e=>upd('data', e.target.value)} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-sm opacity-80">Instância</label>
+                  <input className="w-full input" placeholder="Residencial" value={form.instancia} onChange={e=>upd('instancia', e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-sm opacity-80">Quem pagou</label>
+                  {form.quemMode==='select' ? (
+                    <>
+                      <select className="w-full select" value={form.quem} onChange={e=>upd('quem', e.target.value)}>
+                        <option value="">Selecione…</option>
+                        {payers.map(p=> <option key={p} value={p}>{p}</option>)}
+                        <option value="__outro">Outro…</option>
+                      </select>
+                      {form.quem === '__outro' && setQuemMode('outro')}
+                    </>
+                  ) : (
+                    <>
+                      <input className="w-full input" placeholder="Digite o pagador" value={form.quemOutro} onChange={e=>upd('quemOutro', e.target.value)} />
+                      <div className="text-xs opacity-70 mt-1">Campo obrigatório</div>
+                      <button className="btn ghost mt-2" type="button" onClick={()=>{ upd('quem',''); upd('quemOutro',''); setQuemMode('select'); }}>Voltar ao seletor</button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input id="dividida" type="checkbox" checked={form.dividida} onChange={e=>upd('dividida', e.target.checked)} />
+                <label htmlFor="dividida">Dividida</label>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-sm opacity-80">Link boleto</label>
+                  <input className="w-full input" placeholder="https://..." value={form.boleto} onChange={e=>upd('boleto', e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-sm opacity-80">Link comprovante</label>
+                  <input className="w-full input" placeholder="https://..." value={form.comp} onChange={e=>upd('comp', e.target.value)} />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 mt-2">
+                {/* Salvar só aparece quando houver alteração e o formulário estiver válido */}
+                {!pristine && isFormValid && (
+                  <button className="btn primary" type="button" onClick={onSubmit}>Salvar</button>
+                )}
+                <button className="btn ghost" type="button" onClick={onClose}>Cancelar</button>
+                {mode==='edit' && <button className="btn danger" type="button" onClick={onDelete}>Excluir</button>}
+              </div>
+            </form>
+          </div>
+        </div>
+      );
+    }
+
+    function ReportsModal({ tab, onChangeTab, onClose, years, monthsByYear, currentYear, currentMonth, contasDistinct }){
+      // Estados sincronizados com a tela principal ao abrir
+      const [mensalYear, setMensalYear] = React.useState(currentYear);
+      const [mensalMonth, setMensalMonth] = React.useState(currentMonth);
+
+      const [pStartYear, setPStartYear] = React.useState(currentYear);
+      const [pStartMonth, setPStartMonth] = React.useState(currentMonth);
+      const [pEndYear, setPEndYear] = React.useState(currentYear);
+      const [pEndMonth, setPEndMonth] = React.useState(currentMonth);
+
+      const [cmpRange, setCmpRange] = React.useState('mes'); // 'mes' | 'periodo'
+      const [cmpYear, setCmpYear] = React.useState(currentYear);
+      const [cmpMonth, setCmpMonth] = React.useState(currentMonth);
+      const [cmpStartYear, setCmpStartYear] = React.useState(currentYear);
+      const [cmpStartMonth, setCmpStartMonth] = React.useState(currentMonth);
+      const [cmpEndYear, setCmpEndYear] = React.useState(currentYear);
+      const [cmpEndMonth, setCmpEndMonth] = React.useState(currentMonth);
+      const [cmpType, setCmpType] = React.useState('linhas'); // 'linhas' | 'barras' | 'pizza'
+      const [cmpSel, setCmpSel] = React.useState(()=> new Set(contasDistinct.slice(0, 3)));
+
+      React.useEffect(()=>{
+        setMensalYear(currentYear);
+        setMensalMonth(currentMonth);
+        setPStartYear(currentYear);
+        setPStartMonth(currentMonth);
+        setPEndYear(currentYear);
+        setPEndMonth(currentMonth);
+        setCmpYear(currentYear);
+        setCmpMonth(currentMonth);
+        setCmpStartYear(currentYear);
+        setCmpStartMonth(currentMonth);
+        setCmpEndYear(currentYear);
+        setCmpEndMonth(currentMonth);
+      }, [currentYear, currentMonth]);
+
+      function monthOptions(y){
+        return (monthsByYear[y]||[]).map(m => <option key={m} value={m}>{monthNamePT(m)}</option>);
+      }
+
+      function toggleConta(name){
+        setCmpSel(prev => {
+          const n = new Set(prev);
+          n.has(name) ? n.delete(name) : n.add(name);
+          return n;
+        });
+      }
+
+      return (
+        <div className="overlay" onClick={onClose}>
+          <div className={`modal ${tab==='home' ? 'max-w-md' : 'max-w-3xl'} w-full pop`} onClick={e=>e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-3">
+              <h3 className="text-lg font-semibold">Relatórios</h3>
+              <div className="ml-auto flex gap-2">
+                <button className="btn ghost" onClick={onClose}>Fechar</button>
+              </div>
+            </div>
+
+            {/* Tela inicial com 3 opções */}
+            {tab==='home' && (
+              <div className="grid gap-3">
+                <button className="btn primary" onClick={()=>onChangeTab('mensal')}>Relatório mensal</button>
+                <button className="btn primary" onClick={()=>onChangeTab('periodo')}>Relatório por período</button>
+                <button className="btn primary" onClick={()=>onChangeTab('comparativos')}>Gráficos comparativos</button>
+              </div>
+            )}
+
+            {/* MENSAL */}
+            {tab==='mensal' && (
+              <div className="grid gap-3">
+                <div className="flex gap-2 items-center">
+                  <label className="text-sm opacity-70">Ano</label>
+                  <select className="select" value={mensalYear} onChange={e=>setMensalYear(Number(e.target.value))}>
+                    {years.map(y=> <option key={y} value={y}>{y}</option>)}
+                  </select>
+                  <label className="text-sm opacity-70">Mês</label>
+                  <select className="select" value={mensalMonth} onChange={e=>setMensalMonth(Number(e.target.value))}>
+                    {monthOptions(mensalYear)}
+                  </select>
+                  <div className="ml-auto flex gap-2">
+                    <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
+                    <button className="btn primary">Gerar PDF</button>
+                  </div>
+                </div>
+                <div className="text-sm opacity-70">Gera: Pizza do mês + Resumo por pessoa + Balanço divididas + Listagem com links.</div>
+              </div>
+            )}
+
+            {/* PERÍODO */}
+            {tab==='periodo' && (
+              <div className="grid gap-3">
+                <div className="flex flex-wrap gap-2 items-center">
+                  <label className="text-sm opacity-70">De</label>
+                  <select className="select" value={pStartYear} onChange={e=>setPStartYear(Number(e.target.value))}>{years.map(y=> <option key={y} value={y}>{y}</option>)}</select>
+                  <select className="select" value={pStartMonth} onChange={e=>setPStartMonth(Number(e.target.value))}>{monthOptions(pStartYear)}</select>
+                  <label className="text-sm opacity-70">Até</label>
+                  <select className="select" value={pEndYear} onChange={e=>setPEndYear(Number(e.target.value))}>{years.map(y=> <option key={y} value={y}>{y}</option>)}</select>
+                  <select className="select" value={pEndMonth} onChange={e=>setPEndMonth(Number(e.target.value))}>{monthOptions(pEndYear)}</select>
+                  <div className="ml-auto flex gap-2">
+                    <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
+                    <button className="btn primary">Gerar PDF</button>
+                  </div>
+                </div>
+                <div className="text-sm opacity-70">Consolidado do período.</div>
+              </div>
+            )}
+
+            {/* COMPARATIVOS */}
+            {tab==='comparativos' && (
+              <div className="grid gap-4">
+                <div className="card" style={{background:'transparent', border:'1px dashed var(--border)'}}>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <label className="text-sm opacity-70">Alcance</label>
+                    <select className="select" value={cmpRange} onChange={e=>setCmpRange(e.target.value)}>
+                      <option value="mes">Mês único</option>
+                      <option value="periodo">Período</option>
+                    </select>
+                    {cmpRange==='mes' ? (
+                      <>
+                        <label className="text-sm opacity-70">Ano</label>
+                        <select className="select" value={cmpYear} onChange={e=>setCmpYear(Number(e.target.value))}>{years.map(y=> <option key={y} value={y}>{y}</option>)}</select>
+                        <label className="text-sm opacity-70">Mês</label>
+                        <select className="select" value={cmpMonth} onChange={e=>setCmpMonth(Number(e.target.value))}>{monthOptions(cmpYear)}</select>
+                      </>
+                    ) : (
+                      <>
+                        <label className="text-sm opacity-70">De</label>
+                        <select className="select" value={cmpStartYear} onChange={e=>setCmpStartYear(Number(e.target.value))}>{years.map(y=> <option key={y} value={y}>{y}</option>)}</select>
+                        <select className="select" value={cmpStartMonth} onChange={e=>setCmpStartMonth(Number(e.target.value))}>{monthOptions(cmpStartYear)}</select>
+                        <label className="text-sm opacity-70">Até</label>
+                        <select className="select" value={cmpEndYear} onChange={e=>setCmpEndYear(Number(e.target.value))}>{years.map(y=> <option key={y} value={y}>{y}</option>)}</select>
+                        <select className="select" value={cmpEndMonth} onChange={e=>setCmpEndMonth(Number(e.target.value))}>{monthOptions(cmpEndYear)}</select>
+                      </>
+                    )}
+                    <label className="text-sm opacity-70">Tipo</label>
+                    <select className="select" value={cmpType} onChange={e=>setCmpType(e.target.value)}>
+                      <option value="linhas">Linhas</option>
+                      <option value="barras">Barras</option>
+                      <option value="pizza">Pizza</option>
+                    </select>
+                    <div className="ml-auto flex gap-2">
+                      <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
+                      <button className="btn primary">Gerar PDF</button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="mb-2 opacity-70 text-sm">Contas do período (seleção múltipla)</div>
+                    <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2">
+                      {contasDistinct.map(name => (
+                        <label key={name} className="card flex items-center gap-2">
+                          <input type="checkbox" checked={cmpSel.has(name)} onChange={()=>toggleConta(name)} />
+                          <span>{name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-sm opacity-70">(Opcional futuramente) visualizar gráfico antes do download.</div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ====== Mount App ======
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+    const rootEl = document.getElementById('root');
+
+  function getThemeClass() {
+    const themed = rootEl.querySelector('.theme-gunmetal, .theme-synth, .theme-light');
+    if (!themed) return null;
+    return Array.from(themed.classList).find(c => /^theme-(gunmetal|synth|light)$/.test(c));
+  }
+
+  function syncTheme() {
+    const cls = getThemeClass();
+    document.body.classList.remove('theme-gunmetal','theme-synth','theme-light');
+    if (cls) document.body.classList.add(cls);
+  }
+
+  // sincroniza agora e toda vez que mudar algo no subtree
+  syncTheme();
+  new MutationObserver(syncTheme).observe(rootEl, { attributes:true, childList:true, subtree:true });
+  </script>
+  
+  
+</body>
+</html>
