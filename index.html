@@ -588,18 +588,25 @@ body.theme-gunmetal .modal.solid {
             </div>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
+            {/* Linha 1: badges sempre à esquerda */}
             <span className="badge">{dividida ? 'Dividida' : 'Não dividida'}</span>
             <span className="badge">{quem}</span>
-            {links?.boleto && (
-              <a className="btn ghost" href={links.boleto} target="_blank" rel="noreferrer">Boleto</a>
-            )}
-            {links?.comp && (
-              <a className="btn ghost" href={links.comp} target="_blank" rel="noreferrer">Comprovante</a>
-            )}
-            <div className="ml-auto flex gap-2">
-              <button className="btn ghost" onClick={onEdit}>Editar</button>
+
+            {/* Linha 2: links à esquerda, botão Editar fixo à direita */}
+            <div className="w-full flex flex-wrap items-center justify-between gap-2 mt-1">
+              <div className="flex gap-2 flex-wrap">
+                {links?.boleto && (
+                  <a className="btn ghost" href={links.boleto} target="_blank" rel="noreferrer">Boleto</a>
+                )}
+                {links?.comp && (
+                  <a className="btn ghost" href={links.comp} target="_blank" rel="noreferrer">Comprovante</a>
+                )}
+              </div>
+              <button className="btn ghost ml-auto" onClick={onEdit}>Editar</button>
             </div>
           </div>
+
+
         </article>
       );
     }
