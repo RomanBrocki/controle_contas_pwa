@@ -1239,6 +1239,7 @@ body.theme-gunmetal .modal.solid {
 
   <script type="module">
     import { Router } from './src/router.js';
+    window.Router = Router; // 👈 torna global p/ o JSX
 
     Router.register('#/', () => {
       // rota default: cai na tela do mês atual (sem mudar estado)
