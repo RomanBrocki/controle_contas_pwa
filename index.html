@@ -271,15 +271,70 @@ body.theme-gunmetal .modal.solid {
       const [showReports, setShowReports] = React.useState(false);
       const [reportsTab, setReportsTab] = React.useState('home'); // 'mensal' | 'periodo' | 'comparativos'
 
-      // Years e meses disponíveis (mock). Ordem de meses: DESC
-      const years = React.useMemo(()=>[2025, 2024], []);
-      const monthsByYear = React.useMemo(()=>({
-        2025: [10,9,8,7,6,5,4,3,2,1],
-        2024: [12,11,10,9]
-      }),[]);
+      // 🔹 Anos e meses reais do Supabase
+      const [years, setYears] = React.useState([]);
+      const [monthsByYear, setMonthsByYear] = React.useState({});
+
+      // Carrega anos e meses disponíveis do banco
+      React.useEffect(() => {
+        (async () => {
+          try {
+            const yrs = await window.SupabaseQueries.listYears();
+            setYears(yrs);
+
+            const monthsMap = {};
+            for (const y of yrs) {
+              const months = await window.SupabaseQueries.listMonthsByYear(y);
+              monthsMap[y] = months;
+            }
+            setMonthsByYear(monthsMap);
+          } catch (err) {
+            console.error('[ui] Erro ao carregar anos/meses', err);
+          }
+        })();
+      }, []);
+
 
       const [yearSel, setYearSel] = React.useState(2025);
       const [monthSel, setMonthSel] = React.useState(10); // outubro atual
+
+      // ---- Pendências (dinâmico): estados + helpers ----
+      const [pendentes, setPendentes] = React.useState(null); // null = calculando
+      const [pendLoading, setPendLoading] = React.useState(false);
+      // normaliza: remove acentos, trim e baixa caixa
+      function normalize(str='') {
+        return String(str)
+          .normalize('NFD')                // decompõe acentos
+          .replace(/[\u0300-\u036f]/g, '') // remove diacríticos
+          .toLowerCase()
+          .trim();
+      }
+
+
+      function prevYearMonth(y, m) {
+        return m > 1 ? { y, m: m - 1 } : { y: y - 1, m: 12 };
+      }
+      function keyFor(i) {
+        return `${normalize(i.nome)}__${normalize(i.instancia)}`;
+      }
+
+
+
+      // Exponho handlers para o Router (sem depender de React fora do componente)
+      React.useEffect(() => {
+        window.AppRoutes = {
+          mes: ({ ano, mes } = {}) => {
+            if (ano) setYearSel(Number(ano));
+            if (mes) setMonthSel(Number(mes));
+          },
+          relatorios: () => {
+            setReportsTab('home');
+            setShowReports(true);
+          }
+        };
+        return () => { if (window.AppRoutes) delete window.AppRoutes; };
+      }, []);
+
 
       React.useEffect(()=>{
         const avail = monthsByYear[yearSel] || [];
@@ -288,23 +343,67 @@ body.theme-gunmetal .modal.solid {
         }
       }, [yearSel]);
 
-      // Mock de itens do mês (8 contas)
-      const itens = React.useMemo(()=>[
-        { id:1, nome:'Energia', instancia:'Residencial', valor:'R$ 320,40', data:'10/10/2025', quem:'Roman', dividida:true, links:{ boleto:'https://onedrive.live.com/', comp:'https://onedrive.live.com/' } },
-        { id:2, nome:'Internet', instancia:'Vivo 500', valor:'R$ 120,00', data:'05/10/2025', quem:'Tati', dividida:false, links:{ boleto:'https://onedrive.live.com/', comp:'https://onedrive.live.com/' } },
-        { id:3, nome:'Escola', instancia:'Mensalidade', valor:'R$ 1.250,00', data:'02/10/2025', quem:'Roman', dividida:true, links:{} },
-        { id:4, nome:'Água', instancia:'SABESP', valor:'R$ 89,10', data:'09/10/2025', quem:'Roman', dividida:false, links:{} },
-        { id:5, nome:'Condomínio', instancia:'Ed. Aurora', valor:'R$ 780,00', data:'01/10/2025', quem:'Tati', dividida:true, links:{} },
-        { id:6, nome:'Transporte', instancia:'Combustível', valor:'R$ 420,00', data:'12/10/2025', quem:'Roman', dividida:false, links:{} },
-        { id:7, nome:'Streaming', instancia:'Netflix', valor:'R$ 39,90', data:'15/10/2025', quem:'Tati', dividida:false, links:{} },
-        { id:8, nome:'Celular', instancia:'Plano Família', valor:'R$ 199,00', data:'18/10/2025', quem:'Roman', dividida:true, links:{} },
-      ],[]);
+      // ---- Calcula pendências comparando mês atual x anterior ----
+      React.useEffect(() => {
+        let alive = true;
+        (async () => {
+          try {
+            setPendLoading(true);
+            const { y, m } = prevYearMonth(yearSel, monthSel);
+            const [cur, prev] = await Promise.all([
+              window.DataAdapter.fetchMes(yearSel, monthSel),
+              window.DataAdapter.fetchMes(y, m)
+            ]);
+
+            const curKeys = new Set((cur || []).map(keyFor));
+            const listaPend = (prev || []).filter(p => !curKeys.has(keyFor(p)));
+
+            if (!alive) return;
+            setPendentes(listaPend);
+            // se houver pendência, mostra overlay; se não, esconde
+            setShowOverlay(listaPend.length > 0);
+          } catch (e) {
+            console.error('[pendentes] erro ao calcular', e);
+            if (!alive) return;
+            setPendentes([]);
+            setShowOverlay(false);
+          } finally {
+            if (alive) setPendLoading(false);
+          }
+        })();
+        return () => { alive = false; };
+      }, [yearSel, monthSel]);
+
+      // Itens reais do mês (Supabase) + loading
+      const [itens, setItens] = React.useState(null); // null = carregando
+
+      React.useEffect(() => {
+        let alive = true;
+        (async () => {
+          try {
+            const mapped = await window.DataAdapter.fetchMes(yearSel, monthSel);
+            if (alive) setItens(mapped);
+          } catch (err) {
+            console.error('[ui] Falha ao carregar mês', err);
+            if (alive) setItens([]);
+          }
+        })();
+        return () => { alive = false; };
+      }, [yearSel, monthSel]);
+
 
       // Mock de "quem pagou" vindo do DB
       const payersDB = React.useMemo(()=>['Roman','Tati'], []);
 
-      const totalMes = React.useMemo(()=> itens.reduce((acc,i)=> acc + parseBRL(i.valor), 0), [itens]);
-      const contasDistinct = React.useMemo(()=> Array.from(new Set(itens.map(i=> i.nome))), [itens]);
+      const totalMes = React.useMemo(
+        () => (itens ? itens.reduce((acc,i)=> acc + parseBRL(i.valor), 0) : 0),
+        [itens]
+      );
+      const contasDistinct = React.useMemo(
+        () => Array.from(new Set((itens || []).map(i=> i.nome))),
+        [itens]
+      );
+
 
       function popCard(id){
         setActiveId(id);
@@ -352,31 +451,49 @@ body.theme-gunmetal .modal.solid {
           </header>
         
 
-          {/* Overlay pós-login */}
+          {/* Overlay pós-login (dinâmico) */}
           {showOverlay && (
-            <div className="overlay hard" onClick={()=>setShowOverlay(false)}>
-              <div className="modal solid max-w-md w-full" onClick={(e)=>e.stopPropagation()}>
+            <div className="overlay hard" onClick={() => setShowOverlay(false)}>
+              <div className="modal solid max-w-md w-full" onClick={(e) => e.stopPropagation()}>
                 <h2 className="text-lg font-semibold mb-3">💰 Contas Pendentes</h2>
-                <ul className="space-y-2 mb-4">
-                  <li className="card flex justify-between items-center">
-                    <div>
-                      <strong>Energia</strong><br/>
-                      <span className="text-sm opacity-70">R$ 320,40 • 10/09/2025</span>
-                    </div>
-                    <button className="btn primary" onClick={()=>{ setShowOverlay(false); openNew({nome:'Energia', instancia:'Residencial', quem:'Roman', dividida:true}); }}>Lançar agora</button>
-                  </li>
-                  <li className="card flex justify-between items-center">
-                    <div>
-                      <strong>Internet</strong><br/>
-                      <span className="text-sm opacity-70">R$ 120,00 • 05/09/2025</span>
-                    </div>
-                    <button className="btn primary" onClick={()=>{ setShowOverlay(false); openNew({nome:'Internet', instancia:'Vivo 500', quem:'Tati'}); }}>Lançar agora</button>
-                  </li>
-                </ul>
-                <button className="btn ghost w-full" onClick={()=>setShowOverlay(false)}>Sair</button>
+
+                {pendentes === null || pendLoading ? (
+                  <div className="card text-center py-6">Calculando…</div>
+                ) : pendentes.length === 0 ? (
+                  <div className="card text-center py-6 text-sm opacity-70">
+                    Nenhuma conta do mês anterior está pendente.
+                  </div>
+                ) : (
+                  <ul className="space-y-2 mb-4">
+                    {pendentes.slice(0, 6).map((p, idx) => (
+                      <li key={`${keyFor(p)}-${idx}`} className="card flex justify-between items-center">
+                        <div>
+                          <strong>{p.nome}</strong><br />
+                          {/* Mostramos os dados do mês anterior só como contexto visual */}
+                          <span className="text-sm opacity-70">
+                            {p.instancia ? `${p.instancia} • ` : ''}{p.valor} • {p.data}
+                          </span>
+                        </div>
+                        <button
+                          className="btn primary"
+                          onClick={() => {
+                            // abre modal "Nova Conta" pré-preenchido (valor e data continuam padrão: vazio/hoje)
+                            setShowOverlay(false);
+                            openNew({ nome: p.nome, instancia: p.instancia, quem: p.quem, dividida: p.dividida });
+                          }}
+                        >
+                          Lançar agora
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <button className="btn ghost w-full" onClick={() => setShowOverlay(false)}>Sair</button>
               </div>
             </div>
           )}
+
 
           {/* Resumo do mês + seletor ano/mês (meses DESC e nomes apenas) */}
           <section className="card mb-6 flex flex-wrap items-center gap-4">
@@ -388,11 +505,27 @@ body.theme-gunmetal .modal.solid {
             </div>
             <div className="ml-auto flex items-center gap-2">
               <label className="text-sm opacity-70">Ano</label>
-              <select className="select" value={yearSel} onChange={e=>setYearSel(Number(e.target.value))}>
+              <select
+                className="select"
+                value={yearSel}
+                onChange={e=>{
+                  const y = Number(e.target.value);
+                  setYearSel(y);
+                  Router.go(`#/mes?ano=${y}&mes=${monthSel}`);
+                }}
+              >
                 {years.map(y=> <option key={y} value={y}>{y}</option>)}
               </select>
               <label className="text-sm opacity-70">Mês</label>
-              <select className="select" value={monthSel} onChange={e=>setMonthSel(Number(e.target.value))}>
+              <select
+                className="select"
+                value={monthSel}
+                onChange={e=>{
+                  const m = Number(e.target.value);
+                  setMonthSel(m);
+                  Router.go(`#/mes?ano=${yearSel}&mes=${m}`);
+                }}
+              >
                 {(monthsByYear[yearSel]||[]).map(m=> (
                   <option key={m} value={m}>{monthNamePT(m)}</option>
                 ))}
@@ -400,12 +533,25 @@ body.theme-gunmetal .modal.solid {
             </div>
           </section>
 
-          {/* Lista de contas (8 itens) */}
-          <main className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {itens.map((i)=> (
-              <ContaCard key={i.id} active={activeId===i.id} {...i} onEdit={()=>openEdit(i)} />
-            ))}
-          </main>
+          {/* ================================================ */}
+          {/* 📭 Lista de contas do mês (loading / vazio / itens) */}
+          {itens === null ? (
+            <div className="card text-center py-10">Carregando…</div>
+          ) : itens.length === 0 ? (
+            <div className="card text-center py-10">
+              <h3 className="text-lg font-semibold mb-2">Nenhuma conta neste mês</h3>
+              <p className="text-sm opacity-70 mb-4">Você ainda não adicionou nenhuma conta para este período.</p>
+              <button className="btn primary" onClick={() => openNew()}>+ Adicionar primeira conta</button>
+            </div>
+          ) : (
+            <main className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {itens.map((i) => (
+                <ContaCard key={i.id} active={activeId === i.id} {...i} onEdit={() => openEdit(i)} />
+              ))}
+            </main>
+          )}
+
+
 
           {editing && (
             <EditPopup data={editing} payers={payersDB} onClose={()=>setEditing(null)} />
@@ -420,7 +566,7 @@ body.theme-gunmetal .modal.solid {
               monthsByYear={monthsByYear}
               currentYear={yearSel}
               currentMonth={monthSel}
-              contasDistinct={Array.from(new Set(itens.map(i=> i.nome)))}
+              contasDistinct={Array.from(new Set((itens || []).map(i=> i.nome)))}
             />
           )}
           </div>{/* /max-w wrapper */}
@@ -460,6 +606,14 @@ body.theme-gunmetal .modal.solid {
 
     function EditPopup({ data, payers, onClose }) {
       const { mode, item: initial } = data;
+      // Fecha o modal ao pressionar Esc (desktop apenas)
+      React.useEffect(() => {
+        const handleKey = (e) => {
+          if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+      }, []);
       const [form, setForm] = React.useState(()=>({
         nome: initial.nome || '',
         valor: initial.valor || '',
@@ -487,6 +641,7 @@ body.theme-gunmetal .modal.solid {
         });
         return a===b;
       }, [form, initial]);
+      
 
       const isQuemValid = form.quemMode==='select' ? !!form.quem : !!form.quemOutro.trim();
       const isNomeValid = !!form.nome.trim();
@@ -501,9 +656,9 @@ body.theme-gunmetal .modal.solid {
 
       return (
         <div className="overlay" onClick={onClose}>
-          <div className="modal max-w-lg w-full pop" onClick={e=>e.stopPropagation()}>
-            <h3 className="text-lg font-semibold mb-3">{mode==='new' ? 'Nova Conta' : 'Editar Conta'}</h3>
-            <form className="space-y-3" onSubmit={e=>e.preventDefault()}>
+          <div className="modal max-w-lg w-full pop" role="dialog" aria-modal="true" aria-labelledby="edit-title" onClick={e=>e.stopPropagation()}>
+            <h3 id="edit-title" className="text-lg font-semibold mb-3">{mode==='new' ? 'Nova Conta' : 'Editar Conta'}</h3>
+            <form className="space-y-3" onSubmit={e=>e.preventDefault()} onKeyDown={(e)=>{ if(e.key==='Enter' && (e.ctrlKey||e.metaKey) && isFormValid){ onSubmit(); } }}>
               {/* Tipo de conta: Top10 + “Outro…” */}
               <div>
                 <label className="text-sm opacity-80">Tipo de conta</label>
@@ -546,6 +701,12 @@ body.theme-gunmetal .modal.solid {
                   <option value="__outro">Outro…</option>
                 </select>
 
+                {/* Mostra aviso se tipo de conta estiver vazio */}
+                {!form.nome.trim() && (
+                  <div className="text-xs text-red-400 mt-1">Campo obrigatório</div>
+                )}
+
+
                 {/* Input “Outro…” (inicialmente oculto) */}
                 <div data-nome-outro style={{display: 'none', marginTop: '8px'}}>
                   <input
@@ -570,10 +731,23 @@ body.theme-gunmetal .modal.solid {
                 </div>
               </div>
 
+              {/* ========================== */}
+              {/* 💡 Campo: Valor (obrigatório com hint visual) */}
+              {/* ========================== */}
               <div>
                 <label className="text-sm opacity-80">Valor</label>
-                <input className="w-full input" placeholder="R$ 0,00" value={form.valor} onChange={e=>upd('valor', e.target.value)} />
+                <input
+                  className={`w-full input ${!form.valor.trim() ? 'border-red-500' : ''}`}
+                  placeholder="R$ 0,00"
+                  value={form.valor}
+                  onChange={e=>upd('valor', e.target.value)}
+                />
+                {/* Mostra o aviso “Campo obrigatório” apenas se estiver vazio */}
+                {!form.valor.trim() && (
+                  <div className="text-xs text-red-400 mt-1">Campo obrigatório</div>
+                )}
               </div>
+
               <div>
                 <label className="text-sm opacity-80">Data de pagamento</label>
                 <input type="date" className="w-full input" value={form.data} onChange={e=>upd('data', e.target.value)} />
@@ -602,7 +776,12 @@ body.theme-gunmetal .modal.solid {
                       <button className="btn ghost mt-2" type="button" onClick={()=>{ upd('quem',''); upd('quemOutro',''); setQuemMode('select'); }}>Voltar ao seletor</button>
                     </>
                   )}
+                  {/* Mostra aviso se “Quem pagou” estiver vazio */}
+                  {!isQuemValid && (
+                    <div className="text-xs text-red-400 mt-1">Campo obrigatório</div>
+                  )}
                 </div>
+                                
               </div>
 
               <div className="flex items-center gap-2">
@@ -666,6 +845,14 @@ body.theme-gunmetal .modal.solid {
     }
 
     function ReportsModal({ tab, onChangeTab, onClose, years, monthsByYear, currentYear, currentMonth, contasDistinct }){
+      // Fecha o modal ao pressionar Esc (desktop apenas)
+      React.useEffect(() => {
+        const handleKey = (e) => {
+          if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+      }, []);
       // Estados sincronizados com a tela principal ao abrir
       const [mensalYear, setMensalYear] = React.useState(currentYear);
       const [mensalMonth, setMensalMonth] = React.useState(currentMonth);
@@ -714,11 +901,12 @@ body.theme-gunmetal .modal.solid {
 
       return (
         <div className="overlay" onClick={onClose}>
-          <div className={`modal glass ${tab==='home' ? 'max-w-md' : 'max-w-3xl'} w-full pop`} onClick={e=>e.stopPropagation()}>
+          <div className={`modal glass ${tab==='home' ? 'max-w-md' : 'max-w-3xl'} w-full pop`} role="dialog" aria-modal="true" aria-labelledby="reports-title" onClick={e=>e.stopPropagation()}>
+
 
             {/* Header */}
             <div className="flex items-center gap-3 mb-3">
-              <h3 className="text-lg font-semibold">Relatórios</h3>
+              <h3 id="reports-title" className="text-lg font-semibold">Relatórios</h3>
               <div className="ml-auto flex gap-2">
                 <button className="btn ghost" onClick={onClose}>Fechar</button>
               </div>
@@ -874,9 +1062,11 @@ body.theme-gunmetal .modal.solid {
                 {/* Botões abaixo */}
                 <div className="footer flex flex-wrap gap-2 justify-end">
                   <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
-                  <button className="btn ghost">Gerar gráfico</button>
-                  <button className="btn primary">Gerar PDF</button>
+                  <button className="btn ghost" disabled={cmpSel.size===0}>Gerar gráfico</button>
+                  <button className="btn primary" disabled={cmpSel.size===0}>Gerar PDF</button>
                 </div>
+                {cmpSel.size===0 && <div className="text-xs opacity-70 mt-2 text-right">Selecione ao menos 1 conta.</div>}
+
               </>
             )}
 
@@ -889,6 +1079,7 @@ body.theme-gunmetal .modal.solid {
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<App />);
     const rootEl = document.getElementById('root');
+    
 
   function getThemeClass() {
     const themed = rootEl.querySelector('.theme-gunmetal, .theme-synth, .theme-light');
@@ -907,6 +1098,29 @@ body.theme-gunmetal .modal.solid {
   new MutationObserver(syncTheme).observe(rootEl, { attributes:true, childList:true, subtree:true });
   </script>
   
-  
+  <script type="module" src="./src/router.js"></script>
+  <!-- novo: boot do router como módulo -->
+  <script type="module" src="./src/data-adapter.js"></script>
+
+  <script type="module">
+    import { Router } from './src/router.js';
+
+    Router.register('#/', () => {
+      // rota default: cai na tela do mês atual (sem mudar estado)
+      Router.go('#/mes');
+    });
+
+    Router.register('#/mes', (params) => {
+      // aplica ano/mes na UI se vierem na URL
+      window.AppRoutes?.mes(params);
+    });
+
+    Router.register('#/relatorios', () => {
+      window.AppRoutes?.relatorios();
+    });
+
+    Router.start();
+  </script>
+
 </body>
 </html>
