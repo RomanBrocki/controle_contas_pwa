@@ -124,4 +124,6 @@ export async function deleteConta(id) {
 
 // 🔹 Anos e meses reais do Supabase
 window.SupabaseQueries = { listYears, listMonthsByYear, listMes, payersDistinct, contasDistinct };
+// Exponha as mutations também
+window.SupabaseMutations = { insertConta, updateConta, deleteConta };
 

@@ -293,6 +293,13 @@ body.theme-gunmetal .modal.solid {
           }
         })();
       }, []);
+      
+      // Se o ano padrão (2025) não existir no banco, pega o mais recente disponível
+      React.useEffect(() => {
+        if (years.length && !years.includes(yearSel)) {
+          setYearSel(years[0]); // assumindo que listYears() já retorna DESC
+        }
+      }, [years]);
 
 
       const [yearSel, setYearSel] = React.useState(2025);
@@ -391,9 +398,94 @@ body.theme-gunmetal .modal.solid {
         return () => { alive = false; };
       }, [yearSel, monthSel]);
 
+      // Toast simples
+      const [toast, setToast] = React.useState(null); // { msg, type: 'ok'|'err' }
+      function showToast(msg, type='ok'){
+        setToast({ msg, type });
+        setTimeout(() => setToast(null), 1800);
+      }
 
-      // Mock de "quem pagou" vindo do DB
-      const payersDB = React.useMemo(()=>['Roman','Tati'], []);
+      // Recarrega só a lista do mês atual
+      async function reloadMonth(){
+        const mapped = await window.DataAdapter.fetchMes(yearSel, monthSel);
+        setItens(mapped);
+      }
+
+      // Pequena validação/sanitização de URL (http/https)
+      function cleanUrl(u){
+        if(!u) return '';
+        const s = String(u).trim();
+        if(/^https?:\/\//i.test(s)) return s;
+        return 'https://' + s;
+      }
+
+      async function handleSave(mode, initialId, form){
+        try{
+          // resolve 'quem'
+          const quem = form.quemMode === 'outro' ? (form.quemOutro || '').trim() : (form.quem || '').trim();
+
+          // montar draft para a tabela existente
+          const d = new Date(form.data || todayISO());
+          const ano = d.getFullYear();
+          const mes = d.getMonth() + 1;
+
+          const draft = {
+            nome_da_conta: (form.nome || '').trim(),
+            valor: parseBRL(form.valor),
+            data_de_pagamento: form.data || todayISO(),
+            instancia: (form.instancia || '').trim(),
+            quem_pagou: quem,
+            dividida: !!form.dividida,
+            link_boleto: cleanUrl(form.boleto),
+            link_comprovante: cleanUrl(form.comp),
+            ano, mes
+          };
+
+          let ok = false;
+          if (mode === 'new') {
+            ok = await window.SupabaseMutations.insertConta(draft);
+          } else {
+            ok = await window.SupabaseMutations.updateConta(initialId, draft);
+          }
+          if(!ok) throw new Error('Falha no Supabase');
+
+          await reloadMonth();
+          showToast('Conta salva ✅','ok');
+          setEditing(null);
+        } catch(e){
+          console.error('[save] erro', e);
+          showToast('Erro ao salvar ❌','err');
+        }
+      }
+
+      async function handleDelete(id){
+        try{
+          const ok = await window.SupabaseMutations.deleteConta(id);
+          if(!ok) throw new Error('Falha no Supabase');
+          await reloadMonth();
+          showToast('Conta excluída 🗑️','ok');
+          setEditing(null);
+        } catch(e){
+          console.error('[delete] erro', e);
+          showToast('Erro ao excluir ❌','err');
+        }
+      }
+
+
+      const [payersDB, setPayersDB] = React.useState([]);
+
+      React.useEffect(() => {
+        (async () => {
+          try {
+            const list = await window.SupabaseQueries.payersDistinct();
+            setPayersDB(list || []);
+          } catch (e) {
+            console.error('[ui] payersDistinct', e);
+            setPayersDB([]);
+          }
+        })();
+      }, []);
+
 
       const totalMes = React.useMemo(
         () => (itens ? itens.reduce((acc,i)=> acc + parseBRL(i.valor), 0) : 0),
@@ -554,8 +646,15 @@ body.theme-gunmetal .modal.solid {
 
 
           {editing && (
-            <EditPopup data={editing} payers={payersDB} onClose={()=>setEditing(null)} />
+            <EditPopup
+              data={editing}
+              payers={payersDB}
+              onClose={()=>setEditing(null)}
+              onSave={handleSave}
+              onDelete={handleDelete}
+            />
           )}
+
 
           {showReports && (
             <ReportsModal
@@ -569,6 +668,13 @@ body.theme-gunmetal .modal.solid {
               contasDistinct={Array.from(new Set((itens || []).map(i=> i.nome)))}
             />
           )}
+          {toast && (
+            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg border"
+                style={{ background:'var(--surface)', borderColor:'var(--border)', boxShadow:'var(--glow)' }}>
+              <span className="text-sm">{toast.msg}</span>
+            </div>
+          )}
+
           </div>{/* /max-w wrapper */}
         </div>
       );
@@ -611,7 +717,7 @@ body.theme-gunmetal .modal.solid {
       );
     }
 
-    function EditPopup({ data, payers, onClose }) {
+    function EditPopup({ data, payers, onClose, onSave, onDelete }) {
       const { mode, item: initial } = data;
       // Fecha o modal ao pressionar Esc (desktop apenas)
       React.useEffect(() => {
@@ -658,8 +764,15 @@ body.theme-gunmetal .modal.solid {
       function upd(k,v){ setForm(f=>({...f,[k]:v})); }
       const setQuemMode = (mode)=> upd('quemMode', mode);
 
-      function onSubmit(){ if(!isFormValid) return; onClose(); }
-      function onDelete(){ onClose(); }
+      function onSubmit(){
+        if(!isFormValid) return;
+        onSave(mode, initial.id, form); // parent resolve insert/update, fecha e toast
+      }
+      function onDeleteClick(){
+        if(mode!=='edit') return;
+        onDelete(initial.id); // parent resolve exclusão
+      }
+
 
       return (
         <div className="overlay" onClick={onClose}>
@@ -769,12 +882,27 @@ body.theme-gunmetal .modal.solid {
                   <label className="text-sm opacity-80">Quem pagou</label>
                   {form.quemMode==='select' ? (
                     <>
-                      <select className="w-full select" value={form.quem} onChange={e=>upd('quem', e.target.value)}>
+                      <select
+                        className="w-full select"
+                        value={form.quem}
+                        onChange={e=>{
+                          const v = e.target.value;
+                          if (v === '__outro') {
+                            upd('quem','');               // limpa o select
+                            upd('quemOutro','');          // prepara campo livre
+                            setQuemMode('outro');         // ativa modo 'outro'
+                          } else {
+                            upd('quem', v);
+                            upd('quemOutro','');
+                            setQuemMode('select');
+                          }
+                        }}
+                      >
                         <option value="">Selecione…</option>
                         {payers.map(p=> <option key={p} value={p}>{p}</option>)}
                         <option value="__outro">Outro…</option>
                       </select>
-                      {form.quem === '__outro' && setQuemMode('outro')}
+
                     </>
                   ) : (
                     <>
@@ -808,13 +936,13 @@ body.theme-gunmetal .modal.solid {
               </div>
 
               <div className="flex flex-wrap gap-2 mt-2">
-                {/* Salvar só aparece quando houver alteração e o formulário estiver válido */}
                 {!pristine && isFormValid && (
                   <button className="btn primary" type="button" onClick={onSubmit}>Salvar</button>
                 )}
                 <button className="btn ghost" type="button" onClick={onClose}>Cancelar</button>
-                {mode==='edit' && <button className="btn danger" type="button" onClick={onDelete}>Excluir</button>}
+                {mode==='edit' && <button className="btn danger" type="button" onClick={onDeleteClick}>Excluir</button>}
               </div>
+
             </form>
           </div>
         </div>
