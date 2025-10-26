@@ -122,3 +122,6 @@ export async function deleteConta(id) {
   return true;
 }
 
+// 🔹 Anos e meses reais do Supabase
+window.SupabaseQueries = { listYears, listMonthsByYear, listMes, payersDistinct, contasDistinct };
+
