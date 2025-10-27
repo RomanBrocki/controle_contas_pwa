@@ -1194,12 +1194,86 @@ body.theme-gunmetal .modal.solid {
                   </div>
                 </div>
 
-                {/* Botões abaixo */}
-                <div className="footer flex flex-wrap gap-2 justify-end">
-                  <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
-                  <button className="btn ghost" disabled={cmpSel.size===0}>Gerar gráfico</button>
-                  <button className="btn primary" disabled={cmpSel.size===0}>Gerar PDF</button>
-                </div>
+                    {/* Botões abaixo */}
+                    <div className="footer flex flex-wrap gap-2 justify-end">
+                      <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
+                      <button
+                        className="btn ghost"
+                        disabled={cmpSel.size===0}
+                        onClick={async ()=>{
+                          // remove gráfico anterior se houver
+                          const old = document.getElementById('cmp-chart');
+                          if (old) old.remove();
+
+                          // cria container e canvas
+                          const wrap = document.createElement('div');
+                          wrap.id = 'cmp-chart';
+                          wrap.style.marginTop = '20px';
+                          wrap.style.width = '100%';
+                          wrap.style.height = '400px';
+                          const canvas = document.createElement('canvas');
+                          wrap.appendChild(canvas);
+                          e.currentTarget.closest('.modal').querySelector('.content').appendChild(wrap);
+
+                          // define título do gráfico
+                          const rotulo = cmpRange==='mes'
+                            ? `${monthNamePT(cmpMonth)} / ${cmpYear}`
+                            : `${monthNamePT(cmpStartMonth)} ${cmpStartYear} – ${monthNamePT(cmpEndMonth)} ${cmpEndYear}`;
+
+                          // dados simulados temporariamente (mock)
+                          const dataMock = {
+                            labels: Array.from(cmpSel),
+                            valores: Array.from(cmpSel).map(()=> Math.round(Math.random()*800+200))
+                          };
+
+                          // renderiza o gráfico certo
+                          if (cmpType==='pizza') {
+                            ChartFeatures.renderPizzaMensal(canvas, dataMock, rotulo);
+                          } else if (cmpType==='barras') {
+                            const dataBar = {
+                              labels: dataMock.labels,
+                              atual: dataMock.valores,
+                              comparado: dataMock.valores.map(v=>v*0.8)
+                            };
+                            ChartFeatures.renderBarrasComparativas(canvas, dataBar, 'anterior', {
+                              atual: rotulo,
+                              comparado: 'Mês anterior'
+                            });
+                          } else if (cmpType==='linhas') {
+                            const dataLine = {
+                              nome: Array.from(cmpSel)[0],
+                              meses: ['Jan','Fev','Mar','Abr','Mai','Jun'],
+                              valores: [200,350,400,300,450,500]
+                            };
+                            ChartFeatures.renderLinhaContaPeriodo(canvas, dataLine);
+                          }
+                        }}
+                      >
+                        Gerar gráfico
+                      </button>
+
+                      <button
+                        className="btn primary"
+                        disabled={cmpSel.size===0}
+                        onClick={()=>{
+                          const canvas = document.querySelector('#cmp-chart canvas');
+                          if (!canvas) return alert('Gere um gráfico antes!');
+                          const link = document.createElement('a');
+                          link.download = 'grafico.png';
+                          link.href = canvas.toDataURL('image/png');
+                          link.click();
+                        }}
+                      >
+                        Baixar PNG
+                      </button>
+                    </div>
+
+                    {cmpSel.size===0 && (
+                      <div className="text-xs opacity-70 mt-2 text-right">
+                        Selecione ao menos 1 conta.
+                      </div>
+                    )}
+
                 {cmpSel.size===0 && <div className="text-xs opacity-70 mt-2 text-right">Selecione ao menos 1 conta.</div>}
 
               </>
@@ -1227,12 +1301,18 @@ body.theme-gunmetal .modal.solid {
     document.body.classList.remove('theme-gunmetal','theme-synth','theme-light');
     if (cls) document.body.classList.add(cls);
   }
-
+  
   // sincroniza agora e toda vez que mudar algo no subtree
   syncTheme();
   new MutationObserver(syncTheme).observe(rootEl, { attributes:true, childList:true, subtree:true });
   </script>
-  
+    <!-- === Gráficos === -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-piechart-outlabels@1.1.0"></script>
+
+  <script type="module" src="./src/features/charts.js"></script>
+
   <script type="module" src="./src/router.js"></script>
   <!-- novo: boot do router como módulo -->
   <script type="module" src="./src/data-adapter.js"></script>
