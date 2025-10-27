@@ -33,6 +33,21 @@ export function setupChartDefaults() {
 
   console.log('[Chart.js] Configuração global aplicada');
 }
+// === Helpers de cor para o APP (não afeta PDF) ===
+function __isLightTheme() {
+  return document.body.classList.contains('theme-light');
+}
+function __uiTextColor() {
+  // No app: claro = #0b1220, escuro = #e5e7eb
+  return __isLightTheme() ? '#0b1220' : '#e5e7eb';
+}
+// === Texto padrão do APP por tema (não afeta PDF) ===
+function __appText() {
+  // tenta CSS var do body; senão, fallback por tema
+  const v = (getComputedStyle(document.body).getPropertyValue('--chart-label-text') || '').trim();
+  if (v) return v;
+  return document.body.classList.contains('theme-light') ? '#0b1220' : '#e5e7eb';
+}
 
 // === Paleta "PDF-friendly" ===
 export function applyPdfTheme(chart) {
@@ -100,6 +115,10 @@ export function renderPizzaMensal(canvas, data, rotuloMes = 'Mês do relatório'
   if (!ctx) return;
 
   if (canvas._chart) canvas._chart.destroy();
+  
+  // Ajuste de cor só no app (PDF usa applyPdfTheme)
+  const __TXT = __uiTextColor();
+
 
   const total = data.valores.reduce((a, b) => a + b, 0);
 
@@ -113,15 +132,21 @@ export function renderPizzaMensal(canvas, data, rotuloMes = 'Mês do relatório'
     const root = getComputedStyle(document.documentElement);
     const body = getComputedStyle(document.body);
     const isPdf = !!window.__PDF_MODE;
+
+    // no APP: usar texto escuro no tema claro, claro no tema escuro
+    const appText = __uiTextColor();
+    const appLine = (body.getPropertyValue('--chart-label-line') || '#9ca3af').trim();
+
     return {
       text: isPdf
         ? (root.getPropertyValue('--chart-text-pdf') || '#1f2937').trim()
-        : (body.getPropertyValue('--chart-label-text') || '#e5e7eb').trim(),
+        : (appText || '#e5e7eb'),
       line: isPdf
         ? (root.getPropertyValue('--chart-line-pdf') || '#4b5563').trim()
-        : (body.getPropertyValue('--chart-label-line') || '#9ca3af').trim(),
+        : appLine,
     };
   }
+
 
 
   // Plugin local p/ rótulos externos com linha + anticolisão por lado
@@ -260,7 +285,8 @@ export function renderPizzaMensal(canvas, data, rotuloMes = 'Mês do relatório'
           display: true,
           text: `Distribuição de Gastos de ${rotuloMes}`,
           font: { size: 16, weight: 'bold' },
-          padding: { top: 10, bottom: 10 }
+          padding: { top: 10, bottom: 10 },
+          color: __appText(),
         },
         tooltip: {
           mode: 'nearest',       // ✅ mostra apenas a fatia sob o cursor
@@ -301,7 +327,7 @@ export function renderPizzaMensal(canvas, data, rotuloMes = 'Mês do relatório'
         
         legend: {
           labels: {
-            color: '#e5e7eb',
+            color: __appText(),
             font: { size: 12 }
           }
         }
@@ -331,6 +357,8 @@ export function renderBarrasComparativas(canvas, data, tipo = 'anterior', rotulo
   if (!ctx) return;
 
   if (canvas._chart) canvas._chart.destroy();
+
+  const __TXT = __appText();
 
   // rótulos legíveis — ex: rotulos = { atual: 'Setembro/2025', comparado: 'Agosto/2025' }
   const labelAtual = rotulos.atual || 'Mês do relatório';
@@ -369,7 +397,8 @@ export function renderBarrasComparativas(canvas, data, tipo = 'anterior', rotulo
           display: true,
           text: `Comparativo — ${labelAtual} vs ${labelComparado}`,
           font: { size: 15, weight: 'bold' },
-          padding: { top: 10, bottom: 10 }
+          padding: { top: 10, bottom: 10 },
+          color: __TXT,
         },
         tooltip: {
           callbacks: {
@@ -380,7 +409,7 @@ export function renderBarrasComparativas(canvas, data, tipo = 'anterior', rotulo
         legend: {
           position: 'top',
           labels: {
-            color: '#e5e7eb',
+            color: __TXT,
             font: { size: 12 }
           }
         },
@@ -436,7 +465,7 @@ export function renderBarrasComparativas(canvas, data, tipo = 'anterior', rotulo
         x: { display: false, grid: { display: false }, ticks: { display: false } },
         y: {
           grid: { color: 'rgba(255,255,255,0.06)' },
-          ticks: { color: '#e5e7eb' }
+          ticks: { color: __TXT  }
         }
       }
     },
@@ -463,6 +492,9 @@ export function renderLinhaContaPeriodo(canvas, data) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   if (canvas._chart) canvas._chart.destroy();
+
+  const __TXT = __appText();
+
 
   const media = data.valores.reduce((a, b) => a + b, 0) / Math.max(1, data.valores.length);
   const mediaArr = Array(data.valores.length).fill(media);
@@ -522,12 +554,13 @@ export function renderLinhaContaPeriodo(canvas, data) {
           display: true,
           text: titulo,
           font: { size: 18, weight: 'bold' },
-          padding: { top: 12, bottom: 8 }
+          padding: { top: 12, bottom: 8 },
+          color: __TXT,
         },
         legend: {
           position: 'top',
           labels: {
-            color: '#e5e7eb',
+            color: __TXT,
             font: { size: 12 },
             filter: (item) => item.text?.startsWith('Média')
           }
@@ -553,7 +586,7 @@ export function renderLinhaContaPeriodo(canvas, data) {
         x: {
           grid: { display: false },
           ticks: {
-            color: '#e5e7eb',
+            color: __TXT,
             maxRotation: 45,
             minRotation: 45
           },
