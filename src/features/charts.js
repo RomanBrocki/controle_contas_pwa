@@ -16,6 +16,7 @@ export function setupChartDefaults() {
     return;
   }
 
+
   // Define estilo padrão global
   Chart.defaults.font.family = "'Inter', 'Roboto', sans-serif";
   Chart.defaults.color = '#e5e7eb';
@@ -32,6 +33,8 @@ export function setupChartDefaults() {
 
   console.log('[Chart.js] Configuração global aplicada');
 }
+
+
 // % de corte para rótulo interno (10%)
 const PCT_LABEL_CUTOFF = 0.08;
 

@@ -67,6 +67,13 @@
   --chip: #f5f7fa; /* light chip */
   --glow: 0 0 16px rgba(59,130,246,.20);
 }
+:root {
+  /* Paleta neutra para PDFs */
+  --chart-bg-pdf: #ffffff;
+  --chart-text-pdf: #1f2937;    /* cinza-escuro */
+  --chart-line-pdf: #4b5563;    /* cinza médio */
+  --chart-colors-pdf: #3b82f6, #10b981, #f59e0b, #ef4444, #8b5cf6, #06b6d4, #84cc16, #ec4899;
+}
 
 /* ==== BASE ==== */
 * { box-sizing: border-box; }
@@ -1487,25 +1494,15 @@ body.theme-gunmetal .modal.solid {
                       const wrapper = document.getElementById('cmp-chart');
                       if (!wrapper) return alert('Gere um ou mais gráficos antes!');
                       const canvases = Array.from(wrapper.querySelectorAll('canvas'));
-                      if (canvases.length===0) return alert('Nenhum gráfico encontrado.');
+                      if (canvases.length === 0) return alert('Nenhum gráfico encontrado.');
 
-                      const { jsPDF } = window.jspdf;
-                      const doc = new jsPDF({ orientation:'p', unit:'pt', format:'a4' });
-                      const pageW = doc.internal.pageSize.getWidth();
-                      const pageH = doc.internal.pageSize.getHeight();
-                      const margin = 24;
-
-                      canvases.forEach((cv, idx) => {
-                        const img = cv.toDataURL('image/png', 1.0);
-                        const ratio = cv.width / cv.height;
-                        let w = pageW - 2*margin, h = w / ratio;
-                        if (h > pageH - 2*margin) { h = pageH - 2*margin; w = h * ratio; }
-                        const x = (pageW - w)/2, y = (pageH - h)/2;
-                        if (idx>0) doc.addPage();
-                        doc.addImage(img, 'PNG', x, y, w, h);
+                      window.PDFHelpers.exportTwoPerPage(canvases, 'graficos.pdf', {
+                        margin: 28,   // ajuste fino se quiser 24–36
+                        gap: 24       // espaço entre os 2 gráficos (20–32 também fica bom)
                       });
 
-                      doc.save('graficos.pdf');
+
+                      
                     }}
                   >
                     Baixar PDF (todos)
@@ -1559,6 +1556,9 @@ body.theme-gunmetal .modal.solid {
 
   <!-- jsPDF para exportar múltiplos gráficos em PDF -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <!-- PDF features -->
+  <script src="./src/features/pdf.js"></script>
+
 
 
   <script type="module" src="./src/router.js"></script>
