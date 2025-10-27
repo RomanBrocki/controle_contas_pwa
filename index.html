@@ -1492,14 +1492,21 @@ body.theme-gunmetal .modal.solid {
                     disabled={cmpSel.size===0}
                     onClick={()=>{
                       const wrapper = document.getElementById('cmp-chart');
-                      if (!wrapper) return alert('Gere um ou mais gráficos antes!');
                       const canvases = Array.from(wrapper.querySelectorAll('canvas'));
-                      if (canvases.length === 0) return alert('Nenhum gráfico encontrado.');
-
-                      window.PDFHelpers.exportTwoPerPage(canvases, 'graficos.pdf', {
-                        margin: 28,   // ajuste fino se quiser 24–36
-                        gap: 24       // espaço entre os 2 gráficos (20–32 também fica bom)
+                      if (!canvases.length) return alert('Nenhum gráfico gerado.');
+                      // 1️⃣ liga modo PDF e aplica o tema
+                      window.__PDF_MODE = true;
+                      canvases.forEach(cv => {
+                        const chart = cv._chart;
+                        if (chart && window.ChartFeatures?.applyPdfTheme) {
+                          window.ChartFeatures.applyPdfTheme(chart);
+                        }
                       });
+                      // 2️⃣ exporta 2 por página
+                      window.PDFHelpers.exportTwoPerPage(canvases, 'graficos.pdf', { margin: 28, gap: 24 });
+                      // 3️⃣ volta ao tema normal
+                      window.__PDF_MODE = false;
+                      canvases.forEach(cv => cv._chart?.update('none'));
 
 
                       

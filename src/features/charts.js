@@ -34,9 +34,53 @@ export function setupChartDefaults() {
   console.log('[Chart.js] Configuração global aplicada');
 }
 
+// === Paleta "PDF-friendly" ===
+export function applyPdfTheme(chart) {
+  const css = getComputedStyle(document.documentElement);
+  const cols = css.getPropertyValue('--chart-colors-pdf')
+    .split(',')
+    .map(c => c.trim());
+  const txt = (css.getPropertyValue('--chart-text-pdf') || '#1f2937').trim();
+  const line = (css.getPropertyValue('--chart-line-pdf') || '#4b5563').trim();
+
+  // títulos/legenda
+  if (chart.options?.plugins?.legend?.labels) {
+    chart.options.plugins.legend.labels.color = txt;
+  }
+  if (chart.options?.plugins?.title) {
+    chart.options.plugins.title.color = txt;
+  }
+
+  // eixos (barras/linhas)
+  if (chart.options?.scales) {
+    for (const axis of Object.values(chart.options.scales)) {
+      if (axis.ticks) axis.ticks.color = txt;
+      if (axis.grid) axis.grid.color = 'rgba(0,0,0,0.06)';
+      if (axis.border) axis.border.color = 'rgba(0,0,0,0.12)';
+    }
+  }
+
+  // datalabels escuros (se existir)
+  if (chart.options?.plugins?.datalabels) {
+    chart.options.plugins.datalabels.color = txt;
+  }
+
+  // datasets (bordas e paleta amigável a papel)
+  chart.data.datasets.forEach((ds, i) => {
+    if (!Array.isArray(ds.backgroundColor)) {
+      ds.backgroundColor = cols[i % cols.length];
+    }
+    ds.borderColor = line;
+  });
+
+  chart.update('none');
+}
+
 
 // % de corte para rótulo interno (10%)
 const PCT_LABEL_CUTOFF = 0.08;
+// Flag global para distinguir modo PDF
+window.__PDF_MODE = false;
 
 
 // =============================================
@@ -64,6 +108,21 @@ export function renderPizzaMensal(canvas, data, rotuloMes = 'Mês do relatório'
   const legendLabels = data.labels.map((label, i) =>
     `${label} [R$ ${data.valores[i].toLocaleString('pt-BR')}]`
   );
+  // === Cores sensíveis ao modo PDF (fundo branco) ===
+  function _pdfAwareLabelColors() {
+    const root = getComputedStyle(document.documentElement);
+    const body = getComputedStyle(document.body);
+    const isPdf = !!window.__PDF_MODE;
+    return {
+      text: isPdf
+        ? (root.getPropertyValue('--chart-text-pdf') || '#1f2937').trim()
+        : (body.getPropertyValue('--chart-label-text') || '#e5e7eb').trim(),
+      line: isPdf
+        ? (root.getPropertyValue('--chart-line-pdf') || '#4b5563').trim()
+        : (body.getPropertyValue('--chart-label-line') || '#9ca3af').trim(),
+    };
+  }
+
 
   // Plugin local p/ rótulos externos com linha + anticolisão por lado
   const pieOutlabels = {
@@ -79,8 +138,7 @@ export function renderPizzaMensal(canvas, data, rotuloMes = 'Mês do relatório'
       const total = arr.reduce((a, b) => a + (Number(b) || 0), 0);
 
       // estilos
-      const colorText = getComputedStyle(document.body).getPropertyValue('--chart-label-text').trim() || '#e5e7eb';
-      const colorLine = getComputedStyle(document.body).getPropertyValue('--chart-label-line').trim() || '#9ca3af';
+      const { text: colorText, line: colorLine } = _pdfAwareLabelColors();
       const font = "12px Inter, Roboto, sans-serif";
 
       // gera âncoras iniciais (antes do ajuste)
@@ -492,7 +550,8 @@ window.ChartFeatures = {
   setupChartDefaults,
   renderPizzaMensal,
   renderBarrasComparativas,
-  renderLinhaContaPeriodo,   // ✅ novo
+  renderLinhaContaPeriodo,
+  applyPdfTheme,
 };
 
 
