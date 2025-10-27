@@ -222,6 +222,15 @@ body.theme-gunmetal .modal.solid {
 /* Overlay mais escura/sem transparência visível para o lembrete */
 .overlay.hard { background: rgba(0,0,0,0.88) !important; }
 
+/* Chips de contas: texto quebra em múltiplas linhas sem colar no checkbox */
+.account-chip { padding: 10px 12px; }
+.account-chip__text {
+  display: inline-block;
+  line-height: 1.25;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 
 
 `}</style>
@@ -1005,10 +1014,11 @@ body.theme-gunmetal .modal.solid {
       const [cmpEndYear, setCmpEndYear] = React.useState(currentYear);
       const [cmpEndMonth, setCmpEndMonth] = React.useState(currentMonth);
       const [cmpType, setCmpType] = React.useState('linhas'); // 'linhas' | 'barras' | 'pizza'
-      const [cmpSel, setCmpSel] = React.useState(()=> new Set(contasDistinct.slice(0, 3)));
+      const [cmpSel, setCmpSel] = React.useState(()=> new Set()); // padrão: nenhum marcado
+
 
       // --- NOVOS ESTADOS ---
-      const [cmpContas, setCmpContas] = React.useState(Array.from(cmpSel)); // lista dinâmica p/ seleção
+      const [cmpContas, setCmpContas] = React.useState([]); // lista dinâmica p/ seleção
       const [cmpWarnings, setCmpWarnings] = React.useState([]); // avisos de “sem dados comparáveis” etc.
 
       // --- HELPERS ---
@@ -1024,18 +1034,19 @@ body.theme-gunmetal .modal.solid {
         return contasSel.map(c => items.filter(x=>x.nome===c).reduce((a,b)=>a+parseBRLnum(b.valor),0));
       }
       async function contasDistinctRange(range){
-        if (range==='mes'){
-          return await window.SupabaseQueries.contasDistinct(cmpYear, cmpMonth) || [];
+        // Sempre derive da lista real do período via DataAdapter.fetchMes
+        if (range === 'mes') {
+          const itens = await window.DataAdapter.fetchMes(cmpYear, cmpMonth);
+          return Array.from(new Set((itens || []).map(i => i.nome)));
         }
-        // período → união
+        // período → união de todos os meses do intervalo
         const months = makeMonthsList(cmpStartYear, cmpStartMonth, cmpEndYear, cmpEndMonth);
+        const respostas = await Promise.all(months.map(({y,m}) => window.DataAdapter.fetchMes(y,m)));
         const acc = new Set();
-        for (const {y,m} of months){
-          const cs = await window.SupabaseQueries.contasDistinct(y,m);
-          (cs||[]).forEach(n=>acc.add(n));
-        }
+        respostas.forEach(items => (items || []).forEach(i => acc.add(i.nome)));
         return Array.from(acc);
       }
+
 
       // quando trocar alcance, limitar opções de gráfico e ajustar valor padrão
       React.useEffect(()=>{
@@ -1049,12 +1060,9 @@ body.theme-gunmetal .modal.solid {
           const lista = await contasDistinctRange(cmpRange);
           setCmpContas(lista);
           // mantém seleção somente do que ainda existe
-          setCmpSel(prev=>{
-            const next = new Set(Array.from(prev).filter(n=>lista.includes(n)));
-            // se vazio, pré-seleciona até 3 primeiros para agilizar testes
-            if (next.size===0) lista.slice(0,3).forEach(n=>next.add(n));
-            return next;
-          });
+          setCmpSel(prev => new Set(Array.from(prev).filter(n=>lista.includes(n))));
+
+
         })();
       }, [cmpRange, cmpYear, cmpMonth, cmpStartYear, cmpStartMonth, cmpEndYear, cmpEndMonth]);
 
@@ -1233,25 +1241,55 @@ body.theme-gunmetal .modal.solid {
                     </div>
                   </div>
 
-                  {/* Seleção de contas */}
                   <div className="subpick">
                     <h3>Contas (seleção múltipla)</h3>
-                    <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2">
-                      {cmpContas.length===0 ? (
-                        <div className="text-sm opacity-70">Nenhuma conta encontrada no alcance selecionado.</div>
-                      ) : (
-                        <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-2">
-                          {cmpContas.map(name => (
-                            <label key={name} className="card flex items-center gap-2">
-                              <input type="checkbox" checked={cmpSel.has(name)} onChange={()=>toggleConta(name)} />
-                              <span>{name}</span>
-                            </label>
-                          ))}
-                        </div>
-                      )}
 
+                    {/* Ações rápidas */}
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      <button
+                        type="button"
+                        className="btn ghost"
+                        onClick={()=> setCmpSel(new Set(cmpContas))}
+                        disabled={cmpContas.length===0}
+                        title="Selecionar todas"
+                      >
+                        Selecionar todas
+                      </button>
+                      <button
+                        type="button"
+                        className="btn ghost"
+                        onClick={()=> setCmpSel(new Set())}
+                        disabled={cmpSel.size===0}
+                        title="Limpar seleção"
+                      >
+                        Limpar seleção
+                      </button>
                     </div>
+
+                    {/* Lista dinâmica */}
+                    {cmpContas.length===0 ? (
+                      <div className="text-sm opacity-70">Nenhuma conta encontrada no alcance selecionado.</div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                        {cmpContas.map(name => (
+                          <label
+                            key={name}
+                            className="card flex items-start gap-3 account-chip"
+                            title={name}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={cmpSel.has(name)}
+                              onChange={()=>toggleConta(name)}
+                              style={{ marginTop: 3 }}
+                            />
+                            <span className="account-chip__text">{name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
+
 
                   <div className="text-sm opacity-70" style={{marginTop:12}}>
                     (Opcional) visualizar gráfico antes do download.
@@ -1259,162 +1297,221 @@ body.theme-gunmetal .modal.solid {
                 </div>
 
                 <div className="footer flex flex-wrap gap-2 justify-end">
-                  <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
-
+                  {/* Voltar */}
                   <button
+                    type="button"
+                    className="btn ghost"
+                    onClick={()=>onChangeTab('home')}
+                  >
+                    Voltar
+                  </button>
+
+                  {/* Gerar gráfico — reaproveite SEU handler atual */}
+                  <button
+                    type="button"
                     className="btn ghost"
                     disabled={cmpSel.size===0 || (cmpRange==='periodo' && cmpType==='barras')}
-                    onClick={async (e)=>{
-                      // limpa área de preview
+                    onClick={async (e) => {
+                      // limpa área anterior
                       const content = e.currentTarget.closest('.modal').querySelector('.content');
-                      content.querySelectorAll('#cmp-chart, .cmp-note').forEach(n=>n.remove());
-                      setCmpWarnings([]);
+                      content.querySelectorAll('#cmp-chart, .cmp-note').forEach(n => n.remove());
 
-                      ChartFeatures.setupChartDefaults();
-
-                      const contasSel = Array.from(cmpSel);
-                      // cria um container onde renderizaremos 1..N canvases
+                      // prepara host/canvas helpers
                       const host = document.createElement('div');
                       host.id = 'cmp-chart';
                       host.style.marginTop = '16px';
                       content.appendChild(host);
 
-                      // helpers locais
-                      const addNote = (txt)=>{
+                      const addNote = (txt) => {
                         const n = document.createElement('div');
                         n.className = 'cmp-note text-sm opacity-70 mt-2';
                         n.textContent = txt;
                         content.appendChild(n);
                       };
-                      const addCanvas = (height='380px')=>{
+                      const addCanvas = (h = '380px') => {
                         const wrap = document.createElement('div');
-                        wrap.style.width = '100%'; wrap.style.height = height; wrap.style.marginTop = '12px';
+                        wrap.style.width = '100%';
+                        wrap.style.height = h;
+                        wrap.style.marginTop = '12px';
                         const c = document.createElement('canvas');
                         wrap.appendChild(c);
                         host.appendChild(wrap);
                         return c;
                       };
-                      const fetchMes = (y,m)=>window.DataAdapter.fetchMes(y,m);
 
-                      // ---------- PIZZA ----------
-                      if (cmpType==='pizza'){
-                        if (cmpRange==='mes'){
+                      // utilidades de dados
+                      const contasSel = Array.from(cmpSel);
+                      const fetchMes = (y, m) => window.DataAdapter.fetchMes(y, m);
+                      const monthLabel = (y, m) => `${monthNamePT(m)} / ${y}`;
+                      const sumByConta = (items, contas) =>
+                        contas.map(c => (items || [])
+                          .filter(x => x.nome === c)
+                          .reduce((a, b) => a + parseFloat(String(b.valor).replace(/[^\d,]/g,'').replace(/\.(?=\d)/g,'').replace(',','.')) || 0, 0)
+                        );
+                      const makeMonthsList = (y1, m1, y2, m2) => {
+                        const out = []; let y=y1, m=m1;
+                        while (y < y2 || (y === y2 && m <= m2)) { out.push({y,m}); m++; if (m>12){m=1;y++;} }
+                        return out;
+                      };
+
+                      // aplica defaults do Chart.js
+                      if (window.ChartFeatures?.setupChartDefaults) window.ChartFeatures.setupChartDefaults();
+
+                      // --- PIZZA ---
+                      if (cmpType === 'pizza') {
+                        if (cmpRange === 'mes') {
                           const cur = await fetchMes(cmpYear, cmpMonth);
                           const valores = sumByConta(cur, contasSel);
                           const c = addCanvas();
-                          ChartFeatures.renderPizzaMensal(c, {labels:contasSel, valores}, `${monthNamePT(cmpMonth)} / ${cmpYear}`);
+                          window.ChartFeatures.renderPizzaMensal(c, { labels: contasSel, valores }, monthLabel(cmpYear, cmpMonth));
                           return;
                         } else {
-                          // período → soma agregada no intervalo
                           const months = makeMonthsList(cmpStartYear, cmpStartMonth, cmpEndYear, cmpEndMonth);
+                          // 🔥 performance: busca em paralelo
+                          const respostas = await Promise.all(months.map(({y,m}) => fetchMes(y,m)));
                           const soma = new Array(contasSel.length).fill(0);
-                          for (const {y,m} of months){
-                            const itens = await fetchMes(y,m);
-                            const v = sumByConta(itens, contasSel);
-                            v.forEach((n,i)=> soma[i]+=n);
-                          }
+                          respostas.forEach(items => {
+                            const v = sumByConta(items, contasSel);
+                            v.forEach((n, i) => soma[i] += n);
+                          });
                           const c = addCanvas();
                           const rot = `${monthNamePT(cmpStartMonth)} ${cmpStartYear} – ${monthNamePT(cmpEndMonth)} ${cmpEndYear}`;
-                          ChartFeatures.renderPizzaMensal(c, {labels:contasSel, valores:soma}, rot);
+                          window.ChartFeatures.renderPizzaMensal(c, { labels: contasSel, valores: soma }, rot);
                           return;
                         }
                       }
 
-                      // ---------- LINHAS (período) ----------
-                      if (cmpType==='linhas' && cmpRange==='periodo'){
+                      // --- LINHAS (período) ---
+                      if (cmpType === 'linhas' && cmpRange === 'periodo') {
                         const months = makeMonthsList(cmpStartYear, cmpStartMonth, cmpEndYear, cmpEndMonth);
-                        const labelsMes = months.map(({y,m})=> `${monthNamePT(m).slice(0,3)}/${y}`);
-                        // pré-carrega todos os meses
-                        const cache = {};
-                        for (const {y,m} of months){ cache[`${y}-${m}`] = await fetchMes(y,m); }
+                        const labelsMes = months.map(({y,m}) => `${monthNamePT(m).slice(0,3)}/${y}`);
+                        const respostas = await Promise.all(months.map(({y,m}) => fetchMes(y,m)));
 
                         let plotted = 0;
-                        for (const conta of contasSel){
-                          const serie = months.map(({y,m})=>{
-                            const arr = cache[`${y}-${m}`]||[];
-                            return arr.filter(x=>x.nome===conta).reduce((a,b)=>a+parseBRLnum(b.valor),0);
-                          });
-                          const pontosComValor = serie.filter(v=>v>0).length;
-                          if (pontosComValor>=2){
+                        contasSel.forEach((conta) => {
+                          const serie = respostas.map(items =>
+                            (items || []).filter(x => x.nome === conta)
+                              .reduce((a,b) => a + parseFloat(String(b.valor).replace(/[^\d,]/g,'').replace(/\.(?=\d)/g,'').replace(',','.')) || 0, 0)
+                          );
+                          const pontos = serie.filter(v => v > 0).length;
+                          if (pontos >= 2) {
                             const c = addCanvas();
-                            ChartFeatures.renderLinhaContaPeriodo(c, {nome:conta, meses:labelsMes, valores:serie});
+                            window.ChartFeatures.renderLinhaContaPeriodo(c, { nome: conta, meses: labelsMes, valores: serie });
                             plotted++;
                           } else {
                             addNote(`⚠️ "${conta}": sem reincidência suficiente no período para linhas.`);
                           }
-                        }
-                        if (plotted===0) addNote('Nenhuma conta possui dados em 2 ou mais meses no período selecionado.');
+                        });
+
+                        if (plotted === 0) addNote('Nenhuma conta possui dados em 2 ou mais meses no período selecionado.');
                         return;
                       }
 
-                      // ---------- BARRAS (mês único; duas comparações lado a lado) ----------
-                      if (cmpType==='barras' && cmpRange==='mes'){
-                        // atual
+                      // --- BARRAS (mês único; 2 comparações lado a lado) ---
+                      if (cmpType === 'barras' && cmpRange === 'mes') {
                         const atual = await fetchMes(cmpYear, cmpMonth);
                         const valsAtual = sumByConta(atual, contasSel);
-                        const rotAtual = `${monthNamePT(cmpMonth)} / ${cmpYear}`;
+                        const rotAtual = monthLabel(cmpYear, cmpMonth);
 
                         // mês anterior
-                        const prevM = cmpMonth>1 ? cmpMonth-1 : 12;
-                        const prevY = cmpMonth>1 ? cmpYear : (cmpYear-1);
+                        const prevM = cmpMonth > 1 ? cmpMonth - 1 : 12;
+                        const prevY = cmpMonth > 1 ? cmpYear : (cmpYear - 1);
                         const ant = await fetchMes(prevY, prevM);
                         const valsAnt = sumByConta(ant, contasSel);
-                        const temAnt = valsAnt.some(v=>v>0);
+                        const temAnt = valsAnt.some(v => v > 0);
 
                         // mesmo mês do ano anterior
-                        const anoAnt = await fetchMes(cmpYear-1, cmpMonth);
+                        const anoAnt = await fetchMes(cmpYear - 1, cmpMonth);
                         const valsAnoAnt = sumByConta(anoAnt, contasSel);
-                        const temAnoAnt = valsAnoAnt.some(v=>v>0);
+                        const temAnoAnt = valsAnoAnt.some(v => v > 0);
 
-                        if (temAnt){
+                        if (temAnt) {
                           const c1 = addCanvas('360px');
-                          ChartFeatures.renderBarrasComparativas(
+                          window.ChartFeatures.renderBarrasComparativas(
                             c1,
                             { labels: contasSel, atual: valsAtual, comparado: valsAnt },
                             'anterior',
-                            { atual: rotAtual, comparado: `${monthNamePT(prevM)} / ${prevY}` }
+                            { atual: rotAtual, comparado: monthLabel(prevY, prevM) }
                           );
                         } else {
                           addNote('ℹ️ Sem conta correspondente no mês anterior para as seleções atuais.');
                         }
 
-                        if (temAnoAnt){
+                        if (temAnoAnt) {
                           const c2 = addCanvas('360px');
-                          ChartFeatures.renderBarrasComparativas(
+                          window.ChartFeatures.renderBarrasComparativas(
                             c2,
                             { labels: contasSel, atual: valsAtual, comparado: valsAnoAnt },
                             'anoAnterior',
-                            { atual: rotAtual, comparado: `${monthNamePT(cmpMonth)} / ${cmpYear-1}` }
+                            { atual: rotAtual, comparado: monthLabel(cmpYear - 1, cmpMonth) }
                           );
                         } else {
                           addNote('ℹ️ Sem conta correspondente no mesmo mês do ano anterior para as seleções atuais.');
                         }
 
-                        if (!temAnt && !temAnoAnt){
-                          addNote('Nenhuma base comparável encontrada.');
-                        }
+                        if (!temAnt && !temAnoAnt) addNote('Nenhuma base comparável encontrada.');
                         return;
                       }
-                    }}
+
+                      // combinação inválida (ex.: barras + período)
+                      alert('Combinação de alcance e tipo não suportada.');
+                    }
+}
                   >
                     Gerar gráfico
                   </button>
 
+                  {/* Baixar PNG (primeiro gráfico) */}
                   <button
+                    type="button"
                     className="btn primary"
                     disabled={cmpSel.size===0}
                     onClick={()=>{
                       const firstCanvas = document.querySelector('#cmp-chart canvas');
                       if (!firstCanvas) return alert('Gere um gráfico antes!');
-                      const link = document.createElement('a');
-                      link.download = 'grafico.png';
-                      link.href = firstCanvas.toDataURL('image/png');
-                      link.click();
+                      const a = document.createElement('a');
+                      a.download = 'grafico.png';
+                      a.href = firstCanvas.toDataURL('image/png');
+                      a.click();
                     }}
                   >
                     Baixar PNG
                   </button>
+
+                  {/* Baixar PDF (todos os gráficos renderizados) */}
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={cmpSel.size===0}
+                    onClick={()=>{
+                      const wrapper = document.getElementById('cmp-chart');
+                      if (!wrapper) return alert('Gere um ou mais gráficos antes!');
+                      const canvases = Array.from(wrapper.querySelectorAll('canvas'));
+                      if (canvases.length===0) return alert('Nenhum gráfico encontrado.');
+
+                      const { jsPDF } = window.jspdf;
+                      const doc = new jsPDF({ orientation:'p', unit:'pt', format:'a4' });
+                      const pageW = doc.internal.pageSize.getWidth();
+                      const pageH = doc.internal.pageSize.getHeight();
+                      const margin = 24;
+
+                      canvases.forEach((cv, idx) => {
+                        const img = cv.toDataURL('image/png', 1.0);
+                        const ratio = cv.width / cv.height;
+                        let w = pageW - 2*margin, h = w / ratio;
+                        if (h > pageH - 2*margin) { h = pageH - 2*margin; w = h * ratio; }
+                        const x = (pageW - w)/2, y = (pageH - h)/2;
+                        if (idx>0) doc.addPage();
+                        doc.addImage(img, 'PNG', x, y, w, h);
+                      });
+
+                      doc.save('graficos.pdf');
+                    }}
+                  >
+                    Baixar PDF (todos)
+                  </button>
                 </div>
+
 
                 {cmpSel.size===0 && (
                   <div className="text-xs opacity-70 mt-2 text-right">
@@ -1459,6 +1556,10 @@ body.theme-gunmetal .modal.solid {
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-piechart-outlabels@1.1.0"></script>
 
   <script type="module" src="./src/features/charts.js"></script>
+
+  <!-- jsPDF para exportar múltiplos gráficos em PDF -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
 
   <script type="module" src="./src/router.js"></script>
   <!-- novo: boot do router como módulo -->
