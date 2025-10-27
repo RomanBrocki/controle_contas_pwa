@@ -360,6 +360,8 @@ export function renderBarrasComparativas(canvas, data, tipo = 'anterior', rotulo
     },
     options: {
       indexAxis: 'y',
+      // mais espaço p/ rótulo externo no fim da barra
+      layout: { padding: { top: 8, right: 36, bottom: 8, left: 8 } },
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
@@ -383,22 +385,55 @@ export function renderBarrasComparativas(canvas, data, tipo = 'anterior', rotulo
           }
         },
         datalabels: {
+          clamp: true,
+          clip: false,
+          formatter: (v) => (v > 0 ? new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v) : ''),
+
+
+          // decide posição: dentro se >= 75% da largura útil, senão fora
+          align: (ctx) => {
+            const scale = ctx.chart?.scales?.x;
+            const v = Number(ctx.dataset.data[ctx.dataIndex]) || 0;
+            if (!scale || !isFinite(scale.min) || !isFinite(scale.max)) return 'right';
+            const min = scale.min ?? 0, max = scale.max ?? 1;
+            const range = Math.max(1, max - min);
+            const ratio = Math.max(0, (v - min)) / range;
+            return ratio >= 0.75 ? 'left' : 'right'; // ≥75% dentro; senão fora (após a barra)
+          },
           anchor: 'end',
-          align: 'right',
-          color: '#e5e7eb',
-          font: { size: 10 },
-          formatter: (v) => `R$ ${v.toLocaleString('pt-BR')}`
-        }
+          offset: (ctx) => {
+            const scale = ctx.chart?.scales?.x;
+            const v = Number(ctx.dataset.data[ctx.dataIndex]) || 0;
+            if (!scale || !isFinite(scale.min) || !isFinite(scale.max)) return 6;
+            const min = scale.min ?? 0, max = scale.max ?? 1;
+            const range = Math.max(1, max - min);
+            const ratio = Math.max(0, (v - min)) / range;
+            return ratio >= 0.75 ? -6 : 6; // dentro puxa 6px; fora empurra 6px
+          },
+          color: (ctx) => {
+            const scale = ctx.chart?.scales?.x;
+            const v = Number(ctx.dataset.data[ctx.dataIndex]) || 0;
+            if (!scale || !isFinite(scale.min) || !isFinite(scale.max)) return '#111';
+            const min = scale.min ?? 0, max = scale.max ?? 1;
+            const range = Math.max(1, max - min);
+            const ratio = Math.max(0, (v - min)) / range;
+            if (ratio >= 0.75) return '#fff';
+            const txt = getComputedStyle(document.body).getPropertyValue('--chart-label-text').trim()
+                    || getComputedStyle(document.documentElement).getPropertyValue('--chart-text-pdf').trim()
+                    || '#1f2937';
+            return txt;
+          },
+          backgroundColor: null,
+          borderRadius: 0,
+          font: { size: 12, weight: '600' },
+        },
+
+
+
       },
       scales: {
-        x: {
-          beginAtZero: true,
-          grid: { color: 'rgba(255,255,255,0.06)' },
-          ticks: {
-            color: '#e5e7eb',
-            callback: (v) => `R$ ${v}`
-          }
-        },
+        // valores já aparecem nas barras → escondemos o eixo X
+        x: { display: false, grid: { display: false }, ticks: { display: false } },
         y: {
           grid: { color: 'rgba(255,255,255,0.06)' },
           ticks: { color: '#e5e7eb' }
@@ -407,7 +442,8 @@ export function renderBarrasComparativas(canvas, data, tipo = 'anterior', rotulo
     },
     plugins: [window.ChartDataLabels].filter(Boolean)
   });
-
+  
+  
   canvas._chart = chart;
   return chart;
 }
