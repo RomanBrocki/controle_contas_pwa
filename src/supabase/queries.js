@@ -15,7 +15,7 @@ import { supabase, CURRENT_UID } from './client.js';
 
 
 // Nome da tabela
-const TABLE = 'controle_contas_pwa';
+const TABLE = 'controle_contas';
 
 // -----------------------------
 // 🔍 Listar contas de um mês
@@ -120,7 +120,6 @@ export async function insertConta(conta) {
   const d = new Date(conta.data_de_pagamento); // espera 'YYYY-MM-DD'
   const safe = {
     user_id: CURRENT_UID,                 // obrigatório na PWA
-    legacy_id: conta.legacy_id ?? null,   // fica null por enquanto
     nome_da_conta: conta.nome_da_conta,
     valor: conta.valor,
     data_de_pagamento: conta.data_de_pagamento,
@@ -147,7 +146,6 @@ export async function insertConta(conta) {
 export async function updateConta(id, conta) {
   const d = conta.data_de_pagamento ? new Date(conta.data_de_pagamento) : null;
   const safe = {
-    // NÃO permita trocar user_id/legacy_id aqui
     nome_da_conta: conta.nome_da_conta,
     valor: conta.valor,
     data_de_pagamento: conta.data_de_pagamento,
