@@ -17,6 +17,9 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 // 🔗 Cria o client exportável
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// UID temporário do Roman até termos login na UI
+export const CURRENT_UID = '6b0cec66-788a-4472-8930-8a2843ccdf11';
+
 
 // Apenas log inicial (opcional)
 console.log('[Supabase] Client inicializado:', SUPABASE_URL);

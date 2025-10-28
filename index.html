@@ -277,12 +277,13 @@ body.theme-gunmetal .modal.solid {
       );
     }
     // Top 10 tipos de conta (mock)
-    const COMMON_TYPES = ['Energia','Internet','Água','Condomínio','Escola','Celular','Transporte','Mercado','Streaming','IPTU'];
+    const COMMON_TYPES = ['Luz','Internet','Condomínio','Escola','Celular','Empregada','Mercado','Cartão de Crédito','Gás'];
 
     function PostLoginMock() {
       const [theme, setTheme] = React.useState('gunmetal');
       const [showOverlay, setShowOverlay] = React.useState(true);
       const [editing, setEditing] = React.useState(null); // {mode:'edit'|'new', item:{...}}
+      const [typeOpts, setTypeOpts] = React.useState([]);
       const [activeId, setActiveId] = React.useState(null); // anima o card clicado
       const [showReports, setShowReports] = React.useState(false);
       const [reportsTab, setReportsTab] = React.useState('home'); // 'mensal' | 'periodo' | 'comparativos'
@@ -316,6 +317,19 @@ body.theme-gunmetal .modal.solid {
           setYearSel(years[0]); // assumindo que listYears() já retorna DESC
         }
       }, [years]);
+
+      React.useEffect(() => {
+        (async () => {
+          if (!editing) return; // abre só quando modal 'Nova/Editar' estiver ativo
+          try {
+            const list = await window.SupabaseQueries.contasDistinctUltimos12?.();
+            setTypeOpts(Array.isArray(list) ? list : []);
+          } catch (e) {
+            console.warn('[tipo de conta] usando fallback COMMON_TYPES', e);
+            setTypeOpts([]);
+          }
+        })();
+      }, [editing]); // quando abrir/fechar o modal
 
 
       const [yearSel, setYearSel] = React.useState(2025);
@@ -665,6 +679,7 @@ body.theme-gunmetal .modal.solid {
             <EditPopup
               data={editing}
               payers={payersDB}
+              typeOpts={typeOpts}
               onClose={()=>setEditing(null)}
               onSave={handleSave}
               onDelete={handleDelete}
@@ -733,7 +748,7 @@ body.theme-gunmetal .modal.solid {
       );
     }
 
-    function EditPopup({ data, payers, onClose, onSave, onDelete }) {
+    function EditPopup({ data, payers, typeOpts = [], onClose, onSave, onDelete }) {
       const { mode, item: initial } = data;
       // Fecha o modal ao pressionar Esc (desktop apenas)
       React.useEffect(() => {
@@ -831,9 +846,10 @@ body.theme-gunmetal .modal.solid {
                     <option value={initial.nome}>{initial.nome} (atual)</option>
                   ) : null}
 
-                  {COMMON_TYPES.map(n => (
+                  {(typeOpts.length ? typeOpts : COMMON_TYPES).map(n => (
                     <option key={n} value={n}>{n}</option>
                   ))}
+
                   <option value="__outro">Outro…</option>
                 </select>
 
@@ -1318,6 +1334,7 @@ body.theme-gunmetal .modal.solid {
                     type="button"
                     className="btn ghost"
                     disabled={cmpSel.size===0 || (cmpRange==='periodo' && cmpType==='barras')}
+                    
                     onClick={async (e) => {
                       // limpa área anterior
                       const content = e.currentTarget.closest('.modal').querySelector('.content');
