@@ -744,7 +744,7 @@ function ReportsModal({
 
           const printHeader = () => {
             doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
-            doc.text('Nome (Instância)', col.nome.x, curY);
+            doc.text('', col.nome.x, curY);
             doc.text('Valor',            col.valor.x + col.valor.w, curY, { align: 'right' });
             doc.text('Dividida',         col.dividida.x, curY);
             doc.text('Boleto',           col.boleto.x, curY);
@@ -793,13 +793,14 @@ function ReportsModal({
               // Dividida
               doc.text(it.dividida ? 'Sim' : 'Não', col.dividida.x, curY);
 
-              // Links (clicáveis) — usa it.links.{boleto,comp}
+              // Links (clicáveis, com máscara)
               if (it.links?.boleto) {
-                doc.textWithLink(short(it.links.boleto, 32), col.boleto.x, curY, { url: it.links.boleto });
+                doc.textWithLink('Boleto', col.boleto.x, curY, { url: it.links.boleto });
               }
               if (it.links?.comp) {
-                doc.textWithLink(short(it.links.comp, 32), col.comprovante.x, curY, { url: it.links.comp });
+                doc.textWithLink('Comprovante', col.comprovante.x, curY, { url: it.links.comp });
               }
+
 
               curY += lineH; rowsOnPage++;
             }
@@ -879,13 +880,13 @@ function ReportsModal({
               // Dividida
               ctx.fillText(r.dividida ? 'Sim' : 'Não', cols[2].x, yRow);
 
-              // Links mostrados como texto curto (você já tinha)
-              const billet = r.link_boleto ? (r.link_boleto.length>28 ? r.link_boleto.slice(0,28)+'…' : r.link_boleto) : '';
-              const proof  = r.link_comprovante ? (r.link_comprovante.length>28 ? r.link_comprovante.slice(0,28)+'…' : r.link_comprovante) : '';
+              // Exibe máscaras estáticas
+              const billetLabel = r.link_boleto ? 'Boleto' : '';
+              const proofLabel  = r.link_comprovante ? 'Comprovante' : '';
 
-              // Desenha textos
-              ctx.fillText(billet, cols[3].x, yRow);
-              ctx.fillText(proof,  cols[4].x, yRow);
+              ctx.fillText(billetLabel, cols[3].x, yRow);
+              ctx.fillText(proofLabel,  cols[4].x, yRow);
+
 
               // 🔗 Registra retângulos clicáveis (em coordenadas do CANVAS)
               const approxTextH = 14; // altura de fonte aproximada
@@ -967,10 +968,11 @@ function ReportsModal({
 
             const byPayer = {};
             itensMes.forEach(it=>{
-              const payer = it.quem_pagou || '—';
+              const payer = it.quem || '—';      // 👈 usa o campo mapeado pelo DataAdapter
               if (!byPayer[payer]) byPayer[payer] = [];
               byPayer[payer].push(it);
             });
+
             const payers = Object.keys(byPayer).sort((a,b)=>a.localeCompare(b,'pt-BR'));
             const rows=[];
             payers.forEach(p=>{
