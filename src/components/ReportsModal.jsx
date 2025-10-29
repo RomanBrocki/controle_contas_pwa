@@ -33,7 +33,13 @@ function ReportsModal({
       const [cmpSel, setCmpSel] = React.useState(()=> new Set(defaultSel));
         React.useEffect(()=>{ if (tab==='comparativos') setCmpSel(new Set(defaultSel)); }, [tab, defaultSel]);
 
-
+      // === Texto padrão do APP por tema (não afeta PDF) ===
+      function __appText() {
+        // tenta CSS var do body; senão, fallback por tema
+        const v = (getComputedStyle(document.body).getPropertyValue('--chart-label-text') || '').trim();
+        if (v) return v;
+        return document.body.classList.contains('theme-light') ? '#0b1220' : '#e5e7eb';
+      }
 
       // --- NOVOS ESTADOS ---
       const [cmpContas, setCmpContas] = React.useState([]); // lista dinâmica p/ seleção
@@ -140,6 +146,228 @@ function ReportsModal({
           return n;
         });
       }
+      // === Renderer exclusivo para PIZZA do MENSAL (sem profile; 100% das contas do mês) ===
+      // === Renderer exclusivo para PIZZA do MENSAL (sem profile; 100% das contas do mês) ===
+      function renderPizzaMensalStrict(canvas, { labels, valores }, titulo) {
+        // ===== Normalização / Preparos =====
+        const labs = [];
+        const dataVals = [];
+        for (let i = 0; i < (labels?.length ?? 0); i++) {
+          const v = Number(valores?.[i] ?? 0);
+          if (isFinite(v) && v > 0) {
+            labs.push(String(labels[i] ?? '').trim());
+            dataVals.push(v);
+          }
+        }
+        const total = dataVals.reduce((a, b) => a + b, 0) || 1;
+        const fmtBRL = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+        // Textos usados:
+        // - nameLabels: rótulo externo (texto curto, sem valores)
+        // - legendLabels: legenda rica (Nome — R$ valor (xx%))
+        const nameLabels = labs.slice();
+        const legendLabels = labs.map((name, i) => {
+          const v = Number(dataVals[i] || 0);
+          return `${name} — ${fmtBRL(v)}`;
+        });
+
+        // ===== Dependências Chart.js =====
+        const Chart = window.Chart;
+        const Datalabels = window.ChartDataLabels;
+
+        // registra datalabels se necessário
+        if (Chart && Datalabels && !Chart.registry.plugins.get('datalabels')) {
+          try { Chart.register(Datalabels); } catch (_) {}
+        }
+
+        // ===== Plugin local p/ rótulos externos com linha + anticolisão por lado =====
+        const pieOutlabels = {
+          id: 'pieOutlabels',
+          afterDatasetsDraw(chart) {
+            const { ctx, chartArea } = chart;
+            const ds = chart.data.datasets?.[0];
+            const meta = chart.getDatasetMeta(0);
+            if (!ds || !meta) return;
+
+            const arr = ds.data || [];
+            const totalLocal = arr.reduce((a, b) => a + (Number(b) || 0), 0) || 1;
+
+            // estilos cientes de PDF/app
+            const textColor = (window.__PDF_MODE
+              ? (getComputedStyle(document.documentElement).getPropertyValue('--chart-text-pdf') || '#111827')
+              : (__appText?.() || '#e5e7eb')).trim() || '#333';
+            const lineColor = (window.__PDF_MODE
+              ? (getComputedStyle(document.documentElement).getPropertyValue('--chart-line-pdf') || '#4b5563')
+              : 'rgba(255,255,255,.45)').trim() || '#666';
+
+            const font = "12px Inter, Roboto, system-ui, -apple-system, Segoe UI, Arial, sans-serif";
+
+            // âncoras iniciais
+            const right = [], left = [];
+            meta.data.forEach((arc, i) => {
+              const v = Number(arr[i]) || 0;
+              if (!v) return;
+
+              const angle = (arc.startAngle + arc.endAngle) / 2;
+              const cos = Math.cos(angle), sin = Math.sin(angle);
+              const r = arc.outerRadius;
+              const x0 = arc.x + cos * r;
+              const y0 = arc.y + sin * r;
+
+              const p = totalLocal ? v / totalLocal : 0;
+              const extra = p < 0.08 ? 16 : 10;  // “explode” leve p/ abrir espaço
+              const x1 = arc.x + cos * (r + extra);
+              const y1 = arc.y + sin * (r + extra);
+
+              const tick = 18;
+              const sideRight = cos >= 0;
+              const x2 = x1 + (sideRight ? tick : -tick);
+              const y2 = y1;
+
+              (sideRight ? right : left).push({
+                i, v, p, x0, y0, x1, y1, x2, y2, sideRight,
+                text: nameLabels[i] || ''
+              });
+            });
+
+            // anticolisão por lado
+            const resolve = (items) => {
+              if (items.length <= 1) return;
+              const minGap = 14;
+              const topLim = chartArea.top + 6;
+              const botLim = chartArea.bottom - 6;
+
+              items.sort((a, b) => a.y2 - b.y2);
+              items[0].y2 = Math.max(items[0].y2, topLim);
+              for (let k = 1; k < items.length; k++) {
+                items[k].y2 = Math.max(items[k].y2, items[k - 1].y2 + minGap);
+              }
+              if (items[items.length - 1].y2 > botLim) {
+                items[items.length - 1].y2 = botLim;
+                for (let k = items.length - 2; k >= 0; k--) {
+                  items[k].y2 = Math.min(items[k].y2, items[k + 1].y2 - minGap);
+                }
+                items[0].y2 = Math.max(items[0].y2, topLim);
+              }
+            };
+
+            resolve(right);
+            resolve(left);
+
+            // desenha
+            ctx.save();
+            ctx.font = font;
+            ctx.fillStyle = textColor;
+            ctx.strokeStyle = lineColor;
+            ctx.lineWidth = 2;
+
+            const drawItem = (it) => {
+              // linhas (borda → “ponto” → segmento horizontal)
+              ctx.beginPath();
+              ctx.moveTo(it.x0, it.y0);
+              ctx.lineTo(it.x1, it.y2);
+              ctx.lineTo(it.x2, it.y2);
+              ctx.stroke();
+
+              // texto
+              ctx.textAlign = it.sideRight ? 'left' : 'right';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(it.text, it.x2 + (it.sideRight ? 6 : -6), it.y2);
+            };
+
+            right.forEach(drawItem);
+            left.forEach(drawItem);
+            ctx.restore();
+          }
+        };
+
+        // ===== Destrói gráfico anterior =====
+        if (canvas._chart) { try { canvas._chart.destroy(); } catch (_) {} }
+
+        // ===== Construção do gráfico =====
+        const ctx = canvas.getContext('2d');
+        const chart = new Chart(ctx, {
+          type: 'pie',
+          data: {
+            labels: legendLabels,               // ✅ legenda rica (Nome — R$ valor (%))
+            datasets: [{
+              data: dataVals,
+              backgroundColor: [
+                '#22d3ee', '#3b82f6', '#10b981', '#facc15', '#f472b6',
+                '#a855f7', '#f97316', '#ef4444', '#94a3b8', '#14b8a6'
+              ],
+              borderColor: window.__PDF_MODE
+                ? (getComputedStyle(document.documentElement).getPropertyValue('--chart-line-pdf') || '#0e1218')
+                : '#0e1218',
+              borderWidth: 1,
+              // explode leve nas fatias < 8% para abrir espaço para os traços
+              offset: (ctx) => {
+                const v = Number(ctx.raw) || 0;
+                const p = total ? v / total : 0;
+                return p < 0.08 ? 12 : 4; // px
+              }
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            radius: '84%',                                      // pizza um pouco menor
+            layout: { padding: { top: 18, right: 64, bottom: 18, left: 64 } }, // espaço p/ outlabels
+            plugins: {
+              title: {
+                display: true,
+                text: `Gastos por conta — ${titulo}`,
+                font: { size: 20, weight: 'bold' },             // ✅ título maior
+                padding: { top: 8, bottom: 16 },                // ✅ mais espaço abaixo do título
+                color: window.__PDF_MODE
+                  ? (getComputedStyle(document.documentElement).getPropertyValue('--chart-text-pdf') || '#111827')
+                  : (__appText?.() || '#e5e7eb')
+              },
+              tooltip: { enabled: false },                      // PDF-friendly
+              datalabels: {
+                color: '#fff',
+                display: (ctx) => {
+                  const arr = ctx.chart?.data?.datasets?.[0]?.data || [];
+                  const sum = arr.reduce((a,b)=>a + (Number(b)||0), 0);
+                  const v = Number(ctx.dataset.data[ctx.dataIndex]) || 0;
+                  const p = sum ? v / sum : 0;
+                  return v > 0 && p >= 0.06;                    // ≥ 6%
+                },
+                formatter: (value, ctx) => {
+                  const arr = ctx.chart?.data?.datasets?.[0]?.data || [];
+                  const sum = arr.reduce((a,b)=>a + (Number(b)||0), 0);
+                  const v = Number(value) || 0;
+                  const p = sum ? v / sum : 0;
+                  return (p * 100).toFixed(p >= 0.1 ? 0 : 1).replace('.', ',') + '%';
+                },
+                font: { size: 12, weight: 'bold', lineHeight: 1.1 },
+                textAlign: 'center',
+                offset: 2
+              },
+              legend: {
+                position: 'bottom',
+                labels: {
+                  color: (__appText?.() || '#e5e7eb'),
+                  font: { size: 12 },
+                  usePointStyle: true,     // ✅ usa marcador circular
+                  pointStyle: 'circle',    // ✅ define forma redonda
+                  boxWidth: 10,            // tamanho do pontinho
+                  boxHeight: 10
+                }
+              }
+
+            },
+            animation: false,
+            events: []                                          // sem interações
+          },
+          plugins: [window.ChartDataLabels, pieOutlabels].filter(Boolean) // ✅ inclui o plugin local
+        });
+
+        canvas._chart = chart;
+        return chart;
+      }
+
+
       
       // === RELATÓRIO MENSAL (corrigido: campos, layout A4 e render flush) ===
       async function onPdfRelatorioMensal() {
@@ -265,17 +493,16 @@ function ReportsModal({
 
         const host = makeHost();
         const canvases = [];
+        // canvas da Pizza (primeiro slot da página)
+        const cvPizza = addCanvas(host, 680, 1100);
 
         try {
           // 1) Pizza 100% do mês
-          window.ChartFeatures?.setupChartDefaults?.();
-          const cvPizza = addCanvas(host, 680, 1100);
-          window.ChartFeatures?.renderPizzaMensal?.(cvPizza, { labels: contasAll, valores: valoresAll }, rotMes);
-          await flush();
+          renderPizzaMensalStrict(cvPizza, { labels: contasAll, valores: valoresAll }, rotMes);
           if (cvPizza._chart && window.ChartFeatures?.applyPdfTheme) {
             window.ChartFeatures.applyPdfTheme(cvPizza._chart);
             cvPizza._chart.update('none');
-          }
+            }
           canvases.push(cvPizza);
 
           // 1b) Card-resumo
