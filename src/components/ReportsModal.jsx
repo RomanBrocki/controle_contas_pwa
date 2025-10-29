@@ -99,6 +99,35 @@ function ReportsModal({
         setCmpEndYear(currentYear);
         setCmpEndMonth(currentMonth);
       }, [currentYear, currentMonth]);
+      // ==== HELPERS compartilhados p/ PDF de Relatórios ====
+      function monthNamePT(m){
+        return new Date(2025, m-1, 1).toLocaleString('pt-BR', { month:'long' }).replace(/^./, c=>c.toUpperCase());
+      }
+      const fetchMes = (y, m) => window.DataAdapter.fetchMes(y, m);
+      // ⚠️ NÃO redefinir sumByConta aqui; já existe acima (usa parseBRLnum).
+
+
+      function _makeHost() {
+        const host = document.createElement('div');
+        host.id = 'pdf-host';
+        host.style.position = 'fixed';
+        host.style.left = '-99999px';
+        host.style.top = '0';
+        host.style.width = '1200px';
+        host.style.pointerEvents = 'none';
+        document.body.appendChild(host);
+        return host;
+      }
+      function _addCanvas(host, h='700px', w='1100px') {
+        const wrap = document.createElement('div');
+        wrap.style.width = w;
+        wrap.style.height = h;
+        const c = document.createElement('canvas');
+        wrap.appendChild(c);
+        host.appendChild(wrap);
+        return c;
+      }
+
 
       function monthOptions(y){
         return (monthsByYear[y]||[]).map(m => <option key={m} value={m}>{monthNamePT(m)}</option>);
@@ -111,6 +140,370 @@ function ReportsModal({
           return n;
         });
       }
+      // === RELATÓRIO MENSAL (pizza 100% + card resumo + barras + listagem) ===
+      async function onPdfRelatorioMensal() {
+        const contasProfile = Array.from(cmpSel);            // restrição para BARRAS
+        const y = mensalYear;                                // estados da ABA Mensal
+        const m = mensalMonth;
+
+        // Helpers locais
+        const monthNamePT = (mm)=> new Date(2025, mm-1, 1).toLocaleString('pt-BR',{month:'long'}).replace(/^./,c=>c.toUpperCase());
+        const rotMes = `${monthNamePT(m)} / ${y}`;
+        const host = _makeHost();
+        const canvases = [];
+
+        // ===== Helpers de desenho de CANVAS (card e tabela) =====
+        function makeResumoCanvas({ total, porPagador, totalDividida, deltaTexto }) {
+          const W = 1100, H = 260;            // altura menor p/ caber com a pizza (2-up)
+          const wrap = document.createElement('div'); wrap.style.width=`${W}px`; wrap.style.height=`${H}px`;
+          const c = document.createElement('canvas'); c.width=W; c.height=H; wrap.appendChild(c); host.appendChild(wrap);
+          const ctx = c.getContext('2d');
+
+          // fundo branco p/ impressão
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,W,H);
+          ctx.fillStyle = '#111827'; ctx.font = 'bold 22px Arial';
+          ctx.fillText(`Resumo de ${rotMes}`, 24, 36);
+
+          ctx.font = '16px Arial'; ctx.fillStyle = '#111827';
+          const linhas = [
+            `Total gasto no mês: R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits:2})}`,
+            `Total em contas DIVIDIDAS: R$ ${totalDividida.toLocaleString('pt-BR', {minimumFractionDigits:2})}`,
+            `Por pagador: ${porPagador.map(p => `${p.nome}: R$ ${p.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}`).join(' | ')}`,
+            `Acerto: ${deltaTexto}`
+          ];
+          let yText = 70;
+          for (const ln of linhas) { ctx.fillText(ln, 24, yText); yText += 28; }
+
+          return c;
+        }
+
+        function splitRows(rows, maxRowsPerCanvas=28) {
+          const chunks = [];
+          for (let i=0;i<rows.length;i+=maxRowsPerCanvas) chunks.push(rows.slice(i,i+maxRowsPerCanvas));
+          return chunks;
+        }
+
+        function makeTabelaCanvases({ titulo, rows }) {
+          const W=1100,H=680;
+          const canvList = [];
+          const groups = splitRows(rows, 26); // ~26 linhas visíveis em 680px com espaçamento
+
+          groups.forEach((subset, idx)=>{
+            const wrap = document.createElement('div'); wrap.style.width=`${W}px`; wrap.style.height=`${H}px`;
+            const c = document.createElement('canvas'); c.width=W; c.height=H; wrap.appendChild(c); host.appendChild(wrap);
+            const ctx = c.getContext('2d');
+
+            // header
+            ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H);
+            ctx.fillStyle='#111827'; ctx.font='bold 20px Arial';
+            ctx.fillText(`${titulo}${groups.length>1?` (pág. ${idx+1}/${groups.length})`:''}`, 24, 36);
+
+            // col titles
+            const cols = [
+              { x: 24,   label: 'Nome (Instância)', w: 420 },
+              { x: 460,  label: 'Valor',            w: 120, align: 'right' },
+              { x: 600,  label: 'Dividida',         w: 80  },
+              { x: 700,  label: 'Boleto',           w: 180 },
+              { x: 900,  label: 'Comprovante',      w: 180 }
+            ];
+            ctx.font='bold 13px Arial';
+            cols.forEach(col => ctx.fillText(col.label, col.x, 68));
+
+            // linhas
+            ctx.font='13px Arial'; ctx.fillStyle='#111827';
+            let yRow = 92;
+            subset.forEach(r=>{
+              // Nome (Instância)
+              const nomeInst = r.instancia ? `${r.nome} (${r.instancia})` : r.nome;
+              ctx.fillText(nomeInst, cols[0].x, yRow);
+
+              // Valor (direita)
+              const valTxt = `R$ ${r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
+              ctx.textAlign='right'; ctx.fillText(valTxt, cols[1].x + cols[1].w, yRow);
+              ctx.textAlign='left';
+
+              // Dividida
+              ctx.fillText(r.dividida ? 'Sim' : 'Não', cols[2].x, yRow);
+
+              // Links (mostra URL curta se houver, senão vazio)
+              const billet = r.link_boleto ? (r.link_boleto.length>28 ? r.link_boleto.slice(0,28)+'…' : r.link_boleto) : '';
+              const proof  = r.link_comprovante ? (r.link_comprovante.length>28 ? r.link_comprovante.slice(0,28)+'…' : r.link_comprovante) : '';
+              ctx.fillText(billet, cols[3].x, yRow);
+              ctx.fillText(proof,  cols[4].x, yRow);
+
+              yRow += 24;
+            });
+
+            canvList.push(c);
+          });
+
+          return canvList;
+        }
+
+        try {
+          window.__PDF_MODE = true;
+          window.ChartFeatures?.setupChartDefaults?.();
+
+          // ====== 1) PIZZA 100% das contas do mês ======
+          const itensMes = await window.DataAdapter.fetchMes(y, m) || [];
+          const contasAll = Array.from(new Set(itensMes.map(x=>x.nome))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+          const valoresAll = contasAll.map(c => itensMes.filter(x=>x.nome===c).reduce((a,b)=>a+parseBRLnum(b.valor),0));
+          // ⚠️ Pizza com TODAS as contas do mês → não restringe por profile
+          const cvPizza = _addCanvas(host, '680px', '1100px');
+          window.ChartFeatures?.renderPizzaMensal?.(cvPizza, { labels: contasAll, valores: valoresAll }, rotMes);
+          if (cvPizza._chart && window.ChartFeatures?.applyPdfTheme) { window.ChartFeatures.applyPdfTheme(cvPizza._chart); cvPizza._chart.update('none'); }
+          canvases.push(cvPizza);
+
+          // ====== 1b) CARD-RESUMO (TOTAL / POR PAGADOR / DIVIDIDAS / ACERTO ENTRE PAGADORES) ======
+          const totalMes = itensMes.reduce((a,b)=>a+parseBRLnum(b.valor),0);
+          const porPagadorMap = new Map();
+          let totalDividida = 0;
+          itensMes.forEach(it=>{
+            const v = parseBRLnum(it.valor);
+            if (it.dividida) totalDividida += v;
+            const k = (it.quem_pagou || '—');
+            porPagadorMap.set(k, (porPagadorMap.get(k)||0)+v);
+          });
+          const porPagador = Array.from(porPagadorMap.entries()).map(([nome,valor])=>({nome,valor})).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+
+          // “quem deve para quem”: assume 2 pagadores principais (se houver)
+          let deltaTexto = 'Sem diferença a acertar.';
+          if (porPagador.length >= 2) {
+            const ranked = [...porPagador].sort((a,b)=>b.valor-a.valor);
+            const top = ranked[0], low = ranked[ranked.length-1];
+            const delta = top.valor - low.valor;
+            if (delta > 0) {
+              deltaTexto = `${low.nome} deve R$ ${delta.toLocaleString('pt-BR',{minimumFractionDigits:2})} para ${top.nome}`;
+            }
+          }
+          const cvResumo = makeResumoCanvas({ total: totalMes, porPagador, totalDividida, deltaTexto });
+          canvases.push(cvResumo);  // 👉 garante que a 1ª página seja (Pizza + Card)
+
+          // ====== 2) BARRAS (restringe às contas do PROFILE) — página 2 ======
+          const contasBarras = contasProfile.length ? contasProfile : contasAll; // fallback caso vazio
+          const prevM = m > 1 ? m - 1 : 12;
+          const prevY = m > 1 ? y : (y - 1);
+          const itensAnt = await window.DataAdapter.fetchMes(prevY, prevM) || [];
+          const itensAnoAnt = await window.DataAdapter.fetchMes(y - 1, m) || [];
+
+          const curVals   = sumByConta(itensMes, contasBarras);
+          const antVals   = sumByConta(itensAnt, contasBarras);
+          const anoAntVals= sumByConta(itensAnoAnt, contasBarras);
+
+          // barras vs mês anterior
+          if (curVals.some(v=>v>0) || antVals.some(v=>v>0)) {
+            const cv1 = _addCanvas(host, '560px', '1100px');
+            window.ChartFeatures?.renderBarrasComparativas?.(
+              cv1,
+              { labels: contasBarras, atual: curVals, comparado: antVals },
+              'anterior',
+              { atual: rotMes, comparado: `${monthNamePT(prevM)} / ${prevY}` }
+            );
+            if (cv1._chart && window.ChartFeatures?.applyPdfTheme) { window.ChartFeatures.applyPdfTheme(cv1._chart); cv1._chart.update('none'); }
+            canvases.push(cv1);
+          }
+
+          // barras vs mesmo mês ano anterior
+          if (curVals.some(v=>v>0) || anoAntVals.some(v=>v>0)) {
+            const cv2 = _addCanvas(host, '560px', '1100px');
+            window.ChartFeatures?.renderBarrasComparativas?.(
+              cv2,
+              { labels: contasBarras, atual: curVals, comparado: anoAntVals },
+              'anoAnterior',
+              { atual: rotMes, comparado: `${monthNamePT(m)} / ${y-1}` }
+            );
+            if (cv2._chart && window.ChartFeatures?.applyPdfTheme) { window.ChartFeatures.applyPdfTheme(cv2._chart); cv2._chart.update('none'); }
+            canvases.push(cv2);
+          }
+
+          // ====== 3) LISTAGEM (página 3 em diante) ======
+          // ordenar por quem_pagou, depois nome
+          const byPayer = {};
+          itensMes.forEach(it=>{
+            const payer = it.quem_pagou || '—';
+            if (!byPayer[payer]) byPayer[payer] = [];
+            byPayer[payer].push(it);
+          });
+          const payers = Object.keys(byPayer).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+          const rows = [];
+          payers.forEach(p=>{
+            // linha de seção “Quem pagou: X”
+            rows.push({ nome: `Quem pagou: ${p}`, instancia: '', valor: 0, dividida: false, link_boleto: '', link_comprovante: '', _header:true });
+            byPayer[p].sort((a,b)=> (a.nome+a.instancia).localeCompare(b.nome+b.instancia,'pt-BR')).forEach(it=>{
+              rows.push({
+                nome: it.nome,
+                instancia: it.instancia || '',
+                valor: parseBRLnum(it.valor),
+                dividida: !!it.dividida,
+                link_boleto: it.link_boleto || '',
+                link_comprovante: it.link_comprovante || ''
+              });
+            });
+          });
+          // converte headers para linhas visuais (negrito simples)
+          const rowsVisuais = rows.flatMap(r=>{
+            if (!r._header) return [r];
+            return [
+              { nome: r.nome, instancia:'', valor: 0, dividida:false, link_boleto:'', link_comprovante:'' }
+            ];
+          });
+
+          const canvTab = makeTabelaCanvases({ titulo: `Contas pagas — ${rotMes}`, rows: rowsVisuais });
+          canvases.push(...canvTab);
+
+          // ====== EXPORTA (2 por página) ======
+          window.PDFHelpers.exportTwoPerPage(
+            canvases,
+            `relatorio_mensal_${y}_${String(m).padStart(2,'0')}.pdf`,
+            { margin: 28, gap: 24 }
+          );
+
+        } finally {
+          window.__PDF_MODE = false;
+          host?.parentNode?.removeChild(host);
+        }
+      }
+
+      // === RELATÓRIO POR PERÍODO (pizza 100% do período + linhas 2-up + listagens por mês) ===
+      async function onPdfRelatorioPeriodo() {
+        const contasProfile = Array.from(cmpSel); // quais contas terão linhas
+        const y1 = pStartYear, m1 = pStartMonth;
+        const y2 = pEndYear,   m2 = pEndMonth;
+
+        // monta sequência de meses
+        const monthsList = []; { let y=y1, m=m1; while (y<y2 || (y===y2 && m<=m2)) { monthsList.push({y,m}); m++; if(m>12){m=1;y++;} } }
+        if (!monthsList.length) return alert('Período inválido.');
+
+        const host = _makeHost();
+        const canvases = [];
+
+        // helpers de canvas (reutiliza os do patch A)
+        function splitRows(rows, maxRowsPerCanvas=28) {
+          const chunks = [];
+          for (let i=0;i<rows.length;i+=maxRowsPerCanvas) chunks.push(rows.slice(i,i+maxRowsPerCanvas));
+          return chunks;
+        }
+        function makeTabelaCanvases({ titulo, rows }) {
+          const W=1100,H=680; const canvList=[];
+          const groups = splitRows(rows, 26);
+          groups.forEach((subset, idx)=>{
+            const wrap=document.createElement('div'); wrap.style.width=`${W}px`; wrap.style.height=`${H}px`;
+            const c=document.createElement('canvas'); c.width=W; c.height=H; wrap.appendChild(c); host.appendChild(wrap);
+            const ctx=c.getContext('2d');
+            ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H);
+            ctx.fillStyle='#111827'; ctx.font='bold 20px Arial';
+            ctx.fillText(`${titulo}${groups.length>1?` (pág. ${idx+1}/${groups.length})`:''}`, 24, 36);
+            const cols = [
+              { x: 24,   label: 'Nome (Instância)', w: 420 },
+              { x: 460,  label: 'Valor',            w: 120, align: 'right' },
+              { x: 600,  label: 'Dividida',         w: 80  },
+              { x: 700,  label: 'Boleto',           w: 180 },
+              { x: 900,  label: 'Comprovante',      w: 180 }
+            ];
+            ctx.font='bold 13px Arial'; cols.forEach(col=>ctx.fillText(col.label, col.x, 68));
+            ctx.font='13px Arial'; ctx.fillStyle='#111827';
+            let yRow=92;
+            subset.forEach(r=>{
+              const nomeInst = r.instancia ? `${r.nome} (${r.instancia})` : r.nome;
+              ctx.textAlign='left'; ctx.fillText(nomeInst,  cols[0].x, yRow);
+              const valTxt = `R$ ${r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
+              ctx.textAlign='right'; ctx.fillText(valTxt,    cols[1].x + cols[1].w, yRow);
+              ctx.textAlign='left'; ctx.fillText(r.dividida ? 'Sim' : 'Não', cols[2].x, yRow);
+              const billet = r.link_boleto ? (r.link_boleto.length>28 ? r.link_boleto.slice(0,28)+'…' : r.link_boleto) : '';
+              const proof  = r.link_comprovante ? (r.link_comprovante.length>28 ? r.link_comprovante.slice(0,28)+'…' : r.link_comprovante) : '';
+              ctx.fillText(billet, cols[3].x, yRow);
+              ctx.fillText(proof,  cols[4].x, yRow);
+              yRow += 24;
+            });
+            canvList.push(c);
+          });
+          return canvList;
+        }
+
+        try {
+          window.__PDF_MODE = true;
+          window.ChartFeatures?.setupChartDefaults?.();
+
+          // ====== 1) PIZZA 100% DO PERÍODO ======
+          const todosItens = [];
+          for (const {y,m} of monthsList) {
+            const mm = await window.DataAdapter.fetchMes(y,m) || [];
+            todosItens.push(...mm);
+          }
+          const contasAll = Array.from(new Set(todosItens.map(x=>x.nome))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+          const valoresAll = contasAll.map(c => todosItens.filter(x=>x.nome===c).reduce((a,b)=>a+parseBRLnum(b.valor),0));
+          const rotPeriodo = `${String(m1).padStart(2,'0')}/${y1} a ${String(m2).padStart(2,'0')}/${y2}`;
+          const cvPizza = _addCanvas(host, '680px', '1100px');
+          window.ChartFeatures?.renderPizzaMensal?.(cvPizza, { labels: contasAll, valores: valoresAll }, rotPeriodo);
+          if (cvPizza._chart && window.ChartFeatures?.applyPdfTheme) { window.ChartFeatures.applyPdfTheme(cvPizza._chart); cvPizza._chart.update('none'); }
+          canvases.push(cvPizza);
+
+          // ====== 2) LINHAS por conta (máx. 7; 2 por página) ======
+          const contasLinhas = (contasProfile.length ? contasProfile : contasAll).slice(0,7);
+          for (const conta of contasLinhas) {
+            // série da conta
+            const valores = [];
+            for (const {y,m} of monthsList) {
+              const mm = await window.DataAdapter.fetchMes(y,m) || [];
+              const soma = mm.filter(x=>x.nome===conta).reduce((a,b)=>a+parseBRLnum(b.valor),0);
+              valores.push(soma);
+            }
+            if (valores.filter(v=>v>0).length < 2) continue; // exige pelo menos 2 pontos >0
+
+            const cv = _addCanvas(host, '600px', '1100px');
+            window.ChartFeatures?.renderLinhaContaPeriodo?.(cv, {
+              nome: conta,
+              meses: monthsList.map(({y,m}) => `${String(m).padStart(2,'0')}/${y}`),
+              valores
+            });
+            if (cv._chart && window.ChartFeatures?.applyPdfTheme) { window.ChartFeatures.applyPdfTheme(cv._chart); cv._chart.update('none'); }
+            canvases.push(cv);
+          }
+
+          // ====== 3) LISTAGENS — por MÊS, agrupadas por QUEM PAGOU ======
+          for (const {y,m} of monthsList) {
+            const itensMes = await window.DataAdapter.fetchMes(y,m) || [];
+            if (!itensMes.length) continue;
+
+            const byPayer = {};
+            itensMes.forEach(it=>{
+              const payer = it.quem_pagou || '—';
+              if (!byPayer[payer]) byPayer[payer] = [];
+              byPayer[payer].push(it);
+            });
+            const payers = Object.keys(byPayer).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+            const rows=[];
+            payers.forEach(p=>{
+              rows.push({ nome: `Quem pagou: ${p}`, instancia:'', valor:0, dividida:false, link_boleto:'', link_comprovante:'', _header:true });
+              byPayer[p].sort((a,b)=> (a.nome+a.instancia).localeCompare(b.nome+b.instancia,'pt-BR')).forEach(it=>{
+                rows.push({
+                  nome: it.nome,
+                  instancia: it.instancia || '',
+                  valor: parseBRLnum(it.valor),
+                  dividida: !!it.dividida,
+                  link_boleto: it.link_boleto || '',
+                  link_comprovante: it.link_comprovante || ''
+                });
+              });
+            });
+            const rowsVisuais = rows.flatMap(r=> r._header ? [{ nome:r.nome, instancia:'', valor:0, dividida:false, link_boleto:'', link_comprovante:'' }] : [r]);
+            const canvTab = makeTabelaCanvases({ titulo: `Contas pagas — ${String(m).padStart(2,'0')}/${y}`, rows: rowsVisuais });
+            canvases.push(...canvTab);
+          }
+
+          // ====== EXPORTA ======
+          window.PDFHelpers.exportTwoPerPage(
+            canvases,
+            `relatorio_periodo_${y1}-${String(m1).padStart(2,'0')}_a_${y2}-${String(m2).padStart(2,'0')}.pdf`,
+            { margin: 28, gap: 24 }
+          );
+
+        } finally {
+          window.__PDF_MODE = false;
+          host?.parentNode?.removeChild(host);
+        }
+      }
+
 
       return (
         <div className="overlay" onClick={onClose}>
@@ -152,7 +545,7 @@ function ReportsModal({
                 </div>
                 <div className="footer flex gap-2 justify-end">
                   <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
-                  <button className="btn primary">Gerar PDF</button>
+                  <button className="btn primary" onClick={onPdfRelatorioMensal}>Gerar PDF</button>
                 </div>
               </>
             )}
@@ -184,7 +577,7 @@ function ReportsModal({
                 </div>
                 <div className="footer flex gap-2 justify-end">
                   <button className="btn ghost" onClick={()=>onChangeTab('home')}>Voltar</button>
-                  <button className="btn primary">Gerar PDF</button>
+                  <button className="btn primary" onClick={onPdfRelatorioPeriodo}>Gerar PDF</button>
                 </div>
               </>
             )}
@@ -362,11 +755,6 @@ function ReportsModal({
                       const contasSel = Array.from(cmpSel);
                       const fetchMes = (y, m) => window.DataAdapter.fetchMes(y, m);
                       const monthLabel = (y, m) => `${monthNamePT(m)} / ${y}`;
-                      const sumByConta = (items, contas) =>
-                        contas.map(c => (items || [])
-                          .filter(x => x.nome === c)
-                          .reduce((a, b) => a + parseFloat(String(b.valor).replace(/[^\d,]/g,'').replace(/\.(?=\d)/g,'').replace(',','.')) || 0, 0)
-                        );
                       const makeMonthsList = (y1, m1, y2, m2) => {
                         const out = []; let y=y1, m=m1;
                         while (y < y2 || (y === y2 && m <= m2)) { out.push({y,m}); m++; if (m>12){m=1;y++;} }
@@ -502,10 +890,11 @@ function ReportsModal({
                     type="button"
                     className="btn primary"
                     disabled={cmpSel.size===0}
-                    onClick={()=>{
+                    onClick={()=> {
                       const wrapper = document.getElementById('cmp-chart');
-                      const canvases = Array.from(wrapper.querySelectorAll('canvas'));
+                      const canvases = Array.from(wrapper?.querySelectorAll('canvas') || []);
                       if (!canvases.length) return alert('Nenhum gráfico gerado.');
+
                       // 1️⃣ liga modo PDF e aplica o tema
                       window.__PDF_MODE = true;
                       canvases.forEach(cv => {
@@ -519,13 +908,33 @@ function ReportsModal({
                       // 3️⃣ volta ao tema normal
                       window.__PDF_MODE = false;
                       canvases.forEach(cv => cv._chart?.update('none'));
-
-
-                      
                     }}
                   >
                     Baixar PDF (todos)
                   </button>
+
+                  {/* === Relatórios formais (fora de qualquer <button>) === */}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={onPdfRelatorioMensal}
+                      title="Gera PDF com Pizza do mês e Barras comparativas (mês anterior e mesmo mês do ano anterior, quando houver dados)."
+                    >
+                      Relatório Mensal (PDF)
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={onPdfRelatorioPeriodo}
+                      title="Gera PDF com gráficos de linha por conta ao longo do período selecionado (2 por página)."
+                    >
+                      Relatório Período (PDF)
+                    </button>
+                  </div>
+
+
                 </div>
 
 
