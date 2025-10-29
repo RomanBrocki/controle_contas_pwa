@@ -11,25 +11,23 @@ function ContaCard({ nome, instancia, valor, data, quem, dividida, links, onEdit
           <div className="text-xs opacity-70">{data}</div>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2 items-center">
-        {/* Linha 1: badges sempre à esquerda */}
+      {/* Linha do meio: badges + quem pagou (sem rótulo) */}
+      <div className="flex flex-wrap items-center gap-2">
         <span className="badge">{dividida ? 'Dividida' : 'Não dividida'}</span>
-
-        {/* Linha 2: quem pagou + ações à direita, com wrap controlado */}
-        <div className="flex-1 flex flex-wrap items-center gap-2">
-          <span className="chip">Quem pagou: <strong>{quem}</strong></span>
-
-          <div className="ml-auto flex items-center gap-2">
-            {links?.boleto && (
-              <a className="btn ghost" href={links.boleto} target="_blank" rel="noreferrer">Boleto</a>
-            )}
-            {links?.comp && (
-              <a className="btn ghost" href={links.comp} target="_blank" rel="noreferrer">Comprovante</a>
-            )}
-          </div>
-          <button className="btn ghost ml-auto" onClick={onEdit}>Editar</button>
-        </div>
+        {quem ? <span className="badge">Paga por {quem}</span> : null}
       </div>
+
+      {/* Linha de baixo: links à esquerda, Editar à direita */}
+      <div className="flex items-center gap-2">
+        {links?.boleto && (
+          <a className="btn ghost" href={links.boleto} target="_blank" rel="noreferrer">Boleto</a>
+        )}
+        {links?.comp && (
+          <a className="btn ghost" href={links.comp} target="_blank" rel="noreferrer">Comprovante</a>
+        )}
+        <button className="btn ghost ml-auto" onClick={onEdit}>Editar</button>
+      </div>
+
     </article>
   );
 }

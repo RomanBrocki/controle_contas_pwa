@@ -20,6 +20,11 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 // UID temporário do Roman até termos login na UI
 export const CURRENT_UID = '8193908b-c37e-4639-b0f1-d646bc4ebf0b';
 
+// UID centralizado (mock agora; auth real depois)
+function uid() {
+  return (window.MOCK_AUTH && window.MOCK_AUTH.user_id) || CURRENT_UID;
+}
+
 
 // Apenas log inicial (opcional)
 console.log('[Supabase] Client inicializado:', SUPABASE_URL);

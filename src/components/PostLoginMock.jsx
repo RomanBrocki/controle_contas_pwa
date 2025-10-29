@@ -37,10 +37,30 @@ function PostLoginMock() {
       const [activeId, setActiveId] = React.useState(null); // anima o card clicado
       const [showReports, setShowReports] = React.useState(false);
       const [reportsTab, setReportsTab] = React.useState('home'); // 'mensal' | 'periodo' | 'comparativos'
+      // ---- Settings / Perfil ----
+      const [showSettings, setShowSettings] = React.useState(false);
+      const [profile, setProfile] = React.useState(null); // {email, theme, payers_default, chart_accounts}
+      const [contasDisp, setContasDisp] = React.useState([]);
+
 
       // 🔹 Anos e meses reais do Supabase
       const [years, setYears] = React.useState([]);
       const [monthsByYear, setMonthsByYear] = React.useState({});
+
+      React.useEffect(() => {
+        if (!showSettings) return;
+        let alive = true;
+        (async () => {
+          try {
+            const list = await window.SupabaseQueries.contasDistinctUltimos12();
+            if (alive) setContasDisp(list);
+          } catch (e) {
+            console.warn('[settings] contas 12m', e);
+            if (alive) setContasDisp([]);
+          }
+        })();
+        return () => { alive = false; };
+      }, [showSettings]);
 
       // Carrega anos e meses disponíveis do banco
       React.useEffect(() => {
@@ -67,7 +87,27 @@ function PostLoginMock() {
           setYearSel(years[0]); // assumindo que listYears() já retorna DESC
         }
       }, [years]);
+      // Carrega perfil na montagem e aplica tema/pagadores
+      React.useEffect(() => {
+        (async () => {
+          try {
+            const p = await window.SupabaseQueries.getProfile();
+            if (p) {
+              setProfile(p);
+              if (p.theme) setTheme(p.theme); // aplica tema inicial do perfil
+              
+            } else {
+              setProfile({ email: '', theme, payers_default: [], chart_accounts: [] });
+            }
+          } catch (e) {
+            console.warn('[perfil] erro ao carregar:', e);
+            setProfile({ email: '', theme, payers_default: [], chart_accounts: [] });
+          }
+        })();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, []); // roda uma vez
 
+      // Carrega tipos de conta disponíveis (distinct nomes)
       React.useEffect(() => {
         (async () => {
           if (!editing) return; // abre só quando modal 'Nova/Editar' estiver ativo
@@ -201,7 +241,7 @@ function PostLoginMock() {
 
       async function handleSave(mode, initialId, form){
         try{
-          // resolve 'quem'
+          // resolve '  '
           const quem = form.quemMode === 'outro' ? (form.quemOutro || '').trim() : (form.quem || '').trim();
 
           // montar draft para a tabela existente
@@ -314,11 +354,8 @@ function PostLoginMock() {
             <div className="flex flex-col gap-2 w-full sm:grid sm:grid-cols-2 md:flex md:flex-row md:items-center">
               <button className={`btn primary w-full md:w-auto ${activeId==='new' ? 'pop' : ''}`} onClick={()=>openNew()}>+ Nova Conta</button>
               <button className="btn ghost w-full md:w-auto" onClick={()=>{ setReportsTab('home'); setShowReports(true); }}>📊 Relatórios</button>
-              <select className="btn ghost w-full md:w-auto" value={theme} onChange={e=>setTheme(e.target.value)}>
-                <option value="gunmetal">Gunmetal Neon</option>
-                <option value="synth">Synthwave Teal</option>
-                <option value="light">Claro Metálico</option>
-              </select>
+              <button className="btn ghost" onClick={()=> setShowSettings(true)}>⚙️ Configurações</button>
+              
             </div>
           </header>
         
@@ -447,8 +484,25 @@ function PostLoginMock() {
               currentYear={yearSel}
               currentMonth={monthSel}
               contasDistinct={Array.from(new Set((itens || []).map(i=> i.nome)))}
+              defaultSel={Array.isArray(profile?.chart_accounts) ? profile.chart_accounts : []}
             />
           )}
+
+          {showSettings && (
+            <SettingsModal
+              initial={profile}
+              // contasDisponiveis: sem await no JSX; pega das contas já carregadas na tela atual
+              contasDisponiveis={contasDisp}
+              onClose={()=> setShowSettings(false)}
+              onSaved={(p)=>{
+                setProfile(p);
+                if (p.theme) setTheme(p.theme); // aplica tema escolhido
+                
+              }}
+            />
+          )}
+
+
           {toast && (
             <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg border"
                 style={{ background:'var(--surface)', borderColor:'var(--border)', boxShadow:'var(--glow)' }}>

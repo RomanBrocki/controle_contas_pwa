@@ -1,4 +1,10 @@
-function ReportsModal({ tab, onChangeTab, onClose, years, monthsByYear, currentYear, currentMonth, contasDistinct }){
+function ReportsModal({
+  tab, onChangeTab, onClose,
+  years, monthsByYear, currentYear, currentMonth,
+  contasDistinct,
+  defaultSel = []
+}) {
+
       // Fecha o modal ao pressionar Esc (desktop apenas)
       React.useEffect(() => {
         const handleKey = (e) => {
@@ -24,7 +30,9 @@ function ReportsModal({ tab, onChangeTab, onClose, years, monthsByYear, currentY
       const [cmpEndYear, setCmpEndYear] = React.useState(currentYear);
       const [cmpEndMonth, setCmpEndMonth] = React.useState(currentMonth);
       const [cmpType, setCmpType] = React.useState('linhas'); // 'linhas' | 'barras' | 'pizza'
-      const [cmpSel, setCmpSel] = React.useState(()=> new Set()); // padrão: nenhum marcado
+      const [cmpSel, setCmpSel] = React.useState(()=> new Set(defaultSel));
+        React.useEffect(()=>{ if (tab==='comparativos') setCmpSel(new Set(defaultSel)); }, [tab, defaultSel]);
+
 
 
       // --- NOVOS ESTADOS ---

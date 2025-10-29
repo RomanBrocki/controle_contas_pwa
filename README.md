@@ -8,17 +8,24 @@ Este projeto é um **porte do app em Streamlit**: https://controlecontasapp-atdn
 ## 🧩 Arquitetura do Projeto
 
 ```
-controle_contas_pwa/
-├── index.html                # App principal (React + Tailwind + Babel no browser)
-├── src/
-│   ├── router.js             # Roteamento SPA por hash (#/mes, #/relatorios)
-│   ├── data-adapter.js       # Adaptação dos dados vindos do Supabase para a UI
-│   ├── supabase/
-│   │   ├── client.js         # Inicialização do cliente Supabase (anon key + RLS)
-│   │   └── queries.js        # Consultas (anos, meses, mês atual) e CRUD
-│   └── features/
-│       ├── charts.js         # Gráficos (Chart.js + datalabels + outlabels)
-│       └── pdf.js            # Helpers de exportação (2 gráficos por página)
+├─ index.html                         # carrega Tailwind (CDN), Babel in-browser e todos os componentes
+├─ src/
+│  ├─ data-adapter.js                 # (se usado) adaptadores/utils de dados
+│  ├─ router.js                       # hash-based SPA (ex.: #/mes, #/relatorios) se aplicável
+│  └─ supabase/ 
+│     ├─ client.js                    # Supabase client + CURRENT_UID (mock)
+│     └─ queries.js                   # Funções de acesso ao DB (controle_contas, profile, listas distintas)
+│  └─ features/        
+│  	  ├─ charts.js                    # helpers de gráficos (linhas, barras, pizza, etc.)
+│     └─pdf.js                       # utilitários de exportação (PNG/PDF), ganchos p/ relatórios
+│  └─ components/
+│     ├─ StyleTag.jsx                 # temas (gunmetal, synth, light) e variáveis (inclui tokens p/ PDF)
+│     ├─ PostLoginMock.jsx            # shell principal da tela (login mock, header, cards, modais)
+│     ├─ ContaCard.jsx                # card de exibição de cada conta (layout restaurado)
+│     ├─ EditPopup.jsx                # modal de Nova/Editar (com “Outro...” para quem pagou)
+│     ├─ SettingsModal.jsx            # ⚙️ Configurações (email, tema, chart_accounts)
+│     ├─ ReportsModal.jsx             # Relatórios (mensal, período, comparativos) + export PNG/PDF
+│     └─ App.jsx                      # monta raiz React e integra tudo
 ```
 
 - **Roteamento:** hash‑based SPA (`#/mes`, `#/relatorios`), sem recarregar a página.
