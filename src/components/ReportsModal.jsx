@@ -146,7 +146,7 @@ function ReportsModal({
           return n;
         });
       }
-      // === Renderer exclusivo para PIZZA do MENSAL (sem profile; 100% das contas do mês) ===
+      
       // === Renderer exclusivo para PIZZA do MENSAL (sem profile; 100% das contas do mês) ===
       function renderPizzaMensalStrict(canvas, { labels, valores }, titulo) {
         // ===== Normalização / Preparos =====
@@ -367,15 +367,162 @@ function ReportsModal({
         return chart;
       }
 
+      // === Barras horizontais locais para PDF (mensal) — estilo charts.js ===
+      function renderBarrasMensalLocal(canvas, payload, opts = {}) {
+        const { labels, atual, comparado, allowList } = payload; // allowList = profile.chart_accounts
+        const W0 = canvas.width || 1100, H0 = canvas.height || 560;
+        const ctx = canvas.getContext('2d');
+
+        // Tema alinhado ao charts.js (PDF-friendly)
+        const css = getComputedStyle(document.documentElement);
+        const labelColor = (
+          (window.__PDF_MODE ? css.getPropertyValue('--chart-text-pdf') : css.getPropertyValue('--chart-label-text')) ||
+          '#111827'
+        ).trim();
+        const THEME = {
+          bg: '#ffffff',
+          text: labelColor || '#111827',
+          atual: 'rgba(59,130,246,0.85)',       // azul (mês atual)
+          comparado: 'rgba(148,163,184,0.7)'    // cinza (comparado)
+        };
+
+        // Dados (filtra por allowList mantendo ordem)
+        const allowSet = allowList ? new Set(allowList) : null;
+        const rows = labels
+          .map((name, i) => ({ name, a: Number(atual[i] ?? 0), b: Number(comparado?.[i] ?? 0) }))
+          .filter(r => !allowSet || allowSet.has(r.name));
+
+        // Layout ( espelha charts.js )
+        const margin = { t: 56, r: 40, b: 40, l: 260 };
+        const barH = 18, innerGap = 10, groupGap = 20, legendH = 26;
+        const contentH = rows.length ? rows.length * (barH * 2 + innerGap + groupGap) - groupGap : 0;
+        const totalH = margin.t + legendH + 16 + contentH + margin.b;
+
+        canvas.width = W0;
+        canvas.height = Math.max(H0, totalH);
+
+        // Utils
+        function roundRect(ctx, x, y, w, h, r = 8) {
+          if (w <= 0 || h <= 0) return;
+          const rr = Math.min(r, Math.abs(h) / 2, Math.abs(w) / 2);
+          ctx.beginPath();
+          ctx.moveTo(x + rr, y);
+          ctx.arcTo(x + w, y, x + w, y + h, rr);
+          ctx.arcTo(x + w, y + h, x, y + h, rr);
+          ctx.arcTo(x, y + h, x, y, rr);
+          ctx.arcTo(x, y, x + w, y, rr);
+          ctx.closePath();
+        }
+        const fmtBRL = (v) => `R$ ${Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+
+        // Fundo
+        ctx.fillStyle = THEME.bg;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Título
+        const titulo = opts.title || `Comparativo — ${opts.rotAtuais || 'Mês atual'} vs ${opts.rotComparado || 'Comparado'}`;
+        ctx.fillStyle = THEME.text;
+        ctx.font = '700 18px Inter, Roboto, Arial, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(titulo, margin.l, margin.t - 18);
+
+        // Legenda
+        const legendY = margin.t + 2;
+        ctx.font = '12px Inter, Roboto, Arial, sans-serif';
+        ctx.fillStyle = THEME.atual; ctx.fillRect(margin.l, legendY, 18, 10);
+        ctx.fillStyle = THEME.text;  ctx.fillText(` ${opts.rotAtuais || 'Mês atual'}`, margin.l + 24, legendY + 10);
+        const off2 = margin.l + 180;
+        ctx.fillStyle = THEME.comparado; ctx.fillRect(off2, legendY, 18, 10);
+        ctx.fillStyle = THEME.text;      ctx.fillText(` ${opts.rotComparado || 'Comparado'}`, off2 + 24, legendY + 10);
+
+        // Área do gráfico
+        const x0 = margin.l, y0 = margin.t + legendH + 16;
+        const plotW = Math.max(1, canvas.width - margin.l - margin.r);
+        // Eixo vertical (base Y=0)
+        ctx.strokeStyle = THEME.text;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0 - 6);
+        ctx.lineTo(x0, y0 + contentH + 6);
+        ctx.stroke();
+
+        const vmax = Math.max(1, ...rows.map(r => Math.max(r.a, r.b)));
+        const scaleX = (v) => (v / vmax) * plotW;
+
+        // Sem grid; apenas texto
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = THEME.text;
+
+        // Desenho
+        ctx.font = '13px Inter, Roboto, Arial, sans-serif';
+        let yy = y0;
+        rows.forEach((r) => {
+          // Rótulo da conta à esquerda
+          ctx.textAlign = 'right';
+          ctx.fillStyle = THEME.text;
+          ctx.fillText(r.name, x0 - 10, yy + barH + innerGap / 2);
+
+          const bW = scaleX(r.b);
+          const aW = scaleX(r.a);
+
+          // Barra comparado (em cima)
+          ctx.fillStyle = THEME.comparado;
+          roundRect(ctx, x0, yy, bW, barH, 8); ctx.fill();
+
+          // Barra atual (embaixo)
+          ctx.fillStyle = THEME.atual;
+          roundRect(ctx, x0, yy + barH + innerGap, aW, barH, 8); ctx.fill();
+
+          // Valores (regra 75%)
+          const thresh = 0.75;
+          const ratioB = bW / plotW;
+          const ratioA = aW / plotW;
+          ctx.font = '600 12px Inter, Roboto, Arial, sans-serif';
+
+          // comparado
+          if (bW > 0) {
+            if (ratioB >= thresh) {
+              ctx.fillStyle = '#ffffff'; ctx.textAlign = 'right';
+              ctx.fillText(fmtBRL(r.b), x0 + bW - 6, yy + barH / 2);
+            } else {
+              ctx.fillStyle = THEME.text; ctx.textAlign = 'left';
+              ctx.fillText(fmtBRL(r.b), x0 + bW + 6, yy + barH / 2);
+            }
+          }
+
+          // atual
+          if (aW > 0) {
+            const yA = yy + barH + innerGap + barH / 2;
+            if (ratioA >= thresh) {
+              ctx.fillStyle = '#ffffff'; ctx.textAlign = 'right';
+              ctx.fillText(fmtBRL(r.a), x0 + aW - 6, yA);
+            } else {
+              ctx.fillStyle = THEME.text; ctx.textAlign = 'left';
+              ctx.fillText(fmtBRL(r.a), x0 + aW + 6, yA);
+            }
+          }
+
+          yy += (barH * 2 + innerGap + groupGap); // <- era '='; aqui é '+='
+        });
+      }
+
+
 
       
       // === RELATÓRIO MENSAL (corrigido: campos, layout A4 e render flush) ===
       async function onPdfRelatorioMensal() {
         const y = mensalYear;
         const m = mensalMonth;
-
+       
         // Seleção do perfil para BARRAS (ok ficar vazio)
         const contasProfile = Array.from(cmpSel);
+
+        // Usa a lista do profile; se não houver, cai para a seleção da UI
+        const chartAccounts =
+          (Array.isArray(window.AppState?.profile?.chart_accounts) && window.AppState.profile.chart_accounts.length)
+            ? window.AppState.profile.chart_accounts
+            : contasProfile;
 
         // Helpers
         const monthNamePT = (mm) =>
@@ -450,7 +597,8 @@ function ReportsModal({
         );
 
         // Barras — apenas contas do perfil (fallback: todas)
-        const contasBarras = (contasProfile.length ? contasProfile : contasAll);
+        const contasBarras = (chartAccounts.length ? chartAccounts : contasAll);
+
         const sumByConta = (items, contasSel) =>
           contasSel.map(c => items.filter(x => x.nome === c).reduce((a, b) => a + parseBRLnum(b.valor), 0));
         const curVals = sumByConta(itensMes, contasBarras);
@@ -510,40 +658,47 @@ function ReportsModal({
           canvases.push(cvResumo);
 
           // 2) Barras — mês anterior
-          const temAnt = curVals.some(v => v > 0) || antVals.some(v => v > 0);
-          if (temAnt) {
-            const cvAnt = addCanvas(host, 560, 1100);
-            window.ChartFeatures?.renderBarrasComparativas?.(
+          // Exemplo para "mês atual x mês anterior"
+          {
+            const cvAnt = addCanvas(host, 560, 1100); // (altura, largura)
+            renderBarrasMensalLocal(
               cvAnt,
-              { labels: contasBarras, atual: curVals, comparado: antVals },
-              'anterior',
-              { atual: rotMes, comparado: `${monthNamePT(prevM)} / ${prevY}` }
+              {
+                labels: contasBarras,
+                atual: curVals,           // valores do mês
+                comparado: antVals,       // valores do mês anterior
+                allowList: chartAccounts  // <- profile.chart_accounts (array)
+              },
+              {
+                title: `Comparativo de ${rotMes} vs ${monthNamePT(prevM)} / ${prevY}`,
+                rotAtuais: rotMes,
+                rotComparado: `${monthNamePT(prevM)} / ${prevY}`
+              }
             );
-            await flush();
-            if (cvAnt._chart && window.ChartFeatures?.applyPdfTheme) {
-              window.ChartFeatures.applyPdfTheme(cvAnt._chart);
-              cvAnt._chart.update('none');
-            }
             canvases.push(cvAnt);
           }
 
-          // 2b) Barras — mesmo mês do ano anterior
-          const temAnoAnt = curVals.some(v => v > 0) || anoAntVals.some(v => v > 0);
-          if (temAnoAnt) {
+          // Exemplo para "mês atual x mesmo mês do ano anterior"
+          {
             const cvAnoAnt = addCanvas(host, 560, 1100);
-            window.ChartFeatures?.renderBarrasComparativas?.(
+            renderBarrasMensalLocal(
               cvAnoAnt,
-              { labels: contasBarras, atual: curVals, comparado: anoAntVals },
-              'anoAnterior',
-              { atual: rotMes, comparado: `${monthNamePT(m)} / ${y - 1}` }
+              {
+                labels: contasBarras,
+                atual: curVals,
+                comparado: anoAntVals,
+                allowList: chartAccounts
+              },
+              {
+                title: `Comparativo de ${rotMes} vs ${monthNamePT(m)} / ${y-1}`,
+                rotAtuais: rotMes,
+                rotComparado: `${monthNamePT(m)} / ${y-1}`
+              }
             );
-            await flush();
-            if (cvAnoAnt._chart && window.ChartFeatures?.applyPdfTheme) {
-              window.ChartFeatures.applyPdfTheme(cvAnoAnt._chart);
-              cvAnoAnt._chart.update('none');
-            }
             canvases.push(cvAnoAnt);
           }
+
+
 
           // === Inserir canvases (2 por página) ===
           canvases.forEach((cv, idx) => {
