@@ -140,229 +140,297 @@ function ReportsModal({
           return n;
         });
       }
-      // === RELATÓRIO MENSAL (pizza 100% + card resumo + barras + listagem) ===
+      
+      // === RELATÓRIO MENSAL (corrigido: campos, layout A4 e render flush) ===
       async function onPdfRelatorioMensal() {
-        const contasProfile = Array.from(cmpSel);            // restrição para BARRAS
-        const y = mensalYear;                                // estados da ABA Mensal
+        const y = mensalYear;
         const m = mensalMonth;
 
-        // Helpers locais
-        const monthNamePT = (mm)=> new Date(2025, mm-1, 1).toLocaleString('pt-BR',{month:'long'}).replace(/^./,c=>c.toUpperCase());
-        const rotMes = `${monthNamePT(m)} / ${y}`;
-        const host = _makeHost();
-        const canvases = [];
+        // Seleção do perfil para BARRAS (ok ficar vazio)
+        const contasProfile = Array.from(cmpSel);
 
-        // ===== Helpers de desenho de CANVAS (card e tabela) =====
-        function makeResumoCanvas({ total, porPagador, totalDividida, deltaTexto }) {
-          const W = 1100, H = 260;            // altura menor p/ caber com a pizza (2-up)
-          const wrap = document.createElement('div'); wrap.style.width=`${W}px`; wrap.style.height=`${H}px`;
-          const c = document.createElement('canvas'); c.width=W; c.height=H; wrap.appendChild(c); host.appendChild(wrap);
+        // Helpers
+        const monthNamePT = (mm) =>
+          new Date(2025, mm - 1, 1).toLocaleString('pt-BR', { month: 'long' }).replace(/^./, c => c.toUpperCase());
+        const rotMes = `${monthNamePT(m)} / ${y}`;
+        const parseBRLnum = (brl) =>
+          parseFloat(String(brl || '').replace(/[^\d,]/g, '').replace(/\.(?=\d)/g, '').replace(',', '.')) || 0;
+
+        // Render flush (garante Chart.js pronto antes do toDataURL)
+        const flush = async () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+        // Host offscreen (gráficos)
+        function makeHost() {
+          const host = document.createElement('div');
+          host.id = 'pdf-host';
+          host.style.position = 'fixed';
+          host.style.left = '-99999px';
+          host.style.top = '0';
+          host.style.width = '1100px';
+          host.style.pointerEvents = 'none';
+          document.body.appendChild(host);
+          return host;
+        }
+        function addCanvas(host, h = 680, w = 1100) {
+          const wrap = document.createElement('div');
+          wrap.style.width = `${w}px`;
+          wrap.style.height = `${h}px`;
+          const c = document.createElement('canvas');
+          // ajuda o Chart.js a setar corretamente a densidade de pixels
+          c.width = w;
+          c.height = h;
+          wrap.appendChild(c);
+          host.appendChild(wrap);
+          return c;
+        }
+
+        // Card-resumo (imagem simples)
+        function makeResumoCanvas(host, { total, porPagador, totalDividida, deltaTexto }) {
+          const W = 1100, H = 240;
+          const wrap = document.createElement('div'); wrap.style.width = `${W}px`; wrap.style.height = `${H}px`;
+          const c = document.createElement('canvas'); c.width = W; c.height = H; wrap.appendChild(c); host.appendChild(wrap);
           const ctx = c.getContext('2d');
 
-          // fundo branco p/ impressão
-          ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,W,H);
+          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
           ctx.fillStyle = '#111827'; ctx.font = 'bold 22px Arial';
-          ctx.fillText(`Resumo de ${rotMes}`, 24, 36);
+          ctx.fillText(`Resumo de ${rotMes}`, 24, 34);
 
-          ctx.font = '16px Arial'; ctx.fillStyle = '#111827';
+          ctx.font = '16px Arial';
           const linhas = [
-            `Total gasto no mês: R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits:2})}`,
-            `Total em contas DIVIDIDAS: R$ ${totalDividida.toLocaleString('pt-BR', {minimumFractionDigits:2})}`,
-            `Por pagador: ${porPagador.map(p => `${p.nome}: R$ ${p.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}`).join(' | ')}`,
+            `Total gasto no mês: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            `Total em contas DIVIDIDAS: R$ ${totalDividida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            `Por pagador: ${porPagador.map(p => `${p.nome}: R$ ${p.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`).join(' | ')}`,
             `Acerto: ${deltaTexto}`
           ];
-          let yText = 70;
-          for (const ln of linhas) { ctx.fillText(ln, 24, yText); yText += 28; }
+          let yText = 70; ctx.fillStyle = '#111827';
+          for (const ln of linhas) { ctx.fillText(ln, 24, yText); yText += 26; }
 
           return c;
         }
 
-        function splitRows(rows, maxRowsPerCanvas=28) {
-          const chunks = [];
-          for (let i=0;i<rows.length;i+=maxRowsPerCanvas) chunks.push(rows.slice(i,i+maxRowsPerCanvas));
-          return chunks;
+        // === Dados ===
+        const itensMes = await window.DataAdapter.fetchMes(y, m) || [];
+        const prevM = m > 1 ? m - 1 : 12;
+        const prevY = m > 1 ? y : (y - 1);
+        const itensAnt = await window.DataAdapter.fetchMes(prevY, prevM) || [];
+        const itensAnoAnt = await window.DataAdapter.fetchMes(y - 1, m) || [];
+
+        // Pizza — TODAS as contas do mês
+        const contasAll = Array.from(new Set(itensMes.map(x => x.nome))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        const valoresAll = contasAll.map(c =>
+          itensMes.filter(x => x.nome === c).reduce((a, b) => a + parseBRLnum(b.valor), 0)
+        );
+
+        // Barras — apenas contas do perfil (fallback: todas)
+        const contasBarras = (contasProfile.length ? contasProfile : contasAll);
+        const sumByConta = (items, contasSel) =>
+          contasSel.map(c => items.filter(x => x.nome === c).reduce((a, b) => a + parseBRLnum(b.valor), 0));
+        const curVals = sumByConta(itensMes, contasBarras);
+        const antVals = sumByConta(itensAnt, contasBarras);
+        const anoAntVals = sumByConta(itensAnoAnt, contasBarras);
+
+        // Resumo por pagador (⚠ usa campo `quem` do DataAdapter) + balanço
+        const totalMes = itensMes.reduce((a, b) => a + parseBRLnum(b.valor), 0);
+        let totalDividida = 0;
+        const porPagadorMap = new Map();
+        itensMes.forEach(it => {
+          const v = parseBRLnum(it.valor);
+          if (it.dividida) totalDividida += v;
+          const k = it.quem || '—';  // <— AQUI (não é quem_pagou)
+          porPagadorMap.set(k, (porPagadorMap.get(k) || 0) + v);
+        });
+        const porPagador = Array.from(porPagadorMap.entries())
+          .map(([nome, valor]) => ({ nome, valor }))
+          .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+        let deltaTexto = 'Sem diferença a acertar.';
+        if (porPagador.length >= 2) {
+          const ranked = [...porPagador].sort((a, b) => b.valor - a.valor);
+          const top = ranked[0], low = ranked[ranked.length - 1];
+          const delta = top.valor - low.valor;
+          if (delta > 0) deltaTexto = `${low.nome} deve R$ ${delta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para ${top.nome}`;
         }
 
-        function makeTabelaCanvases({ titulo, rows }) {
-          const W=1100,H=680;
-          const canvList = [];
-          const groups = splitRows(rows, 26); // ~26 linhas visíveis em 680px com espaçamento
+        // === PDF ===
+        const { jsPDF } = window.jspdf || {};
+        if (!jsPDF) return alert('jsPDF não carregado.');
+        const doc = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
+        const pageW = doc.internal.pageSize.getWidth();
+        const pageH = doc.internal.pageSize.getHeight();
+        const margin = 28;
+        const gap = 24;
+        const slotH = (pageH - margin * 2 - gap) / 2;
+        const maxW = pageW - margin * 2;
 
-          groups.forEach((subset, idx)=>{
-            const wrap = document.createElement('div'); wrap.style.width=`${W}px`; wrap.style.height=`${H}px`;
-            const c = document.createElement('canvas'); c.width=W; c.height=H; wrap.appendChild(c); host.appendChild(wrap);
-            const ctx = c.getContext('2d');
+        window.__PDF_MODE = true; // aplica paleta PDF nos charts
 
-            // header
-            ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H);
-            ctx.fillStyle='#111827'; ctx.font='bold 20px Arial';
-            ctx.fillText(`${titulo}${groups.length>1?` (pág. ${idx+1}/${groups.length})`:''}`, 24, 36);
-
-            // col titles
-            const cols = [
-              { x: 24,   label: 'Nome (Instância)', w: 420 },
-              { x: 460,  label: 'Valor',            w: 120, align: 'right' },
-              { x: 600,  label: 'Dividida',         w: 80  },
-              { x: 700,  label: 'Boleto',           w: 180 },
-              { x: 900,  label: 'Comprovante',      w: 180 }
-            ];
-            ctx.font='bold 13px Arial';
-            cols.forEach(col => ctx.fillText(col.label, col.x, 68));
-
-            // linhas
-            ctx.font='13px Arial'; ctx.fillStyle='#111827';
-            let yRow = 92;
-            subset.forEach(r=>{
-              // Nome (Instância)
-              const nomeInst = r.instancia ? `${r.nome} (${r.instancia})` : r.nome;
-              ctx.fillText(nomeInst, cols[0].x, yRow);
-
-              // Valor (direita)
-              const valTxt = `R$ ${r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
-              ctx.textAlign='right'; ctx.fillText(valTxt, cols[1].x + cols[1].w, yRow);
-              ctx.textAlign='left';
-
-              // Dividida
-              ctx.fillText(r.dividida ? 'Sim' : 'Não', cols[2].x, yRow);
-
-              // Links (mostra URL curta se houver, senão vazio)
-              const billet = r.link_boleto ? (r.link_boleto.length>28 ? r.link_boleto.slice(0,28)+'…' : r.link_boleto) : '';
-              const proof  = r.link_comprovante ? (r.link_comprovante.length>28 ? r.link_comprovante.slice(0,28)+'…' : r.link_comprovante) : '';
-              ctx.fillText(billet, cols[3].x, yRow);
-              ctx.fillText(proof,  cols[4].x, yRow);
-
-              yRow += 24;
-            });
-
-            canvList.push(c);
-          });
-
-          return canvList;
-        }
+        const host = makeHost();
+        const canvases = [];
 
         try {
-          window.__PDF_MODE = true;
+          // 1) Pizza 100% do mês
           window.ChartFeatures?.setupChartDefaults?.();
-
-          // ====== 1) PIZZA 100% das contas do mês ======
-          const itensMes = await window.DataAdapter.fetchMes(y, m) || [];
-          const contasAll = Array.from(new Set(itensMes.map(x=>x.nome))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-          const valoresAll = contasAll.map(c => itensMes.filter(x=>x.nome===c).reduce((a,b)=>a+parseBRLnum(b.valor),0));
-          // ⚠️ Pizza com TODAS as contas do mês → não restringe por profile
-          const cvPizza = _addCanvas(host, '680px', '1100px');
+          const cvPizza = addCanvas(host, 680, 1100);
           window.ChartFeatures?.renderPizzaMensal?.(cvPizza, { labels: contasAll, valores: valoresAll }, rotMes);
-          if (cvPizza._chart && window.ChartFeatures?.applyPdfTheme) { window.ChartFeatures.applyPdfTheme(cvPizza._chart); cvPizza._chart.update('none'); }
+          await flush();
+          if (cvPizza._chart && window.ChartFeatures?.applyPdfTheme) {
+            window.ChartFeatures.applyPdfTheme(cvPizza._chart);
+            cvPizza._chart.update('none');
+          }
           canvases.push(cvPizza);
 
-          // ====== 1b) CARD-RESUMO (TOTAL / POR PAGADOR / DIVIDIDAS / ACERTO ENTRE PAGADORES) ======
-          const totalMes = itensMes.reduce((a,b)=>a+parseBRLnum(b.valor),0);
-          const porPagadorMap = new Map();
-          let totalDividida = 0;
-          itensMes.forEach(it=>{
-            const v = parseBRLnum(it.valor);
-            if (it.dividida) totalDividida += v;
-            const k = (it.quem_pagou || '—');
-            porPagadorMap.set(k, (porPagadorMap.get(k)||0)+v);
-          });
-          const porPagador = Array.from(porPagadorMap.entries()).map(([nome,valor])=>({nome,valor})).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+          // 1b) Card-resumo
+          const cvResumo = makeResumoCanvas(host, { total: totalMes, porPagador, totalDividida, deltaTexto });
+          canvases.push(cvResumo);
 
-          // “quem deve para quem”: assume 2 pagadores principais (se houver)
-          let deltaTexto = 'Sem diferença a acertar.';
-          if (porPagador.length >= 2) {
-            const ranked = [...porPagador].sort((a,b)=>b.valor-a.valor);
-            const top = ranked[0], low = ranked[ranked.length-1];
-            const delta = top.valor - low.valor;
-            if (delta > 0) {
-              deltaTexto = `${low.nome} deve R$ ${delta.toLocaleString('pt-BR',{minimumFractionDigits:2})} para ${top.nome}`;
-            }
-          }
-          const cvResumo = makeResumoCanvas({ total: totalMes, porPagador, totalDividida, deltaTexto });
-          canvases.push(cvResumo);  // 👉 garante que a 1ª página seja (Pizza + Card)
-
-          // ====== 2) BARRAS (restringe às contas do PROFILE) — página 2 ======
-          const contasBarras = contasProfile.length ? contasProfile : contasAll; // fallback caso vazio
-          const prevM = m > 1 ? m - 1 : 12;
-          const prevY = m > 1 ? y : (y - 1);
-          const itensAnt = await window.DataAdapter.fetchMes(prevY, prevM) || [];
-          const itensAnoAnt = await window.DataAdapter.fetchMes(y - 1, m) || [];
-
-          const curVals   = sumByConta(itensMes, contasBarras);
-          const antVals   = sumByConta(itensAnt, contasBarras);
-          const anoAntVals= sumByConta(itensAnoAnt, contasBarras);
-
-          // barras vs mês anterior
-          if (curVals.some(v=>v>0) || antVals.some(v=>v>0)) {
-            const cv1 = _addCanvas(host, '560px', '1100px');
+          // 2) Barras — mês anterior
+          const temAnt = curVals.some(v => v > 0) || antVals.some(v => v > 0);
+          if (temAnt) {
+            const cvAnt = addCanvas(host, 560, 1100);
             window.ChartFeatures?.renderBarrasComparativas?.(
-              cv1,
+              cvAnt,
               { labels: contasBarras, atual: curVals, comparado: antVals },
               'anterior',
               { atual: rotMes, comparado: `${monthNamePT(prevM)} / ${prevY}` }
             );
-            if (cv1._chart && window.ChartFeatures?.applyPdfTheme) { window.ChartFeatures.applyPdfTheme(cv1._chart); cv1._chart.update('none'); }
-            canvases.push(cv1);
+            await flush();
+            if (cvAnt._chart && window.ChartFeatures?.applyPdfTheme) {
+              window.ChartFeatures.applyPdfTheme(cvAnt._chart);
+              cvAnt._chart.update('none');
+            }
+            canvases.push(cvAnt);
           }
 
-          // barras vs mesmo mês ano anterior
-          if (curVals.some(v=>v>0) || anoAntVals.some(v=>v>0)) {
-            const cv2 = _addCanvas(host, '560px', '1100px');
+          // 2b) Barras — mesmo mês do ano anterior
+          const temAnoAnt = curVals.some(v => v > 0) || anoAntVals.some(v => v > 0);
+          if (temAnoAnt) {
+            const cvAnoAnt = addCanvas(host, 560, 1100);
             window.ChartFeatures?.renderBarrasComparativas?.(
-              cv2,
+              cvAnoAnt,
               { labels: contasBarras, atual: curVals, comparado: anoAntVals },
               'anoAnterior',
-              { atual: rotMes, comparado: `${monthNamePT(m)} / ${y-1}` }
+              { atual: rotMes, comparado: `${monthNamePT(m)} / ${y - 1}` }
             );
-            if (cv2._chart && window.ChartFeatures?.applyPdfTheme) { window.ChartFeatures.applyPdfTheme(cv2._chart); cv2._chart.update('none'); }
-            canvases.push(cv2);
+            await flush();
+            if (cvAnoAnt._chart && window.ChartFeatures?.applyPdfTheme) {
+              window.ChartFeatures.applyPdfTheme(cvAnoAnt._chart);
+              cvAnoAnt._chart.update('none');
+            }
+            canvases.push(cvAnoAnt);
           }
 
-          // ====== 3) LISTAGEM (página 3 em diante) ======
-          // ordenar por quem_pagou, depois nome
+          // === Inserir canvases (2 por página) ===
+          canvases.forEach((cv, idx) => {
+            if (idx > 0 && idx % 2 === 0) doc.addPage();
+            const posInPage = idx % 2;
+            const ratio = cv.width / cv.height;
+            let w = maxW, h = w / ratio;
+            if (h > slotH) { h = slotH; w = h * ratio; }
+            const x = (pageW - w) / 2;
+            const yPos = posInPage === 0 ? margin : (margin + slotH + gap);
+            const img = cv.toDataURL('image/png', 1.0);
+            doc.addImage(img, 'PNG', x, yPos, w, h);
+          });
+
+          // === 3) LISTAGEM POR PAGADOR (com links clicáveis)
+          // ⚠️ usa campos do DataAdapter: it.quem e it.links.{boleto,comp}
           const byPayer = {};
-          itensMes.forEach(it=>{
-            const payer = it.quem_pagou || '—';
+          itensMes.forEach(it => {
+            const payer = it.quem || '—';
             if (!byPayer[payer]) byPayer[payer] = [];
             byPayer[payer].push(it);
           });
-          const payers = Object.keys(byPayer).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-          const rows = [];
-          payers.forEach(p=>{
-            // linha de seção “Quem pagou: X”
-            rows.push({ nome: `Quem pagou: ${p}`, instancia: '', valor: 0, dividida: false, link_boleto: '', link_comprovante: '', _header:true });
-            byPayer[p].sort((a,b)=> (a.nome+a.instancia).localeCompare(b.nome+b.instancia,'pt-BR')).forEach(it=>{
-              rows.push({
-                nome: it.nome,
-                instancia: it.instancia || '',
-                valor: parseBRLnum(it.valor),
-                dividida: !!it.dividida,
-                link_boleto: it.link_boleto || '',
-                link_comprovante: it.link_comprovante || ''
-              });
-            });
-          });
-          // converte headers para linhas visuais (negrito simples)
-          const rowsVisuais = rows.flatMap(r=>{
-            if (!r._header) return [r];
-            return [
-              { nome: r.nome, instancia:'', valor: 0, dividida:false, link_boleto:'', link_comprovante:'' }
-            ];
-          });
+          const payers = Object.keys(byPayer).sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
-          const canvTab = makeTabelaCanvases({ titulo: `Contas pagas — ${rotMes}`, rows: rowsVisuais });
-          canvases.push(...canvTab);
+          // Layout A4 (em pt) – cabe tudo sem “estourar”
+          const col = {
+            nome:        { x: margin,                w: 240 },
+            valor:       { x: margin + 240 + 8,      w: 70,  align: 'right' },
+            dividida:    { x: margin + 240 + 8 + 70 + 8, w: 60 },
+            boleto:      { x: margin + 240 + 8 + 70 + 8 + 60 + 8, w: 90 },
+            comprovante: { x: margin + 240 + 8 + 70 + 8 + 60 + 8 + 90 + 8, w: 90 },
+          };
+          const headerH = 30;
+          const lineH = 18;
+          const startY = margin + headerH + 12;
+          const maxRows = Math.floor((pageH - startY - margin) / lineH);
 
-          // ====== EXPORTA (2 por página) ======
-          window.PDFHelpers.exportTwoPerPage(
-            canvases,
-            `relatorio_mensal_${y}_${String(m).padStart(2,'0')}.pdf`,
-            { margin: 28, gap: 24 }
-          );
+          doc.addPage();
+          let curY = margin;
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+          doc.text(`Contas pagas — ${rotMes}`, margin, curY);
+          curY += 20;
 
+          const printHeader = () => {
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+            doc.text('Nome (Instância)', col.nome.x, curY);
+            doc.text('Valor',            col.valor.x + col.valor.w, curY, { align: 'right' });
+            doc.text('Dividida',         col.dividida.x, curY);
+            doc.text('Boleto',           col.boleto.x, curY);
+            doc.text('Comprovante',      col.comprovante.x, curY);
+            curY += 12;
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+          };
+
+          let rowsOnPage = 0;
+          printHeader();
+
+          const short = (u, n = 36) => (u && u.length > n ? (u.slice(0, n) + '…') : (u || ''));
+
+          for (const p of payers) {
+            if (rowsOnPage + 2 > maxRows) {
+              doc.addPage(); curY = margin;
+              doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+              doc.text(`Contas pagas — ${rotMes}`, margin, curY); curY += 20;
+              printHeader(); rowsOnPage = 0;
+            }
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+            doc.text(`Quem pagou: ${p}`, margin, curY);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+            curY += lineH; rowsOnPage++;
+
+            const linhas = byPayer[p].sort((a, b) =>
+              (a.nome + (a.instancia || '')).localeCompare(b.nome + (b.instancia || ''), 'pt-BR')
+            );
+
+            for (const it of linhas) {
+              if (rowsOnPage >= maxRows) {
+                doc.addPage(); curY = margin;
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+                doc.text(`Contas pagas — ${rotMes}`, margin, curY); curY += 20;
+                printHeader(); rowsOnPage = 0;
+              }
+
+              const nomeInst = it.instancia ? `${it.nome} (${it.instancia})` : it.nome;
+              // Nome (wrap controlado pelo maxWidth)
+              doc.text(String(nomeInst), col.nome.x, curY, { maxWidth: col.nome.w });
+
+              // Valor
+              const valTxt = `R$ ${parseBRLnum(it.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+              doc.text(valTxt, col.valor.x + col.valor.w, curY, { align: 'right' });
+
+              // Dividida
+              doc.text(it.dividida ? 'Sim' : 'Não', col.dividida.x, curY);
+
+              // Links (clicáveis) — usa it.links.{boleto,comp}
+              if (it.links?.boleto) {
+                doc.textWithLink(short(it.links.boleto, 32), col.boleto.x, curY, { url: it.links.boleto });
+              }
+              if (it.links?.comp) {
+                doc.textWithLink(short(it.links.comp, 32), col.comprovante.x, curY, { url: it.links.comp });
+              }
+
+              curY += lineH; rowsOnPage++;
+            }
+          }
+
+          doc.save(`relatorio_mensal_${y}_${String(m).padStart(2, '0')}.pdf`);
         } finally {
           window.__PDF_MODE = false;
           host?.parentNode?.removeChild(host);
         }
       }
+
+
 
       // === RELATÓRIO POR PERÍODO (pizza 100% do período + linhas 2-up + listagens por mês) ===
       async function onPdfRelatorioPeriodo() {
@@ -384,15 +452,22 @@ function ReportsModal({
           return chunks;
         }
         function makeTabelaCanvases({ titulo, rows }) {
-          const W=1100,H=680; const canvList=[];
-          const groups = splitRows(rows, 26);
+          const W=1100,H=680;
+          const canvList = [];
+          const groups = splitRows(rows, 26); // ~26 linhas por canvas
+
           groups.forEach((subset, idx)=>{
-            const wrap=document.createElement('div'); wrap.style.width=`${W}px`; wrap.style.height=`${H}px`;
-            const c=document.createElement('canvas'); c.width=W; c.height=H; wrap.appendChild(c); host.appendChild(wrap);
-            const ctx=c.getContext('2d');
+            const wrap = document.createElement('div'); wrap.style.width=`${W}px`; wrap.style.height=`${H}px`;
+            const c = document.createElement('canvas'); c.width=W; c.height=H; wrap.appendChild(c); host.appendChild(wrap);
+            const ctx = c.getContext('2d');
+            c._pdfLinks = []; // 👈 coletor de links clicáveis
+
+            // header
             ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H);
             ctx.fillStyle='#111827'; ctx.font='bold 20px Arial';
             ctx.fillText(`${titulo}${groups.length>1?` (pág. ${idx+1}/${groups.length})`:''}`, 24, 36);
+
+            // col titles
             const cols = [
               { x: 24,   label: 'Nome (Instância)', w: 420 },
               { x: 460,  label: 'Valor',            w: 120, align: 'right' },
@@ -400,25 +475,66 @@ function ReportsModal({
               { x: 700,  label: 'Boleto',           w: 180 },
               { x: 900,  label: 'Comprovante',      w: 180 }
             ];
-            ctx.font='bold 13px Arial'; cols.forEach(col=>ctx.fillText(col.label, col.x, 68));
+            ctx.font='bold 13px Arial';
+            cols.forEach(col => ctx.fillText(col.label, col.x, 68));
+
+            // linhas
             ctx.font='13px Arial'; ctx.fillStyle='#111827';
-            let yRow=92;
+            let yRow = 92;
+            const rowHeight = 24;
+
             subset.forEach(r=>{
+              // Nome (Instância)
               const nomeInst = r.instancia ? `${r.nome} (${r.instancia})` : r.nome;
-              ctx.textAlign='left'; ctx.fillText(nomeInst,  cols[0].x, yRow);
+              ctx.textAlign='left';
+              ctx.fillText(nomeInst, cols[0].x, yRow);
+
+              // Valor (direita)
               const valTxt = `R$ ${r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
-              ctx.textAlign='right'; ctx.fillText(valTxt,    cols[1].x + cols[1].w, yRow);
-              ctx.textAlign='left'; ctx.fillText(r.dividida ? 'Sim' : 'Não', cols[2].x, yRow);
+              ctx.textAlign='right'; ctx.fillText(valTxt, cols[1].x + cols[1].w, yRow);
+              ctx.textAlign='left';
+
+              // Dividida
+              ctx.fillText(r.dividida ? 'Sim' : 'Não', cols[2].x, yRow);
+
+              // Links mostrados como texto curto (você já tinha)
               const billet = r.link_boleto ? (r.link_boleto.length>28 ? r.link_boleto.slice(0,28)+'…' : r.link_boleto) : '';
               const proof  = r.link_comprovante ? (r.link_comprovante.length>28 ? r.link_comprovante.slice(0,28)+'…' : r.link_comprovante) : '';
+
+              // Desenha textos
               ctx.fillText(billet, cols[3].x, yRow);
               ctx.fillText(proof,  cols[4].x, yRow);
-              yRow += 24;
+
+              // 🔗 Registra retângulos clicáveis (em coordenadas do CANVAS)
+              const approxTextH = 14; // altura de fonte aproximada
+              if (r.link_boleto) {
+                c._pdfLinks.push({
+                  url: r.link_boleto,
+                  x: cols[3].x,
+                  y: yRow - approxTextH + 4, // ajuste fino vertical
+                  w: cols[3].w,
+                  h: approxTextH + 6
+                });
+              }
+              if (r.link_comprovante) {
+                c._pdfLinks.push({
+                  url: r.link_comprovante,
+                  x: cols[4].x,
+                  y: yRow - approxTextH + 4,
+                  w: cols[4].w,
+                  h: approxTextH + 6
+                });
+              }
+
+              yRow += rowHeight;
             });
+
             canvList.push(c);
           });
+
           return canvList;
         }
+
 
         try {
           window.__PDF_MODE = true;
@@ -434,6 +550,8 @@ function ReportsModal({
           const valoresAll = contasAll.map(c => todosItens.filter(x=>x.nome===c).reduce((a,b)=>a+parseBRLnum(b.valor),0));
           const rotPeriodo = `${String(m1).padStart(2,'0')}/${y1} a ${String(m2).padStart(2,'0')}/${y2}`;
           const cvPizza = _addCanvas(host, '680px', '1100px');
+          console.debug('[PERÍODO pizza-like]', rotPeriodo, { labels: contasAll.length, valores: valoresAll.length, total: valoresAll.reduce((a,b)=>a+b,0) });
+
           window.ChartFeatures?.renderPizzaMensal?.(cvPizza, { labels: contasAll, valores: valoresAll }, rotPeriodo);
           if (cvPizza._chart && window.ChartFeatures?.applyPdfTheme) { window.ChartFeatures.applyPdfTheme(cvPizza._chart); cvPizza._chart.update('none'); }
           canvases.push(cvPizza);
