@@ -13,6 +13,7 @@ function ReportsModal({
         window.addEventListener('keydown', handleKey);
         return () => window.removeEventListener('keydown', handleKey);
       }, []);
+      const [loading, setLoading] = React.useState(false);
       // Estados sincronizados com a tela principal ao abrir
       const [mensalYear, setMensalYear] = React.useState(currentYear);
       const [mensalMonth, setMensalMonth] = React.useState(currentMonth);
@@ -532,322 +533,327 @@ function ReportsModal({
       
       // === RELATÓRIO MENSAL (corrigido: campos, layout A4 e render flush) ===
       async function onPdfRelatorioMensal() {
-        const y = mensalYear;
-        const m = mensalMonth;
-       
-        // Seleção do perfil para BARRAS (ok ficar vazio)
-        const contasProfile = Array.from(cmpSel);
-
-        // Usa a lista do profile; se não houver, cai para a seleção da UI
-        const chartAccounts =
-          (Array.isArray(window.AppState?.profile?.chart_accounts) && window.AppState.profile.chart_accounts.length)
-            ? window.AppState.profile.chart_accounts
-            : (Array.isArray(window.DataAdapter?.profile?.chart_accounts) && window.DataAdapter.profile.chart_accounts.length)
-              ? window.DataAdapter.profile.chart_accounts
-              : contasProfile;
-
-
-        // Helpers
-        const monthNamePT = (mm) =>
-          new Date(2025, mm - 1, 1).toLocaleString('pt-BR', { month: 'long' }).replace(/^./, c => c.toUpperCase());
-        const rotMes = `${monthNamePT(m)} / ${y}`;
-        const parseBRLnum = (brl) =>
-          parseFloat(String(brl || '').replace(/[^\d,]/g, '').replace(/\.(?=\d)/g, '').replace(',', '.')) || 0;
-
-        // Render flush (garante Chart.js pronto antes do toDataURL)
-        const flush = async () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
-
-        // Host offscreen (gráficos)
-        function makeHost() {
-          const host = document.createElement('div');
-          host.id = 'pdf-host';
-          host.style.position = 'fixed';
-          host.style.left = '-99999px';
-          host.style.top = '0';
-          host.style.width = '1100px';
-          host.style.pointerEvents = 'none';
-          document.body.appendChild(host);
-          return host;
-        }
-        function addCanvas(host, h = 680, w = 1100) {
-          const wrap = document.createElement('div');
-          wrap.style.width = `${w}px`;
-          wrap.style.height = `${h}px`;
-          const c = document.createElement('canvas');
-          // ajuda o Chart.js a setar corretamente a densidade de pixels
-          c.width = w;
-          c.height = h;
-          wrap.appendChild(c);
-          host.appendChild(wrap);
-          return c;
-        }
-
-        // Card-resumo (imagem simples)
-        function makeResumoCanvas(host, { total, porPagador, totalDividida, deltaTexto }) {
-          const W = 1100, H = 240;
-          const wrap = document.createElement('div'); wrap.style.width = `${W}px`; wrap.style.height = `${H}px`;
-          const c = document.createElement('canvas'); c.width = W; c.height = H; wrap.appendChild(c); host.appendChild(wrap);
-          const ctx = c.getContext('2d');
-
-          ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
-          ctx.fillStyle = '#111827'; ctx.font = 'bold 22px Arial';
-          ctx.fillText(`Resumo de ${rotMes}`, 24, 34);
-
-          ctx.font = '16px Arial';
-          const linhas = [
-            `Total gasto no mês: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            `Total em contas DIVIDIDAS: R$ ${totalDividida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            `Por pagador: ${porPagador.map(p => `${p.nome}: R$ ${p.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`).join(' | ')}`,
-            `Acerto: ${deltaTexto}`
-          ];
-          let yText = 70; ctx.fillStyle = '#111827';
-          for (const ln of linhas) { ctx.fillText(ln, 24, yText); yText += 26; }
-
-          return c;
-        }
-
-        // === Dados ===
-        const itensMes = await window.DataAdapter.fetchMes(y, m) || [];
-        const prevM = m > 1 ? m - 1 : 12;
-        const prevY = m > 1 ? y : (y - 1);
-        const itensAnt = await window.DataAdapter.fetchMes(prevY, prevM) || [];
-        const itensAnoAnt = await window.DataAdapter.fetchMes(y - 1, m) || [];
-
-        // Pizza — TODAS as contas do mês
-        const contasAll = Array.from(new Set(itensMes.map(x => x.nome))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-        const valoresAll = contasAll.map(c =>
-          itensMes.filter(x => x.nome === c).reduce((a, b) => a + parseBRLnum(b.valor), 0)
-        );
-
-        // Barras — apenas contas do perfil (fallback: todas)
-        const contasBarras = (chartAccounts.length ? chartAccounts : contasAll);
-
-        const sumByConta = (items, contasSel) =>
-          contasSel.map(c => items.filter(x => x.nome === c).reduce((a, b) => a + parseBRLnum(b.valor), 0));
-        const curVals = sumByConta(itensMes, contasBarras);
-        const antVals = sumByConta(itensAnt, contasBarras);
-        const anoAntVals = sumByConta(itensAnoAnt, contasBarras);
-
-        // Resumo por pagador (⚠ usa campo `quem` do DataAdapter) + balanço
-        const totalMes = itensMes.reduce((a, b) => a + parseBRLnum(b.valor), 0);
-        let totalDividida = 0;
-        const porPagadorMap = new Map();
-        itensMes.forEach(it => {
-          const v = parseBRLnum(it.valor);
-          if (it.dividida) totalDividida += v;
-          const k = it.quem || '—';  // <— AQUI (não é quem_pagou)
-          porPagadorMap.set(k, (porPagadorMap.get(k) || 0) + v);
-        });
-        const porPagador = Array.from(porPagadorMap.entries())
-          .map(([nome, valor]) => ({ nome, valor }))
-          .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-        let deltaTexto = 'Sem diferença a acertar.';
-        if (porPagador.length >= 2) {
-          const ranked = [...porPagador].sort((a, b) => b.valor - a.valor);
-          const top = ranked[0], low = ranked[ranked.length - 1];
-          const delta = top.valor - low.valor;
-          if (delta > 0) deltaTexto = `${low.nome} deve R$ ${delta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para ${top.nome}`;
-        }
-
-        // === PDF ===
-        const { jsPDF } = window.jspdf || {};
-        if (!jsPDF) return alert('jsPDF não carregado.');
-        const doc = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
-        const pageW = doc.internal.pageSize.getWidth();
-        const pageH = doc.internal.pageSize.getHeight();
-        const margin = 28;
-        const gap = 24;
-        const slotH = (pageH - margin * 2 - gap) / 2;
-        const maxW = pageW - margin * 2;
-
-        window.__PDF_MODE = true; // aplica paleta PDF nos charts
-
-        const host = makeHost();
-        const canvases = [];
-        // canvas da Pizza (primeiro slot da página)
-        const cvPizza = addCanvas(host, 560, 900);
-        const ctxPizza = cvPizza.getContext('2d');
-        ctxPizza.fillStyle = '#ffffff';
-        ctxPizza.fillRect(0, 0, cvPizza.width, cvPizza.height);
-
+        setLoading(true);
         try {
-          // 1) Pizza 100% do mês
-          renderPizzaMensalStrict(cvPizza, { labels: contasAll, valores: valoresAll }, rotMes);
-          if (cvPizza._chart && window.ChartFeatures?.applyPdfTheme) {
-            window.ChartFeatures.applyPdfTheme(cvPizza._chart);
-            cvPizza._chart.update('none');
-            }
-            // 👇 AQUI vem o fundo branco, depois do chart
+          const y = mensalYear;
+          const m = mensalMonth;
+        
+          // Seleção do perfil para BARRAS (ok ficar vazio)
+          const contasProfile = Array.from(cmpSel);
+
+          // Usa a lista do profile; se não houver, cai para a seleção da UI
+          const chartAccounts =
+            (Array.isArray(window.AppState?.profile?.chart_accounts) && window.AppState.profile.chart_accounts.length)
+              ? window.AppState.profile.chart_accounts
+              : (Array.isArray(window.DataAdapter?.profile?.chart_accounts) && window.DataAdapter.profile.chart_accounts.length)
+                ? window.DataAdapter.profile.chart_accounts
+                : contasProfile;
+
+
+          // Helpers
+          const monthNamePT = (mm) =>
+            new Date(2025, mm - 1, 1).toLocaleString('pt-BR', { month: 'long' }).replace(/^./, c => c.toUpperCase());
+          const rotMes = `${monthNamePT(m)} / ${y}`;
+          const parseBRLnum = (brl) =>
+            parseFloat(String(brl || '').replace(/[^\d,]/g, '').replace(/\.(?=\d)/g, '').replace(',', '.')) || 0;
+
+          // Render flush (garante Chart.js pronto antes do toDataURL)
+          const flush = async () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+          // Host offscreen (gráficos)
+          function makeHost() {
+            const host = document.createElement('div');
+            host.id = 'pdf-host';
+            host.style.position = 'fixed';
+            host.style.left = '-99999px';
+            host.style.top = '0';
+            host.style.width = '1100px';
+            host.style.pointerEvents = 'none';
+            document.body.appendChild(host);
+            return host;
+          }
+          function addCanvas(host, h = 680, w = 1100) {
+            const wrap = document.createElement('div');
+            wrap.style.width = `${w}px`;
+            wrap.style.height = `${h}px`;
+            const c = document.createElement('canvas');
+            // ajuda o Chart.js a setar corretamente a densidade de pixels
+            c.width = w;
+            c.height = h;
+            wrap.appendChild(c);
+            host.appendChild(wrap);
+            return c;
+          }
+
+          // Card-resumo (imagem simples)
+          function makeResumoCanvas(host, { total, porPagador, totalDividida, deltaTexto }) {
+            const W = 1100, H = 240;
+            const wrap = document.createElement('div'); wrap.style.width = `${W}px`; wrap.style.height = `${H}px`;
+            const c = document.createElement('canvas'); c.width = W; c.height = H; wrap.appendChild(c); host.appendChild(wrap);
+            const ctx = c.getContext('2d');
+
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = '#111827'; ctx.font = 'bold 22px Arial';
+            ctx.fillText(`Resumo de ${rotMes}`, 24, 34);
+
+            ctx.font = '16px Arial';
+            const linhas = [
+              `Total gasto no mês: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+              `Total em contas DIVIDIDAS: R$ ${totalDividida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+              `Por pagador: ${porPagador.map(p => `${p.nome}: R$ ${p.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`).join(' | ')}`,
+              `Acerto: ${deltaTexto}`
+            ];
+            let yText = 70; ctx.fillStyle = '#111827';
+            for (const ln of linhas) { ctx.fillText(ln, 24, yText); yText += 26; }
+
+            return c;
+          }
+
+          // === Dados ===
+          const itensMes = await window.DataAdapter.fetchMes(y, m) || [];
+          const prevM = m > 1 ? m - 1 : 12;
+          const prevY = m > 1 ? y : (y - 1);
+          const itensAnt = await window.DataAdapter.fetchMes(prevY, prevM) || [];
+          const itensAnoAnt = await window.DataAdapter.fetchMes(y - 1, m) || [];
+
+          // Pizza — TODAS as contas do mês
+          const contasAll = Array.from(new Set(itensMes.map(x => x.nome))).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+          const valoresAll = contasAll.map(c =>
+            itensMes.filter(x => x.nome === c).reduce((a, b) => a + parseBRLnum(b.valor), 0)
+          );
+
+          // Barras — apenas contas do perfil (fallback: todas)
+          const contasBarras = (chartAccounts.length ? chartAccounts : contasAll);
+
+          const sumByConta = (items, contasSel) =>
+            contasSel.map(c => items.filter(x => x.nome === c).reduce((a, b) => a + parseBRLnum(b.valor), 0));
+          const curVals = sumByConta(itensMes, contasBarras);
+          const antVals = sumByConta(itensAnt, contasBarras);
+          const anoAntVals = sumByConta(itensAnoAnt, contasBarras);
+
+          // Resumo por pagador (⚠ usa campo `quem` do DataAdapter) + balanço
+          const totalMes = itensMes.reduce((a, b) => a + parseBRLnum(b.valor), 0);
+          let totalDividida = 0;
+          const porPagadorMap = new Map();
+          itensMes.forEach(it => {
+            const v = parseBRLnum(it.valor);
+            if (it.dividida) totalDividida += v;
+            const k = it.quem || '—';  // <— AQUI (não é quem_pagou)
+            porPagadorMap.set(k, (porPagadorMap.get(k) || 0) + v);
+          });
+          const porPagador = Array.from(porPagadorMap.entries())
+            .map(([nome, valor]) => ({ nome, valor }))
+            .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+          let deltaTexto = 'Sem diferença a acertar.';
+          if (porPagador.length >= 2) {
+            const ranked = [...porPagador].sort((a, b) => b.valor - a.valor);
+            const top = ranked[0], low = ranked[ranked.length - 1];
+            const delta = top.valor - low.valor;
+            if (delta > 0) deltaTexto = `${low.nome} deve R$ ${delta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para ${top.nome}`;
+          }
+
+          // === PDF ===
+          const { jsPDF } = window.jspdf || {};
+          if (!jsPDF) return alert('jsPDF não carregado.');
+          const doc = new jsPDF({ orientation: 'p', unit: 'pt', format: 'a4' });
+          const pageW = doc.internal.pageSize.getWidth();
+          const pageH = doc.internal.pageSize.getHeight();
+          const margin = 28;
+          const gap = 24;
+          const slotH = (pageH - margin * 2 - gap) / 2;
+          const maxW = pageW - margin * 2;
+
+          window.__PDF_MODE = true; // aplica paleta PDF nos charts
+
+          const host = makeHost();
+          const canvases = [];
+          // canvas da Pizza (primeiro slot da página)
+          const cvPizza = addCanvas(host, 560, 900);
           const ctxPizza = cvPizza.getContext('2d');
-          ctxPizza.save();
-          ctxPizza.globalCompositeOperation = 'destination-over';
           ctxPizza.fillStyle = '#ffffff';
           ctxPizza.fillRect(0, 0, cvPizza.width, cvPizza.height);
-          ctxPizza.restore();
 
-          canvases.push(cvPizza);
-
-          // 1b) Card-resumo
-          const cvResumo = makeResumoCanvas(host, { total: totalMes, porPagador, totalDividida, deltaTexto });
-          canvases.push(cvResumo);
-
-          // 2) Barras — mês anterior
-          // Exemplo para "mês atual x mês anterior"
-          {
-            const cvAnt = addCanvas(host, 520, 900); // (altura, largura)
-            renderBarrasMensalLocal(
-              cvAnt,
-              {
-                labels: contasBarras,
-                atual: curVals,           // valores do mês
-                comparado: antVals,       // valores do mês anterior
-                allowList: chartAccounts  // <- profile.chart_accounts (array)
-              },
-              {
-                title: `Comparativo de ${rotMes} vs ${monthNamePT(prevM)} / ${prevY}`,
-                rotAtuais: rotMes,
-                rotComparado: `${monthNamePT(prevM)} / ${prevY}`
+          try {
+            // 1) Pizza 100% do mês
+            renderPizzaMensalStrict(cvPizza, { labels: contasAll, valores: valoresAll }, rotMes);
+            if (cvPizza._chart && window.ChartFeatures?.applyPdfTheme) {
+              window.ChartFeatures.applyPdfTheme(cvPizza._chart);
+              cvPizza._chart.update('none');
               }
-            );
-            canvases.push(cvAnt);
-          }
+              // 👇 AQUI vem o fundo branco, depois do chart
+            const ctxPizza = cvPizza.getContext('2d');
+            ctxPizza.save();
+            ctxPizza.globalCompositeOperation = 'destination-over';
+            ctxPizza.fillStyle = '#ffffff';
+            ctxPizza.fillRect(0, 0, cvPizza.width, cvPizza.height);
+            ctxPizza.restore();
 
-          // Exemplo para "mês atual x mesmo mês do ano anterior"
-          {
-            const cvAnoAnt = addCanvas(host, 520, 900);
-            renderBarrasMensalLocal(
-              cvAnoAnt,
-              {
-                labels: contasBarras,
-                atual: curVals,
-                comparado: anoAntVals,
-                allowList: chartAccounts
-              },
-              {
-                title: `Comparativo de ${rotMes} vs ${monthNamePT(m)} / ${y-1}`,
-                rotAtuais: rotMes,
-                rotComparado: `${monthNamePT(m)} / ${y-1}`
-              }
-            );
-            canvases.push(cvAnoAnt);
-          }
+            canvases.push(cvPizza);
 
+            // 1b) Card-resumo
+            const cvResumo = makeResumoCanvas(host, { total: totalMes, porPagador, totalDividida, deltaTexto });
+            canvases.push(cvResumo);
 
-
-          // === Inserir canvases (2 por página) ===
-          canvases.forEach((cv, idx) => {
-            if (cv._forcePageBreak) { doc.addPage(); return; }   // nova página se flag
-            if (idx > 0 && idx % 2 === 0) doc.addPage();
-            const posInPage = idx % 2;
-            const ratio = cv.width / cv.height;
-            let w = maxW, h = w / ratio;
-            if (h > slotH) { h = slotH; w = h * ratio; }
-            const x = (pageW - w) / 2;
-            const yPos = posInPage === 0 ? margin : (margin + slotH + gap);
-            const img = cv.toDataURL('image/jpeg', 0.75);
-            doc.addImage(img, 'JPEG', x, yPos, w, h);
-          });
-
-          // === 3) LISTAGEM POR PAGADOR (com links clicáveis)
-          // ⚠️ usa campos do DataAdapter: it.quem e it.links.{boleto,comp}
-          const byPayer = {};
-          itensMes.forEach(it => {
-            const payer = it.quem || '—';
-            if (!byPayer[payer]) byPayer[payer] = [];
-            byPayer[payer].push(it);
-          });
-          const payers = Object.keys(byPayer).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-
-          // Layout A4 (em pt) – cabe tudo sem “estourar”
-          const col = {
-            nome:        { x: margin,                w: 240 },
-            valor:       { x: margin + 240 + 6,      w: 70,  align: 'right' },
-            dividida:    { x: margin + 240 + 6 + 70 + 6, w: 60 },
-            boleto:      { x: margin + 240 + 6 + 70 + 6 + 50 + 6, w: 90 },
-            comprovante: { x: margin + 240 + 6 + 70 + 6 + 50 + 6 + 90 + 6, w: 90 },
-          };
-          const headerH = 30;
-          const lineH = 18;
-          const startY = margin + headerH + 12;
-          const maxRows = Math.floor((pageH - startY - margin) / lineH);
-
-          doc.addPage();
-          let curY = margin;
-          doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
-          doc.text(`Contas pagas — ${rotMes}`, margin, curY);
-          curY += 20;
-
-          const printHeader = () => {
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
-            doc.text('', col.nome.x, curY);
-            doc.text('Valor',            col.valor.x + col.valor.w, curY, { align: 'right' });
-            doc.text('Dividida',         col.dividida.x, curY);
-            doc.text('Boleto',           col.boleto.x, curY);
-            doc.text('Comprovante',      col.comprovante.x, curY);
-            curY += 12;
-            doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-          };
-
-          let rowsOnPage = 0;
-          printHeader();
-
-          const short = (u, n = 36) => (u && u.length > n ? (u.slice(0, n) + '…') : (u || ''));
-
-          for (const p of payers) {
-            if (rowsOnPage + 2 > maxRows) {
-              doc.addPage(); curY = margin;
-              doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
-              doc.text(`Contas pagas — ${rotMes}`, margin, curY); curY += 20;
-              printHeader(); rowsOnPage = 0;
+            // 2) Barras — mês anterior
+            // Exemplo para "mês atual x mês anterior"
+            {
+              const cvAnt = addCanvas(host, 520, 900); // (altura, largura)
+              renderBarrasMensalLocal(
+                cvAnt,
+                {
+                  labels: contasBarras,
+                  atual: curVals,           // valores do mês
+                  comparado: antVals,       // valores do mês anterior
+                  allowList: chartAccounts  // <- profile.chart_accounts (array)
+                },
+                {
+                  title: `Comparativo de ${rotMes} vs ${monthNamePT(prevM)} / ${prevY}`,
+                  rotAtuais: rotMes,
+                  rotComparado: `${monthNamePT(prevM)} / ${prevY}`
+                }
+              );
+              canvases.push(cvAnt);
             }
-            doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
-            doc.text(`Quem pagou: ${p}`, margin, curY);
-            doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-            curY += lineH; rowsOnPage++;
 
-            const linhas = byPayer[p].sort((a, b) =>
-              (a.nome + (a.instancia || '')).localeCompare(b.nome + (b.instancia || ''), 'pt-BR')
-            );
+            // Exemplo para "mês atual x mesmo mês do ano anterior"
+            {
+              const cvAnoAnt = addCanvas(host, 520, 900);
+              renderBarrasMensalLocal(
+                cvAnoAnt,
+                {
+                  labels: contasBarras,
+                  atual: curVals,
+                  comparado: anoAntVals,
+                  allowList: chartAccounts
+                },
+                {
+                  title: `Comparativo de ${rotMes} vs ${monthNamePT(m)} / ${y-1}`,
+                  rotAtuais: rotMes,
+                  rotComparado: `${monthNamePT(m)} / ${y-1}`
+                }
+              );
+              canvases.push(cvAnoAnt);
+            }
 
-            for (const it of linhas) {
-              if (rowsOnPage >= maxRows) {
+
+
+            // === Inserir canvases (2 por página) ===
+            canvases.forEach((cv, idx) => {
+              if (cv._forcePageBreak) { doc.addPage(); return; }   // nova página se flag
+              if (idx > 0 && idx % 2 === 0) doc.addPage();
+              const posInPage = idx % 2;
+              const ratio = cv.width / cv.height;
+              let w = maxW, h = w / ratio;
+              if (h > slotH) { h = slotH; w = h * ratio; }
+              const x = (pageW - w) / 2;
+              const yPos = posInPage === 0 ? margin : (margin + slotH + gap);
+              const img = cv.toDataURL('image/jpeg', 0.75);
+              doc.addImage(img, 'JPEG', x, yPos, w, h);
+            });
+
+            // === 3) LISTAGEM POR PAGADOR (com links clicáveis)
+            // ⚠️ usa campos do DataAdapter: it.quem e it.links.{boleto,comp}
+            const byPayer = {};
+            itensMes.forEach(it => {
+              const payer = it.quem || '—';
+              if (!byPayer[payer]) byPayer[payer] = [];
+              byPayer[payer].push(it);
+            });
+            const payers = Object.keys(byPayer).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+            // Layout A4 (em pt) – cabe tudo sem “estourar”
+            const col = {
+              nome:        { x: margin,                w: 240 },
+              valor:       { x: margin + 240 + 6,      w: 70,  align: 'right' },
+              dividida:    { x: margin + 240 + 6 + 70 + 6, w: 60 },
+              boleto:      { x: margin + 240 + 6 + 70 + 6 + 50 + 6, w: 90 },
+              comprovante: { x: margin + 240 + 6 + 70 + 6 + 50 + 6 + 90 + 6, w: 90 },
+            };
+            const headerH = 30;
+            const lineH = 18;
+            const startY = margin + headerH + 12;
+            const maxRows = Math.floor((pageH - startY - margin) / lineH);
+
+            doc.addPage();
+            let curY = margin;
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+            doc.text(`Contas pagas — ${rotMes}`, margin, curY);
+            curY += 20;
+
+            const printHeader = () => {
+              doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+              doc.text('', col.nome.x, curY);
+              doc.text('Valor',            col.valor.x + col.valor.w, curY, { align: 'right' });
+              doc.text('Dividida',         col.dividida.x, curY);
+              doc.text('Boleto',           col.boleto.x, curY);
+              doc.text('Comprovante',      col.comprovante.x, curY);
+              curY += 12;
+              doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+            };
+
+            let rowsOnPage = 0;
+            printHeader();
+
+            const short = (u, n = 36) => (u && u.length > n ? (u.slice(0, n) + '…') : (u || ''));
+
+            for (const p of payers) {
+              if (rowsOnPage + 2 > maxRows) {
                 doc.addPage(); curY = margin;
                 doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
                 doc.text(`Contas pagas — ${rotMes}`, margin, curY); curY += 20;
                 printHeader(); rowsOnPage = 0;
               }
-
-              const nomeInst = it.instancia ? `${it.nome} (${it.instancia})` : it.nome;
-              // Nome (wrap controlado pelo maxWidth)
-              doc.text(String(nomeInst), col.nome.x, curY, { maxWidth: col.nome.w });
-
-              // Valor
-              const valTxt = `R$ ${parseBRLnum(it.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-              doc.text(valTxt, col.valor.x + col.valor.w, curY, { align: 'right' });
-
-              // Dividida
-              doc.text(it.dividida ? 'Sim' : 'Não', col.dividida.x, curY);
-
-              // Links (clicáveis, com máscara)
-              doc.setTextColor(0, 102, 204); // azul
-              if (it.links?.boleto) {
-                doc.textWithLink('[Boleto]', col.boleto.x, curY, { url: it.links.boleto });
-              }
-              if (it.links?.comp) {
-                doc.textWithLink('[Comprovante]', col.comprovante.x, curY, { url: it.links.comp });
-              }
-              doc.setTextColor(0, 0, 0); // volta pro preto normal
-
-
-
+              doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+              doc.text(`Quem pagou: ${p}`, margin, curY);
+              doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
               curY += lineH; rowsOnPage++;
-            }
-          }
 
-          doc.save(`relatorio_mensal_${y}_${String(m).padStart(2, '0')}.pdf`);
+              const linhas = byPayer[p].sort((a, b) =>
+                (a.nome + (a.instancia || '')).localeCompare(b.nome + (b.instancia || ''), 'pt-BR')
+              );
+
+              for (const it of linhas) {
+                if (rowsOnPage >= maxRows) {
+                  doc.addPage(); curY = margin;
+                  doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+                  doc.text(`Contas pagas — ${rotMes}`, margin, curY); curY += 20;
+                  printHeader(); rowsOnPage = 0;
+                }
+
+                const nomeInst = it.instancia ? `${it.nome} (${it.instancia})` : it.nome;
+                // Nome (wrap controlado pelo maxWidth)
+                doc.text(String(nomeInst), col.nome.x, curY, { maxWidth: col.nome.w });
+
+                // Valor
+                const valTxt = `R$ ${parseBRLnum(it.valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+                doc.text(valTxt, col.valor.x + col.valor.w, curY, { align: 'right' });
+
+                // Dividida
+                doc.text(it.dividida ? 'Sim' : 'Não', col.dividida.x, curY);
+
+                // Links (clicáveis, com máscara)
+                doc.setTextColor(0, 102, 204); // azul
+                if (it.links?.boleto) {
+                  doc.textWithLink('[Boleto]', col.boleto.x, curY, { url: it.links.boleto });
+                }
+                if (it.links?.comp) {
+                  doc.textWithLink('[Comprovante]', col.comprovante.x, curY, { url: it.links.comp });
+                }
+                doc.setTextColor(0, 0, 0); // volta pro preto normal
+
+
+
+                curY += lineH; rowsOnPage++;
+              }
+            }
+
+            doc.save(`relatorio_mensal_${y}_${String(m).padStart(2, '0')}.pdf`);
+          } finally {
+            window.__PDF_MODE = false;
+            host?.parentNode?.removeChild(host);
+          }
         } finally {
-          window.__PDF_MODE = false;
-          host?.parentNode?.removeChild(host);
+          setLoading(false);
         }
       }
 
@@ -855,283 +861,288 @@ function ReportsModal({
 
       // === RELATÓRIO POR PERÍODO (pizza 100% do período + linhas 2-up + listagens por mês) ===
       async function onPdfRelatorioPeriodo() {
-        const contasProfile = Array.from(cmpSel); // quais contas terão linhas
-        const y1 = pStartYear, m1 = pStartMonth;
-        const y2 = pEndYear,   m2 = pEndMonth;
-
-        // monta sequência de meses
-        const monthsList = []; { let y=y1, m=m1; while (y<y2 || (y===y2 && m<=m2)) { monthsList.push({y,m}); m++; if(m>12){m=1;y++;} } }
-        if (!monthsList.length) return alert('Período inválido.');
-
-        const host = _makeHost();
-        const canvases = [];
-
-        // helpers de canvas (reutiliza os do patch A)
-        function splitRows(rows, maxRowsPerCanvas=28) {
-          const chunks = [];
-          for (let i=0;i<rows.length;i+=maxRowsPerCanvas) chunks.push(rows.slice(i,i+maxRowsPerCanvas));
-          return chunks;
-        }
-        function makeTabelaCanvases({ titulo, rows }) {
-          const W = 1080;
-          const baseH = 460;
-          const titleY = 24;
-          const headerY = 52;
-          const firstRowY = 78;
-          const rowHeight = 22;
-
-          // calcula altura dinâmica: cada linha soma 22 px + margens
-          const neededH = firstRowY + rows.length * rowHeight + 40;
-          const H = Math.max(baseH, neededH);
-
-          const wrap = document.createElement('div');
-          wrap.style.width = `${W}px`;
-          wrap.style.height = `${H}px`;
-          const c = document.createElement('canvas');
-          c.width = W;
-          c.height = H;
-          wrap.appendChild(c);
-          host.appendChild(wrap);
-
-          const ctx = c.getContext('2d');
-          c._pdfLinks = [];
-
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(0, 0, W, H);
-          ctx.fillStyle = '#111827';
-          ctx.font = 'bold 18px Arial';
-          ctx.textAlign = 'left';
-          ctx.fillText(titulo, 24, titleY);
-
-          const cols = [
-            { x: 24,   label: '',            w: 380 },
-            { x: 420,  label: 'Valor',       w: 110, align: 'right' },
-            { x: 540,  label: 'Dividida',    w: 60  },
-            { x: 620,  label: 'Boleto',      w: 150 },
-            { x: 780,  label: 'Comprovante', w: 180 },
-          ];
-
-          ctx.font = 'bold 14px Arial';
-          cols.forEach(col => {
-            ctx.textAlign = col.align === 'right' ? 'right' : 'left';
-            ctx.fillText(col.label, col.align === 'right' ? col.x + col.w : col.x, headerY);
-          });
-
-          ctx.font = '14px Arial';
-          ctx.fillStyle = '#111827';
-          let yRow = firstRowY;
-
-          rows.forEach(r => {
-            if (r._header) {
-              ctx.font = 'bold 14px Arial';
-              ctx.fillText(r.nome, 24, yRow);
-              yRow += 20;
-              ctx.font = '14px Arial';
-              return;
-            }
-            const nomeInst = r.instancia ? `${r.nome} (${r.instancia})` : r.nome;
-            ctx.fillText(nomeInst, cols[0].x, yRow);
-
-            const valTxt = `R$ ${r.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
-            ctx.textAlign = 'right';
-            ctx.fillText(valTxt, cols[1].x + cols[1].w, yRow);
-            ctx.textAlign = 'left';
-
-            ctx.fillText(r.dividida ? 'Sim' : 'Não', cols[2].x, yRow);
-
-            ctx.fillStyle = '#0066cc';
-            const approxH = 14; // altura estimada da linha
-            if (r.link_boleto) {
-              ctx.fillText('[Boleto]', cols[3].x, yRow);
-              c._pdfLinks.push({
-                url: r.link_boleto,
-                x: cols[3].x,
-                y: yRow - approxH + 4,
-                w: cols[3].w,
-                h: approxH + 6
-              });
-            }
-            if (r.link_comprovante) {
-              ctx.fillText('[Comprovante]', cols[4].x, yRow);
-              c._pdfLinks.push({
-                url: r.link_comprovante,
-                x: cols[4].x,
-                y: yRow - approxH + 4,
-                w: cols[4].w,
-                h: approxH + 6
-              });
-            }
-            ctx.fillStyle = '#111827';
-
-            yRow += rowHeight;
-          });
-
-          return [c];
-        }
-
-
-
-
+        setLoading(true);
         try {
-          window.__PDF_MODE = true;
-          window.ChartFeatures?.setupChartDefaults?.();
+          const contasProfile = Array.from(cmpSel); // quais contas terão linhas
+          const y1 = pStartYear, m1 = pStartMonth;
+          const y2 = pEndYear,   m2 = pEndMonth;
 
-          // ====== 1) PIZZA 100% DO PERÍODO ======
-          const todosItens = [];
-          for (const {y,m} of monthsList) {
-            const mm = await window.DataAdapter.fetchMes(y,m) || [];
-            todosItens.push(...mm);
+          // monta sequência de meses
+          const monthsList = []; { let y=y1, m=m1; while (y<y2 || (y===y2 && m<=m2)) { monthsList.push({y,m}); m++; if(m>12){m=1;y++;} } }
+          if (!monthsList.length) return alert('Período inválido.');
+
+          const host = _makeHost();
+          const canvases = [];
+
+          // helpers de canvas (reutiliza os do patch A)
+          function splitRows(rows, maxRowsPerCanvas=28) {
+            const chunks = [];
+            for (let i=0;i<rows.length;i+=maxRowsPerCanvas) chunks.push(rows.slice(i,i+maxRowsPerCanvas));
+            return chunks;
           }
-          const contasAll = Array.from(new Set(todosItens.map(x=>x.nome))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-          const valoresAll = contasAll.map(c => todosItens.filter(x=>x.nome===c).reduce((a,b)=>a+parseBRLnum(b.valor),0));
-          const rotPeriodo = `${String(m1).padStart(2,'0')}/${y1} a ${String(m2).padStart(2,'0')}/${y2}`;
-          const cvPizza = _addCanvas(host, '560px', '900px');
-          console.debug('[PERÍODO pizza-like]', rotPeriodo, { labels: contasAll.length, valores: valoresAll.length, total: valoresAll.reduce((a,b)=>a+b,0) });
+          function makeTabelaCanvases({ titulo, rows }) {
+            const W = 1080;
+            const baseH = 460;
+            const titleY = 24;
+            const headerY = 52;
+            const firstRowY = 78;
+            const rowHeight = 22;
 
-          renderPizzaMensalStrict(
-            cvPizza,
-            { labels: contasAll, valores: valoresAll },
-            rotPeriodo
-          );
-          // aplica tema PDF igual ao mensal
-          if (cvPizza._chart && window.ChartFeatures?.applyPdfTheme) {
-            window.ChartFeatures.applyPdfTheme(cvPizza._chart);
-            cvPizza._chart.update('none');
+            // calcula altura dinâmica: cada linha soma 22 px + margens
+            const neededH = firstRowY + rows.length * rowHeight + 40;
+            const H = Math.max(baseH, neededH);
+
+            const wrap = document.createElement('div');
+            wrap.style.width = `${W}px`;
+            wrap.style.height = `${H}px`;
+            const c = document.createElement('canvas');
+            c.width = W;
+            c.height = H;
+            wrap.appendChild(c);
+            host.appendChild(wrap);
+
+            const ctx = c.getContext('2d');
+            c._pdfLinks = [];
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = '#111827';
+            ctx.font = 'bold 18px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(titulo, 24, titleY);
+
+            const cols = [
+              { x: 24,   label: '',            w: 380 },
+              { x: 420,  label: 'Valor',       w: 110, align: 'right' },
+              { x: 540,  label: 'Dividida',    w: 60  },
+              { x: 620,  label: 'Boleto',      w: 150 },
+              { x: 780,  label: 'Comprovante', w: 180 },
+            ];
+
+            ctx.font = 'bold 14px Arial';
+            cols.forEach(col => {
+              ctx.textAlign = col.align === 'right' ? 'right' : 'left';
+              ctx.fillText(col.label, col.align === 'right' ? col.x + col.w : col.x, headerY);
+            });
+
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#111827';
+            let yRow = firstRowY;
+
+            rows.forEach(r => {
+              if (r._header) {
+                ctx.font = 'bold 14px Arial';
+                ctx.fillText(r.nome, 24, yRow);
+                yRow += 20;
+                ctx.font = '14px Arial';
+                return;
+              }
+              const nomeInst = r.instancia ? `${r.nome} (${r.instancia})` : r.nome;
+              ctx.fillText(nomeInst, cols[0].x, yRow);
+
+              const valTxt = `R$ ${r.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+              ctx.textAlign = 'right';
+              ctx.fillText(valTxt, cols[1].x + cols[1].w, yRow);
+              ctx.textAlign = 'left';
+
+              ctx.fillText(r.dividida ? 'Sim' : 'Não', cols[2].x, yRow);
+
+              ctx.fillStyle = '#0066cc';
+              const approxH = 14; // altura estimada da linha
+              if (r.link_boleto) {
+                ctx.fillText('[Boleto]', cols[3].x, yRow);
+                c._pdfLinks.push({
+                  url: r.link_boleto,
+                  x: cols[3].x,
+                  y: yRow - approxH + 4,
+                  w: cols[3].w,
+                  h: approxH + 6
+                });
+              }
+              if (r.link_comprovante) {
+                ctx.fillText('[Comprovante]', cols[4].x, yRow);
+                c._pdfLinks.push({
+                  url: r.link_comprovante,
+                  x: cols[4].x,
+                  y: yRow - approxH + 4,
+                  w: cols[4].w,
+                  h: approxH + 6
+                });
+              }
+              ctx.fillStyle = '#111827';
+
+              yRow += rowHeight;
+            });
+
+            return [c];
           }
 
-          // 👇 mesmo truque do MENSAL: põe branco por baixo
-          
-          const ctxPizza = cvPizza.getContext('2d');
-          ctxPizza.save();
-          ctxPizza.globalCompositeOperation = 'destination-over';
-          ctxPizza.fillStyle = '#ffffff';
-          ctxPizza.fillRect(0, 0, cvPizza.width, cvPizza.height);
-          ctxPizza.restore();
-          
-
-          canvases.push(cvPizza);
 
 
-          // 🔖 Spacer em branco para reservar o 2º slot da 1ª página.
-          // Assim, os gráficos de LINHAS começam, obrigatoriamente, na página 2.
-          const cvSpacer = _addBlank(host, '200px', '900px');
-          canvases.push(cvSpacer);
 
+          try {
+            window.__PDF_MODE = true;
+            window.ChartFeatures?.setupChartDefaults?.();
 
-          // ====== 2) LINHAS por conta (máx. 7; 2 por página) ======
-          const contasLinhas = (contasProfile.length ? contasProfile : contasAll).slice(0,7);
-          for (const conta of contasLinhas) {
-            // série da conta
-            const valores = [];
+            // ====== 1) PIZZA 100% DO PERÍODO ======
+            const todosItens = [];
             for (const {y,m} of monthsList) {
               const mm = await window.DataAdapter.fetchMes(y,m) || [];
-              const soma = mm.filter(x=>x.nome===conta).reduce((a,b)=>a+parseBRLnum(b.valor),0);
-              valores.push(soma);
+              todosItens.push(...mm);
             }
-            if (valores.filter(v=>v>0).length < 2) continue; // exige pelo menos 2 pontos >0
+            const contasAll = Array.from(new Set(todosItens.map(x=>x.nome))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+            const valoresAll = contasAll.map(c => todosItens.filter(x=>x.nome===c).reduce((a,b)=>a+parseBRLnum(b.valor),0));
+            const rotPeriodo = `${String(m1).padStart(2,'0')}/${y1} a ${String(m2).padStart(2,'0')}/${y2}`;
+            const cvPizza = _addCanvas(host, '560px', '900px');
+            console.debug('[PERÍODO pizza-like]', rotPeriodo, { labels: contasAll.length, valores: valoresAll.length, total: valoresAll.reduce((a,b)=>a+b,0) });
 
-            const cv = _addCanvas(host, '600px', '1100px');
-            window.ChartFeatures?.renderLinhaContaPeriodo?.(cv, {
-              nome: conta,
-              meses: monthsList.map(({y,m}) => `${String(m).padStart(2,'0')}/${y}`),
-              valores
-            });
-            if (cv._chart && window.ChartFeatures?.applyPdfTheme) {
-              window.ChartFeatures.applyPdfTheme(cv._chart);
-              cv._chart.update('none');
+            renderPizzaMensalStrict(
+              cvPizza,
+              { labels: contasAll, valores: valoresAll },
+              rotPeriodo
+            );
+            // aplica tema PDF igual ao mensal
+            if (cvPizza._chart && window.ChartFeatures?.applyPdfTheme) {
+              window.ChartFeatures.applyPdfTheme(cvPizza._chart);
+              cvPizza._chart.update('none');
             }
 
-            // 👇 força fundo branco igual ao mensal
-            {
+            // 👇 mesmo truque do MENSAL: põe branco por baixo
+            
+            const ctxPizza = cvPizza.getContext('2d');
+            ctxPizza.save();
+            ctxPizza.globalCompositeOperation = 'destination-over';
+            ctxPizza.fillStyle = '#ffffff';
+            ctxPizza.fillRect(0, 0, cvPizza.width, cvPizza.height);
+            ctxPizza.restore();
+            
+
+            canvases.push(cvPizza);
+
+
+            // 🔖 Spacer em branco para reservar o 2º slot da 1ª página.
+            // Assim, os gráficos de LINHAS começam, obrigatoriamente, na página 2.
+            const cvSpacer = _addBlank(host, '200px', '900px');
+            canvases.push(cvSpacer);
+
+
+            // ====== 2) LINHAS por conta (máx. 7; 2 por página) ======
+            const contasLinhas = (contasProfile.length ? contasProfile : contasAll).slice(0,7);
+            for (const conta of contasLinhas) {
+              // série da conta
+              const valores = [];
+              for (const {y,m} of monthsList) {
+                const mm = await window.DataAdapter.fetchMes(y,m) || [];
+                const soma = mm.filter(x=>x.nome===conta).reduce((a,b)=>a+parseBRLnum(b.valor),0);
+                valores.push(soma);
+              }
+              if (valores.filter(v=>v>0).length < 2) continue; // exige pelo menos 2 pontos >0
+
+              const cv = _addCanvas(host, '600px', '1100px');
+              window.ChartFeatures?.renderLinhaContaPeriodo?.(cv, {
+                nome: conta,
+                meses: monthsList.map(({y,m}) => `${String(m).padStart(2,'0')}/${y}`),
+                valores
+              });
+              if (cv._chart && window.ChartFeatures?.applyPdfTheme) {
+                window.ChartFeatures.applyPdfTheme(cv._chart);
+                cv._chart.update('none');
+              }
+
+              // 👇 força fundo branco igual ao mensal
+              {
+                const ctx = cv.getContext('2d');
+                ctx.save();
+                ctx.globalCompositeOperation = 'destination-over';
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, cv.width, cv.height);
+                ctx.restore();
+              }
+
+              canvases.push(cv);
+
+            }
+
+            // ====== 3) LISTAGENS — por MÊS, agrupadas por QUEM PAGOU ======
+            for (const {y,m} of monthsList) {
+              const itensMes = await window.DataAdapter.fetchMes(y,m) || [];
+              if (!itensMes.length) continue;
+
+              const byPayer = {};
+              itensMes.forEach(it=>{
+                const payer = it.quem || '—';      // 👈 usa o campo mapeado pelo DataAdapter
+                if (!byPayer[payer]) byPayer[payer] = [];
+                byPayer[payer].push(it);
+              });
+
+              const payers = Object.keys(byPayer).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+              const rows=[];
+              payers.forEach(p=>{
+                rows.push({ nome: `Quem pagou: ${p}`, instancia:'', valor:0, dividida:false, link_boleto:'', link_comprovante:'', _header:true });
+                byPayer[p].sort((a,b)=> (a.nome+a.instancia).localeCompare(b.nome+b.instancia,'pt-BR')).forEach(it=>{
+                // normaliza porque no mensal vem em it.links.{boleto,comp}
+                const linkBoleto =
+                  it.link_boleto ||
+                  it.boleto ||
+                  it.links?.boleto ||
+                  '';
+                const linkComp =
+                  it.link_comprovante ||
+                  it.comprovante ||
+                  it.links?.comp ||
+                  it.links?.comprovante ||
+                  '';
+
+                rows.push({
+                  nome: it.nome,
+                  instancia: it.instancia || '',
+                  valor: parseBRLnum(it.valor),
+                  dividida: !!it.dividida,
+                  link_boleto: linkBoleto,
+                  link_comprovante: linkComp
+                });
+              });
+
+              });
+              // NÃO achatamos mais os headers
+              const canvTab = makeTabelaCanvases({
+                titulo: `Contas pagas — ${String(m).padStart(2,'0')}/${y}`,
+                rows  : rows
+              });
+
+              // Cada mês começa no topo da página, sem forçar 2-up nem página em branco
+              if (canvTab.length > 0) {
+                // Marca o primeiro canvas deste mês para iniciar nova página
+                canvTab[0]._forcePageBreak = true;
+                canvases.push(...canvTab);
+              }
+            }
+
+            // força fundo branco em todos os canvases (igual ao mensal)
+            canvases.forEach((cv) => {
               const ctx = cv.getContext('2d');
+              if (!ctx) return;
               ctx.save();
               ctx.globalCompositeOperation = 'destination-over';
               ctx.fillStyle = '#ffffff';
               ctx.fillRect(0, 0, cv.width, cv.height);
               ctx.restore();
-            }
+            });
 
-            canvases.push(cv);
+            // ====== EXPORTA ======
+            window.PDFHelpers.exportTwoPerPage(
+              canvases,
+              `relatorio_periodo_${y1}-${String(m1).padStart(2,'0')}_a_${y2}-${String(m2).padStart(2,'0')}.pdf`,
+              { margin: 28, gap: 24 }
+            );
 
+          } finally {
+            window.__PDF_MODE = false;
+            host?.parentNode?.removeChild(host);
           }
-
-          // ====== 3) LISTAGENS — por MÊS, agrupadas por QUEM PAGOU ======
-          for (const {y,m} of monthsList) {
-            const itensMes = await window.DataAdapter.fetchMes(y,m) || [];
-            if (!itensMes.length) continue;
-
-            const byPayer = {};
-            itensMes.forEach(it=>{
-              const payer = it.quem || '—';      // 👈 usa o campo mapeado pelo DataAdapter
-              if (!byPayer[payer]) byPayer[payer] = [];
-              byPayer[payer].push(it);
-            });
-
-            const payers = Object.keys(byPayer).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-            const rows=[];
-            payers.forEach(p=>{
-              rows.push({ nome: `Quem pagou: ${p}`, instancia:'', valor:0, dividida:false, link_boleto:'', link_comprovante:'', _header:true });
-              byPayer[p].sort((a,b)=> (a.nome+a.instancia).localeCompare(b.nome+b.instancia,'pt-BR')).forEach(it=>{
-              // normaliza porque no mensal vem em it.links.{boleto,comp}
-              const linkBoleto =
-                it.link_boleto ||
-                it.boleto ||
-                it.links?.boleto ||
-                '';
-              const linkComp =
-                it.link_comprovante ||
-                it.comprovante ||
-                it.links?.comp ||
-                it.links?.comprovante ||
-                '';
-
-              rows.push({
-                nome: it.nome,
-                instancia: it.instancia || '',
-                valor: parseBRLnum(it.valor),
-                dividida: !!it.dividida,
-                link_boleto: linkBoleto,
-                link_comprovante: linkComp
-              });
-            });
-
-            });
-            // NÃO achatamos mais os headers
-            const canvTab = makeTabelaCanvases({
-              titulo: `Contas pagas — ${String(m).padStart(2,'0')}/${y}`,
-              rows  : rows
-            });
-
-            // Cada mês começa no topo da página, sem forçar 2-up nem página em branco
-            if (canvTab.length > 0) {
-              // Marca o primeiro canvas deste mês para iniciar nova página
-              canvTab[0]._forcePageBreak = true;
-              canvases.push(...canvTab);
-            }
+          } finally {
+            setLoading(false);
           }
-
-          // força fundo branco em todos os canvases (igual ao mensal)
-          canvases.forEach((cv) => {
-            const ctx = cv.getContext('2d');
-            if (!ctx) return;
-            ctx.save();
-            ctx.globalCompositeOperation = 'destination-over';
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, cv.width, cv.height);
-            ctx.restore();
-          });
-
-          // ====== EXPORTA ======
-          window.PDFHelpers.exportTwoPerPage(
-            canvases,
-            `relatorio_periodo_${y1}-${String(m1).padStart(2,'0')}_a_${y2}-${String(m2).padStart(2,'0')}.pdf`,
-            { margin: 28, gap: 24 }
-          );
-
-        } finally {
-          window.__PDF_MODE = false;
-          host?.parentNode?.removeChild(host);
-        }
       }
 
 
@@ -1577,7 +1588,14 @@ function ReportsModal({
 
               </>
             )}
-
+              {/* overlay de carregamento */}
+              {loading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-xl z-50">
+                  <div className="bg-[var(--surface)] text-[var(--text)] px-6 py-4 rounded-lg font-semibold shadow-lg animate-pulse">
+                    Gerando relatório… Aguarde ⏳
+                  </div>
+                </div>
+              )}
           </div>
         </div>
       );
