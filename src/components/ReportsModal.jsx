@@ -542,6 +542,169 @@ function ReportsModal({
       }
 
 
+      // === Linhas por conta (local, pdf-friendly) ===
+      function renderLinhaPeriodoLocal(canvas, { nome, meses, valores }) {
+        const Chart = window.Chart;
+        const Datalabels = window.ChartDataLabels;
+        if (!Chart) {
+          console.error('Chart.js não carregado para linhas.');
+          return;
+        }
+        if (canvas._chart) {
+          try { canvas._chart.destroy(); } catch (e) {}
+        }
+
+        const ctx = canvas.getContext('2d');
+
+        // fundo branco SEMPRE
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // média
+        const media =
+          (valores.reduce((a, b) => a + b, 0) / Math.max(1, valores.length)) || 0;
+        const mediaArr = new Array(valores.length).fill(media);
+
+        // título
+        const ini = meses[0];
+        const fim = meses[meses.length - 1];
+        const titulo = `Comparativo de conta '${nome}' — ${ini} a ${fim}`;
+        const mediaTxt = `Média da conta: R$ ${media.toLocaleString('pt-BR', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}`;
+
+        // plugin linha de base
+        const xBaselinePlugin = {
+          id: 'xBaseline',
+          afterDraw(chart) {
+            const { ctx, chartArea } = chart;
+            if (!chartArea) return;
+            ctx.save();
+            ctx.strokeStyle = window.__PDF_MODE
+              ? (getComputedStyle(document.documentElement).getPropertyValue('--chart-line-pdf') || '#4b5563')
+              : 'rgba(255,255,255,0.35)';
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(chartArea.left, chartArea.bottom);
+            ctx.lineTo(chartArea.right, chartArea.bottom);
+            ctx.stroke();
+            ctx.restore();
+          },
+        };
+
+        // garante datalabels
+        if (Datalabels && !Chart.registry.plugins.get('datalabels')) {
+          try { Chart.register(Datalabels); } catch (_) {}
+        }
+
+        const chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: meses,
+            datasets: [
+              {
+                label: nome,
+                data: valores,
+                borderColor: 'rgba(59,130,246,1)',
+                backgroundColor: 'rgba(59,130,246,0.12)',
+                tension: 0.28,
+                pointRadius: 4,
+                pointHoverRadius: 5,
+                fill: false,
+              },
+              {
+                label: mediaTxt,
+                data: mediaArr,
+                borderColor: 'rgba(148,163,184,0.95)',
+                borderDash: [6, 4],
+                pointRadius: 0,
+                borderWidth: 2,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              title: {
+                display: true,
+                text: titulo,
+                font: { size: 18, weight: 'bold' },
+                padding: { top: 10, bottom: 6 },
+                color: window.__PDF_MODE
+                  ? (getComputedStyle(document.documentElement).getPropertyValue('--chart-text-pdf') || '#111827')
+                  : (__appText?.() || '#e5e7eb'),
+              },
+              legend: {
+                position: 'top',
+                labels: {
+                  color: window.__PDF_MODE
+                    ? (getComputedStyle(document.documentElement).getPropertyValue('--chart-text-pdf') || '#111827')
+                    : (__appText?.() || '#e5e7eb'),
+                  font: { size: 12 },
+                  // mostra só a “Média” como segunda linha
+                  filter: (item) => true,
+                },
+              },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) =>
+                    `R$ ${ctx.parsed.y.toLocaleString('pt-BR', {
+                      minimumFractionDigits: 2,
+                    })}`,
+                },
+              },
+              datalabels: {
+                display: (ctx) => ctx.datasetIndex === 0,
+                align: 'top',
+                anchor: 'end',
+                color: window.__PDF_MODE ? '#111827' : '#e5e7eb',
+                font: { size: 10, weight: '500' },
+                formatter: (v) =>
+                  `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+                clamp: true,
+              },
+              xBaseline: {},
+            },
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: {
+                  color: window.__PDF_MODE
+                    ? (getComputedStyle(document.documentElement).getPropertyValue('--chart-text-pdf') || '#111827')
+                    : (__appText?.() || '#e5e7eb'),
+                  maxRotation: 45,
+                  minRotation: 45,
+                },
+                border: { display: false },
+              },
+              y: {
+                display: false,
+                grid: { display: false },
+                border: { display: false },
+              },
+            },
+            layout: { padding: { left: 8, right: 8, top: 4, bottom: 0 } },
+          },
+          plugins: [Datalabels, xBaselinePlugin].filter(Boolean),
+        });
+
+        // aplica tema pdf se estiver ligado
+        if (window.__PDF_MODE && window.ChartFeatures?.applyPdfTheme) {
+          window.ChartFeatures.applyPdfTheme(chart);
+        }
+
+        // força fundo branco por baixo
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-over';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.restore();
+
+        canvas._chart = chart;
+        return chart;
+      }
 
       
       // === RELATÓRIO MENSAL (corrigido: campos, layout A4 e render flush) ===
@@ -1107,20 +1270,17 @@ function ReportsModal({
 
                 valores.push(soma);
               }
-              if (valores.filter(v=>v>0).length < 2) continue; // exige pelo menos 2 pontos >0
+              const pontosNaoZero = valores.filter(v => v > 0.001).length;
+              if (pontosNaoZero === 0) continue;
 
               const cv = _addCanvas(host, '600px', '1100px');
-              window.ChartFeatures?.renderLinhaContaPeriodo?.(cv, {
+              renderLinhaPeriodoLocal(cv, {
                 nome: conta,
-                meses: monthsList.map(({y,m}) => `${String(m).padStart(2,'0')}/${y}`),
-                valores
+                meses: monthsList.map(({ y, m }) => `${String(m).padStart(2, '0')}/${y}`),
+                valores,
               });
-              if (cv._chart && window.ChartFeatures?.applyPdfTheme) {
-                window.ChartFeatures.applyPdfTheme(cv._chart);
-                cv._chart.update('none');
-              }
 
-              // 👇 força fundo branco igual ao mensal
+              // fundo branco já é feito dentro, mas vamos garantir
               {
                 const ctx = cv.getContext('2d');
                 ctx.save();
@@ -1131,6 +1291,7 @@ function ReportsModal({
               }
 
               canvases.push(cv);
+
 
             }
 
