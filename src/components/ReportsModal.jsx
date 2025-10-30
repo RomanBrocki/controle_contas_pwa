@@ -870,64 +870,84 @@ function ReportsModal({
             // col titles
             const cols = [
               { x: 24,   label: '', w: 420 },
-              { x: 460,  label: 'Valor',            w: 120, align: 'left' },
+              { x: 460,  label: 'Valor',            w: 120, align: 'right' },
               { x: 600,  label: 'Dividida',         w: 80  },
               { x: 700,  label: 'Boleto',           w: 180 },
               { x: 900,  label: 'Comprovante',      w: 180 }
             ];
-            ctx.font='bold 13px Arial';
-            cols.forEach(col => ctx.fillText(col.label, col.x, 68));
+            ctx.font='bold 15px Arial';
+            cols.forEach(col => {
+              if (col.align === 'right') {
+                ctx.textAlign = 'right';
+                ctx.fillText(col.label, col.x + col.w, 68);
+              } else {
+                ctx.textAlign = 'left';
+                ctx.fillText(col.label, col.x, 68);
+              }
+            });
+
 
             // linhas
-            ctx.font='13px Arial'; ctx.fillStyle='#111827';
+            ctx.font='15px Arial'; ctx.fillStyle='#111827';
             let yRow = 92;
             const rowHeight = 24;
 
-            subset.forEach(r=>{
-              // Nome (Instância)
-              const nomeInst = r.instancia ? `${r.nome} (${r.instancia})` : r.nome;
-              ctx.textAlign='left';
-              ctx.fillText(nomeInst, cols[0].x, yRow);
+            subset.forEach(r => {
+            // 1) se for header ("Quem pagou: ..."), desenha sozinho e sai
+            if (r._header) {
+              ctx.font = 'bold 15px Arial';
+              ctx.textAlign = 'left';
+              ctx.fillText(r.nome, 24, yRow);
+              yRow += 30; // deixa um espaço antes das contas desse pagador
+              // volta fonte padrão pra linhas normais
+              ctx.font = '15px Arial';
+              return;
+            }
 
-              // Valor (direita)
-              const valTxt = `R$ ${r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
-              ctx.textAlign='right'; ctx.fillText(valTxt, cols[1].x + cols[1].w, yRow);
-              ctx.textAlign='left';
+            // 2) linha normal da tabela
+            const nomeInst = r.instancia ? `${r.nome} (${r.instancia})` : r.nome;
+            ctx.textAlign = 'left';
+            ctx.fillText(nomeInst, cols[0].x, yRow);
 
-              // Dividida
-              ctx.fillText(r.dividida ? 'Sim' : 'Não', cols[2].x, yRow);
+            // Valor (direita)
+            const valTxt = `R$ ${r.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+            ctx.textAlign = 'right';
+            ctx.fillText(valTxt, cols[1].x + cols[1].w, yRow);
+            ctx.textAlign = 'left';
 
-              // Exibe máscaras estáticas
-              const billetLabel = r.link_boleto ? 'Boleto' : '';
-              const proofLabel  = r.link_comprovante ? 'Comprovante' : '';
+            // Dividida
+            ctx.fillText(r.dividida ? 'Sim' : 'Não', cols[2].x, yRow);
 
-              ctx.fillText(billetLabel, cols[3].x, yRow);
-              ctx.fillText(proofLabel,  cols[4].x, yRow);
+            // Boleto / Comprovante
+            const billetLabel = r.link_boleto ? 'Boleto' : '';
+            const proofLabel  = r.link_comprovante ? 'Comprovante' : '';
+            ctx.fillText(billetLabel, cols[3].x, yRow);
+            ctx.fillText(proofLabel,  cols[4].x, yRow);
 
+            // links clicáveis
+            const approxTextH = 14;
+            if (r.link_boleto) {
+              c._pdfLinks.push({
+                url: r.link_boleto,
+                x: cols[3].x,
+                y: yRow - approxTextH + 4,
+                w: cols[3].w,
+                h: approxTextH + 6
+              });
+            }
+            if (r.link_comprovante) {
+              c._pdfLinks.push({
+                url: r.link_comprovante,
+                x: cols[4].x,
+                y: yRow - approxTextH + 4,
+                w: cols[4].w,
+                h: approxTextH + 6
+              });
+            }
 
-              // 🔗 Registra retângulos clicáveis (em coordenadas do CANVAS)
-              const approxTextH = 14; // altura de fonte aproximada
-              if (r.link_boleto) {
-                c._pdfLinks.push({
-                  url: r.link_boleto,
-                  x: cols[3].x,
-                  y: yRow - approxTextH + 4, // ajuste fino vertical
-                  w: cols[3].w,
-                  h: approxTextH + 6
-                });
-              }
-              if (r.link_comprovante) {
-                c._pdfLinks.push({
-                  url: r.link_comprovante,
-                  x: cols[4].x,
-                  y: yRow - approxTextH + 4,
-                  w: cols[4].w,
-                  h: approxTextH + 6
-                });
-              }
+            yRow += 24;
+          });
 
-              yRow += rowHeight;
-            });
 
             canvList.push(c);
           });
@@ -1025,8 +1045,12 @@ function ReportsModal({
             });
 
             });
-            const rowsVisuais = rows.flatMap(r=> r._header ? [{ nome:r.nome, instancia:'', valor:0, dividida:false, link_boleto:'', link_comprovante:'' }] : [r]);
-            const canvTab = makeTabelaCanvases({ titulo: `Contas pagas — ${String(m).padStart(2,'0')}/${y}`, rows: rowsVisuais });
+            // NÃO achatamos mais os headers
+            const canvTab = makeTabelaCanvases({
+              titulo: `Contas pagas — ${String(m).padStart(2,'0')}/${y}`,
+              rows  : rows
+            });
+
             canvases.push(...canvTab);
           }
 
