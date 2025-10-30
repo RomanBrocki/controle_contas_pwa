@@ -28,8 +28,8 @@
       const y = posInPage === 0 ? yTop : yBottom;
 
       // 1) desenha imagem do canvas
-      const img = cv.toDataURL('image/png', 1.0);
-      doc.addImage(img, 'PNG', x, y, w, h);
+      const img = cv.toDataURL('image/jpeg', 0.75);
+      doc.addImage(img, 'JPEG', x, y, w, h);
 
       // 2) adiciona links clicáveis (se houver metadados)
       // Esperado: cv._pdfLinks = [{ url, x, y, w, h }] em coordenadas do CANVAS (px)

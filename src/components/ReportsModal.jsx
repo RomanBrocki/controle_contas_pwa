@@ -124,7 +124,7 @@ function ReportsModal({
         document.body.appendChild(host);
         return host;
       }
-      function _addCanvas(host, h='700px', w='1100px') {
+      function _addCanvas(host, h='520px', w='900px') {
         const wrap = document.createElement('div');
         wrap.style.width = w;
         wrap.style.height = h;
@@ -147,7 +147,7 @@ function ReportsModal({
         });
       }
       
-      function _addBlank(host, h='600px', w='1100px') {
+      function _addBlank(host, h='200px', w='900px') {
         const wrap = document.createElement('div');
         wrap.style.width = w;
         wrap.style.height = h;
@@ -662,7 +662,10 @@ function ReportsModal({
         const host = makeHost();
         const canvases = [];
         // canvas da Pizza (primeiro slot da página)
-        const cvPizza = addCanvas(host, 680, 1100);
+        const cvPizza = addCanvas(host, 560, 900);
+        const ctxPizza = cvPizza.getContext('2d');
+        ctxPizza.fillStyle = '#ffffff';
+        ctxPizza.fillRect(0, 0, cvPizza.width, cvPizza.height);
 
         try {
           // 1) Pizza 100% do mês
@@ -671,6 +674,14 @@ function ReportsModal({
             window.ChartFeatures.applyPdfTheme(cvPizza._chart);
             cvPizza._chart.update('none');
             }
+            // 👇 AQUI vem o fundo branco, depois do chart
+          const ctxPizza = cvPizza.getContext('2d');
+          ctxPizza.save();
+          ctxPizza.globalCompositeOperation = 'destination-over';
+          ctxPizza.fillStyle = '#ffffff';
+          ctxPizza.fillRect(0, 0, cvPizza.width, cvPizza.height);
+          ctxPizza.restore();
+
           canvases.push(cvPizza);
 
           // 1b) Card-resumo
@@ -680,7 +691,7 @@ function ReportsModal({
           // 2) Barras — mês anterior
           // Exemplo para "mês atual x mês anterior"
           {
-            const cvAnt = addCanvas(host, 560, 1100); // (altura, largura)
+            const cvAnt = addCanvas(host, 520, 900); // (altura, largura)
             renderBarrasMensalLocal(
               cvAnt,
               {
@@ -700,7 +711,7 @@ function ReportsModal({
 
           // Exemplo para "mês atual x mesmo mês do ano anterior"
           {
-            const cvAnoAnt = addCanvas(host, 560, 1100);
+            const cvAnoAnt = addCanvas(host, 520, 900);
             renderBarrasMensalLocal(
               cvAnoAnt,
               {
@@ -729,8 +740,8 @@ function ReportsModal({
             if (h > slotH) { h = slotH; w = h * ratio; }
             const x = (pageW - w) / 2;
             const yPos = posInPage === 0 ? margin : (margin + slotH + gap);
-            const img = cv.toDataURL('image/png', 1.0);
-            doc.addImage(img, 'PNG', x, yPos, w, h);
+            const img = cv.toDataURL('image/jpeg', 0.75);
+            doc.addImage(img, 'JPEG', x, yPos, w, h);
           });
 
           // === 3) LISTAGEM POR PAGADOR (com links clicáveis)
@@ -858,7 +869,7 @@ function ReportsModal({
           return chunks;
         }
         function makeTabelaCanvases({ titulo, rows }) {
-          const W=1100,H=680;
+          const W=880,H=520;
           const canvList = [];
           const groups = splitRows(rows, 26); // ~26 linhas por canvas
 
@@ -978,7 +989,7 @@ function ReportsModal({
           const contasAll = Array.from(new Set(todosItens.map(x=>x.nome))).sort((a,b)=>a.localeCompare(b,'pt-BR'));
           const valoresAll = contasAll.map(c => todosItens.filter(x=>x.nome===c).reduce((a,b)=>a+parseBRLnum(b.valor),0));
           const rotPeriodo = `${String(m1).padStart(2,'0')}/${y1} a ${String(m2).padStart(2,'0')}/${y2}`;
-          const cvPizza = _addCanvas(host, '680px', '1100px');
+          const cvPizza = _addCanvas(host, '560px', '900px');
           console.debug('[PERÍODO pizza-like]', rotPeriodo, { labels: contasAll.length, valores: valoresAll.length, total: valoresAll.reduce((a,b)=>a+b,0) });
 
           window.ChartFeatures?.renderPizzaMensal?.(cvPizza, { labels: contasAll, valores: valoresAll }, rotPeriodo);
@@ -986,7 +997,7 @@ function ReportsModal({
           canvases.push(cvPizza);
           // 🔖 Spacer em branco para reservar o 2º slot da 1ª página.
           // Assim, os gráficos de LINHAS começam, obrigatoriamente, na página 2.
-          const cvSpacer = _addBlank(host, '600px', '1100px');
+          const cvSpacer = _addBlank(host, '200px', '900px');
           canvases.push(cvSpacer);
 
 
