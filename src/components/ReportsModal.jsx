@@ -147,6 +147,23 @@ function ReportsModal({
         });
       }
       
+      function _addBlank(host, h='600px', w='1100px') {
+        const wrap = document.createElement('div');
+        wrap.style.width = w;
+        wrap.style.height = h;
+        const c = document.createElement('canvas');
+        // tamanho “grande o suficiente” para ocupar o slot (o exporter escala de qualquer forma)
+        c.width = parseInt(String(w).replace('px','')) || 1100;
+        c.height = parseInt(String(h).replace('px','')) || 600;
+        const ctx = c.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, c.width, c.height);
+        wrap.appendChild(c);
+        host.appendChild(wrap);
+        return c;
+      }
+
+
       // === Renderer exclusivo para PIZZA do MENSAL (sem profile; 100% das contas do mês) ===
       function renderPizzaMensalStrict(canvas, { labels, valores }, titulo) {
         // ===== Normalização / Preparos =====
@@ -938,6 +955,11 @@ function ReportsModal({
           window.ChartFeatures?.renderPizzaMensal?.(cvPizza, { labels: contasAll, valores: valoresAll }, rotPeriodo);
           if (cvPizza._chart && window.ChartFeatures?.applyPdfTheme) { window.ChartFeatures.applyPdfTheme(cvPizza._chart); cvPizza._chart.update('none'); }
           canvases.push(cvPizza);
+          // 🔖 Spacer em branco para reservar o 2º slot da 1ª página.
+          // Assim, os gráficos de LINHAS começam, obrigatoriamente, na página 2.
+          const cvSpacer = _addBlank(host, '600px', '1100px');
+          canvases.push(cvSpacer);
+
 
           // ====== 2) LINHAS por conta (máx. 7; 2 por página) ======
           const contasLinhas = (contasProfile.length ? contasProfile : contasAll).slice(0,7);
