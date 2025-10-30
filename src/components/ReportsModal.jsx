@@ -982,6 +982,7 @@ function ReportsModal({
             if (cv._chart && window.ChartFeatures?.applyPdfTheme) { window.ChartFeatures.applyPdfTheme(cv._chart); cv._chart.update('none'); }
             canvases.push(cv);
           }
+          canvases.push(cvSpacer);
 
           // ====== 3) LISTAGENS — por MÊS, agrupadas por QUEM PAGOU ======
           for (const {y,m} of monthsList) {
