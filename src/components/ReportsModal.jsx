@@ -811,12 +811,15 @@ function ReportsModal({
               doc.text(it.dividida ? 'Sim' : 'Não', col.dividida.x, curY);
 
               // Links (clicáveis, com máscara)
+              doc.setTextColor(0, 102, 204); // azul
               if (it.links?.boleto) {
-                doc.textWithLink('Boleto', col.boleto.x, curY, { url: it.links.boleto });
+                doc.textWithLink('[Boleto]', col.boleto.x, curY, { url: it.links.boleto });
               }
               if (it.links?.comp) {
-                doc.textWithLink('Comprovante', col.comprovante.x, curY, { url: it.links.comp });
+                doc.textWithLink('[Comprovante]', col.comprovante.x, curY, { url: it.links.comp });
               }
+              doc.setTextColor(0, 0, 0); // volta pro preto normal
+
 
 
               curY += lineH; rowsOnPage++;
@@ -919,10 +922,13 @@ function ReportsModal({
             ctx.fillText(r.dividida ? 'Sim' : 'Não', cols[2].x, yRow);
 
             // Boleto / Comprovante
-            const billetLabel = r.link_boleto ? 'Boleto' : '';
-            const proofLabel  = r.link_comprovante ? 'Comprovante' : '';
+            ctx.fillStyle = '#0066cc';
+            const billetLabel = r.link_boleto ? '[Boleto]' : '';
+            const proofLabel  = r.link_comprovante ? '[Comprovante]' : '';
             ctx.fillText(billetLabel, cols[3].x, yRow);
             ctx.fillText(proofLabel,  cols[4].x, yRow);
+            ctx.fillStyle = '#111827'; // volta pro texto normal
+
 
             // links clicáveis
             const approxTextH = 14;
