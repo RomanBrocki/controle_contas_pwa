@@ -129,6 +129,9 @@ function ReportsModal({
         wrap.style.width = w;
         wrap.style.height = h;
         const c = document.createElement('canvas');
+        // 👇 igual ao mensal: canvas real com o mesmo tamanho do wrapper
+        c.width  = parseInt(String(w).replace('px','')) || 900;
+        c.height = parseInt(String(h).replace('px','')) || 520
         wrap.appendChild(c);
         host.appendChild(wrap);
         return c;
@@ -757,10 +760,10 @@ function ReportsModal({
           // Layout A4 (em pt) – cabe tudo sem “estourar”
           const col = {
             nome:        { x: margin,                w: 240 },
-            valor:       { x: margin + 240 + 8,      w: 70,  align: 'right' },
-            dividida:    { x: margin + 240 + 8 + 70 + 8, w: 60 },
-            boleto:      { x: margin + 240 + 8 + 70 + 8 + 60 + 8, w: 90 },
-            comprovante: { x: margin + 240 + 8 + 70 + 8 + 60 + 8 + 90 + 8, w: 90 },
+            valor:       { x: margin + 240 + 6,      w: 70,  align: 'right' },
+            dividida:    { x: margin + 240 + 6 + 70 + 6, w: 60 },
+            boleto:      { x: margin + 240 + 6 + 70 + 6 + 50 + 6, w: 90 },
+            comprovante: { x: margin + 240 + 6 + 70 + 6 + 50 + 6 + 90 + 6, w: 90 },
           };
           const headerH = 30;
           const lineH = 18;
@@ -869,7 +872,7 @@ function ReportsModal({
           return chunks;
         }
         function makeTabelaCanvases({ titulo, rows }) {
-          const W=880,H=520;
+          const W=1080,H=520;
           const canvList = [];
           const groups = splitRows(rows, 26); // ~26 linhas por canvas
 
@@ -888,8 +891,8 @@ function ReportsModal({
             const cols = [
               { x: 24,   label: '', w: 420 },
               { x: 460,  label: 'Valor',            w: 120, align: 'right' },
-              { x: 600,  label: 'Dividida',         w: 80  },
-              { x: 700,  label: 'Boleto',           w: 180 },
+              { x: 600,  label: 'Dividida',         w: 70  },
+              { x: 700,  label: 'Boleto',           w: 150 },
               { x: 900,  label: 'Comprovante',      w: 180 }
             ];
             ctx.font='bold 15px Arial';
@@ -992,9 +995,25 @@ function ReportsModal({
           const cvPizza = _addCanvas(host, '560px', '900px');
           console.debug('[PERÍODO pizza-like]', rotPeriodo, { labels: contasAll.length, valores: valoresAll.length, total: valoresAll.reduce((a,b)=>a+b,0) });
 
-          window.ChartFeatures?.renderPizzaMensal?.(cvPizza, { labels: contasAll, valores: valoresAll }, rotPeriodo);
-          if (cvPizza._chart && window.ChartFeatures?.applyPdfTheme) { window.ChartFeatures.applyPdfTheme(cvPizza._chart); cvPizza._chart.update('none'); }
+          renderPizzaMensalStrict(
+            cvPizza,
+            { labels: contasAll, valores: valoresAll },
+            rotPeriodo
+          );
+
+          // 👇 mesmo truque do MENSAL: põe branco por baixo
+          
+          const ctxPizza = cvPizza.getContext('2d');
+          ctxPizza.save();
+          ctxPizza.globalCompositeOperation = 'destination-over';
+          ctxPizza.fillStyle = '#ffffff';
+          ctxPizza.fillRect(0, 0, cvPizza.width, cvPizza.height);
+          ctxPizza.restore();
+          
+
           canvases.push(cvPizza);
+
+
           // 🔖 Spacer em branco para reservar o 2º slot da 1ª página.
           // Assim, os gráficos de LINHAS começam, obrigatoriamente, na página 2.
           const cvSpacer = _addBlank(host, '200px', '900px');
@@ -1019,8 +1038,23 @@ function ReportsModal({
               meses: monthsList.map(({y,m}) => `${String(m).padStart(2,'0')}/${y}`),
               valores
             });
-            if (cv._chart && window.ChartFeatures?.applyPdfTheme) { window.ChartFeatures.applyPdfTheme(cv._chart); cv._chart.update('none'); }
+            if (cv._chart && window.ChartFeatures?.applyPdfTheme) {
+              window.ChartFeatures.applyPdfTheme(cv._chart);
+              cv._chart.update('none');
+            }
+
+            // 👇 força fundo branco igual ao mensal
+            {
+              const ctx = cv.getContext('2d');
+              ctx.save();
+              ctx.globalCompositeOperation = 'destination-over';
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, cv.width, cv.height);
+              ctx.restore();
+            }
+
             canvases.push(cv);
+
           }
           canvases.push(cvSpacer);
 
@@ -1073,6 +1107,16 @@ function ReportsModal({
 
             canvases.push(...canvTab);
           }
+          // força fundo branco em todos os canvases (igual ao mensal)
+          canvases.forEach((cv) => {
+            const ctx = cv.getContext('2d');
+            if (!ctx) return;
+            ctx.save();
+            ctx.globalCompositeOperation = 'destination-over';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, cv.width, cv.height);
+            ctx.restore();
+          });
 
           // ====== EXPORTA ======
           window.PDFHelpers.exportTwoPerPage(
