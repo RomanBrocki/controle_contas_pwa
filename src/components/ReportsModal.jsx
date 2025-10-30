@@ -1344,7 +1344,8 @@ function ReportsModal({
                 meses: monthsList.map(({ y, m }) => `${String(m).padStart(2, '0')}/${y}`),
                 valores,
               });
-
+              // aguarda o Chart.js terminar de desenhar
+              await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
               // garante fundo branco
               const ctx = cv.getContext('2d');
               ctx.save();
