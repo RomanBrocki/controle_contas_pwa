@@ -65,11 +65,26 @@ function ReportsModal({
       }
 
       function normalizeContaName(raw = '') {
-        // remove SOMENTE um sufixo no formato " (qualquer coisa)" no FINAL da string
-        return String(raw)
-          .replace(/\s*\([^()]*\)\s*$/, '')  // tira só "(...)" no fim
-          .trim();
+        // 1) string básica
+        let s = String(raw || '').trim();
+
+        // 2) remove UM sufixo entre parênteses no fim: "IPTU (legado)" -> "IPTU"
+        s = s.replace(/\s*\([^()]*\)\s*$/, '');
+
+        // 3) normaliza acentos
+        s = s
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, ''); // tira acento
+
+        // 4) colapsa espaços
+        s = s.replace(/\s+/g, ' ');
+
+        // 5) tudo minúsculo p/ comparar
+        s = s.toLowerCase();
+
+        return s;
       }
+
 
       async function contasDistinctRange(range){
         // Sempre derive da lista real do período via DataAdapter.fetchMes
@@ -314,7 +329,7 @@ function ReportsModal({
             ctx.restore();
           }
         };
-
+        
         // ===== Destrói gráfico anterior =====
         if (canvas._chart) { try { canvas._chart.destroy(); } catch (_) {} }
 
@@ -1250,28 +1265,78 @@ function ReportsModal({
             canvases.push(cvPizza);
 
 
+            // 1b) Card / linha de total do período (canvas fininho)
+            // usa o mesmo total da pizza: valoresAll.reduce(...)
+            const totalPeriodo = valoresAll.reduce((a, b) => a + b, 0);
+            const cvTotal = _addCanvas(host, '80px', '900px');
+            {
+              const ctx = cvTotal.getContext('2d');
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, cvTotal.width, cvTotal.height);
+
+              ctx.fillStyle = '#111827';
+              ctx.font = '600 18px Inter, Arial, sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              const brl = `R$ ${totalPeriodo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+              ctx.fillText(`Total do período: ${brl}`, cvTotal.width / 2, cvTotal.height / 2);
+            }
+            canvases.push(cvTotal);
+
             // 🔖 Spacer em branco para reservar o 2º slot da 1ª página.
             // Assim, os gráficos de LINHAS começam, obrigatoriamente, na página 2.
             const cvSpacer = _addBlank(host, '200px', '900px');
-            canvases.push(cvSpacer);
+            // força o exporter a começar página nova depois dele
+            cvSpacer._forcePageBreak = true;
 
+            
 
             // ====== 2) LINHAS por conta (máx. 7; 2 por página) ======
-            const contasLinhas = (contasProfile.length ? contasProfile : contasAll).slice(0,7);
+
+            // contas vindas da UI (aba Comparativos → cmpSel)
+            const contasSelecionadasUI = contasProfile.length ? contasProfile : [];
+
+            // contas do profile GLOBAL (Supabase / AppState)
+            let contasProfileGlobal = [];
+            if (
+              Array.isArray(window.AppState?.profile?.chart_accounts) &&
+              window.AppState.profile.chart_accounts.length
+            ) {
+              contasProfileGlobal = window.AppState.profile.chart_accounts;
+            } else if (
+              Array.isArray(window.DataAdapter?.profile?.chart_accounts) &&
+              window.DataAdapter.profile.chart_accounts.length
+            ) {
+              contasProfileGlobal = window.DataAdapter.profile.chart_accounts;
+            }
+
+            // prioridade: 1) UI → 2) profile global → 3) todas do período
+            let contasLinhas;
+            if (contasSelecionadasUI.length) {
+              contasLinhas = contasSelecionadasUI;
+            } else if (contasProfileGlobal.length) {
+              contasLinhas = contasProfileGlobal;
+            } else {
+              contasLinhas = contasAll;
+            }
+
+            // ainda assim limitamos a 7 pra não explodir o PDF
+            contasLinhas = contasLinhas.slice(0, 7);
+
             for (const conta of contasLinhas) {
-              // série da conta
               const valores = [];
-              for (const {y,m} of monthsList) {
-                const mm = await window.DataAdapter.fetchMes(y,m) || [];
+              for (const { y, m } of monthsList) {
+                const mm = await window.DataAdapter.fetchMes(y, m) || [];
                 const alvo = normalizeContaName(conta);
                 const soma = mm
                   .filter(x => normalizeContaName(x.nome) === alvo)
-                  .reduce((a,b) => a + parseBRLnum(b.valor), 0);
-
+                  .reduce((a, b) => a + parseBRLnum(b.valor), 0);
                 valores.push(soma);
               }
+
+              // deixa passar contas anuais (IPTU, IPVA, ITBI) mesmo com 1 ponto
               const pontosNaoZero = valores.filter(v => v > 0.001).length;
-              if (pontosNaoZero === 0) continue;
+              if (pontosNaoZero < 1) continue;
 
               const cv = _addCanvas(host, '600px', '1100px');
               renderLinhaPeriodoLocal(cv, {
@@ -1280,21 +1345,21 @@ function ReportsModal({
                 valores,
               });
 
-              // fundo branco já é feito dentro, mas vamos garantir
-              {
-                const ctx = cv.getContext('2d');
-                ctx.save();
-                ctx.globalCompositeOperation = 'destination-over';
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(0, 0, cv.width, cv.height);
-                ctx.restore();
-              }
+              // garante fundo branco
+              const ctx = cv.getContext('2d');
+              ctx.save();
+              ctx.globalCompositeOperation = 'destination-over';
+              ctx.fillStyle = '#ffffff';
+              ctx.fillRect(0, 0, cv.width, cv.height);
+              ctx.restore();
 
               canvases.push(cv);
-
-
             }
 
+            // força começar listagens em uma nova página
+            const cvBreakList = _addBlank(host, '10px', '900px');
+            cvBreakList._forcePageBreak = true;
+            canvases.push(cvBreakList);
             // ====== 3) LISTAGENS — por MÊS, agrupadas por QUEM PAGOU ======
             for (const {y,m} of monthsList) {
               const itensMes = await window.DataAdapter.fetchMes(y,m) || [];
