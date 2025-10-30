@@ -43,14 +43,6 @@ function LoginGate({ onLogged }) {
       window.SupabaseClient = window.SupabaseClient || {};
       window.SupabaseClient.__lastAuthUid = user.id;
       console.log('[Auth] logado como', user.id);
-      // 👇 cria/atualiza o profile do usuário recém-criado
-      if (window.SupabaseQueries?.upsertProfile) {
-        await window.SupabaseQueries.upsertProfile({
-          email: user.email,
-          theme: 'gunmetal',
-          chart_accounts: [],
-        });
-      }
       // 3️⃣ notifica o App.jsx que o login foi feito
       onLogged?.(window.MOCK_AUTH);
     } catch (e) {

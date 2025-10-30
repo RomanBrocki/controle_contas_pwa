@@ -242,9 +242,10 @@ function PostLoginMock() {
       async function handleSave(mode, initialId, form){
         try{
           // resolve '  '
-          const quem = form.quemMode === 'outro' ? (form.quemOutro || '').trim() : (form.quem || '').trim();
+          const quem = form.quemMode === 'outro'
+            ? (form.quemOutro || '').trim()
+            : (form.quem || '').trim();
 
-          // montar draft para a tabela existente
           const d = new Date(form.data || todayISO());
           const ano = d.getFullYear();
           const mes = d.getMonth() + 1;
@@ -261,11 +262,17 @@ function PostLoginMock() {
             ano, mes
           };
 
+          // 🔐 SAFE CALL
+          const muts = window.SupabaseMutations || window.SupabaseQueries;
+          if (!muts) {
+            throw new Error('SupabaseMutations/Queries não carregados');
+          }
+
           let ok = false;
           if (mode === 'new') {
-            ok = await window.SupabaseMutations.insertConta(draft);
+            ok = await muts.insertConta(draft);
           } else {
-            ok = await window.SupabaseMutations.updateConta(initialId, draft);
+            ok = await muts.updateConta(initialId, draft);
           }
           if(!ok) throw new Error('Falha no Supabase');
 
@@ -277,6 +284,7 @@ function PostLoginMock() {
           showToast('Erro ao salvar ❌','err');
         }
       }
+
 
       async function handleDelete(id){
         try{

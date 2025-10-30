@@ -60,25 +60,32 @@ function App() {
     return () => { alive = false; };
   }, [authed]);
 
-  // 🚪 logout
-  async function handleLogout() {
-    try {
-      const { supabase } = window.SupabaseClient || {};
-      if (supabase) {
-        await supabase.auth.signOut();
-      }
-    } catch (e) {
-      console.warn('[App] erro ao fazer signOut:', e);
+  // 🚪 logout (enxuto)
+async function handleLogout() {
+  try {
+    const { supabase } = window.SupabaseClient || {};
+    if (supabase) {
+      await supabase.auth.signOut();
     }
-    // limpa mocks e cache
-    window.MOCK_AUTH = null;
-    if (window.SupabaseClient) {
-      window.SupabaseClient.__lastAuthUid = null;
-    }
-    setProfile(null);
-    setAuthed(null);
-    setChecking(false);
+  } catch (e) {
+    console.warn('[App] erro ao fazer signOut:', e);
   }
+
+  // 👇 só tira o usuário atual
+  window.MOCK_AUTH = null;
+  if (window.SupabaseClient) {
+    window.SupabaseClient.__lastAuthUid = null;
+  }
+
+  // 👇 NÃO mexe em window.AppState.profile aqui
+  // porque isso pode ter coisas que você montou no Settings
+
+  setAuthed(null);
+  // volta pro login
+  setProfile(null); // só o state do App, não o global
+  setChecking(false);
+}
+
 
   // ⏳ carregando
   if (checking) {
