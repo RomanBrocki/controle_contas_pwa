@@ -278,14 +278,14 @@ export function renderPizzaMensal(canvas, data, rotuloMes = 'Mês do relatório'
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      radius: '86%',                  // pizza um pouco menor
-      layout: { padding: { top: 16, right: 56, bottom: 16, left: 56 } }, // espaço p/ outlabels
+      radius: 200,                  // pizza um pouco menor
+      layout: { padding: { top: 48, right: 64, bottom: 20, left: 64 } }, // espaço p/ outlabels
       plugins: {
         title: {
           display: true,
           text: `Distribuição de Gastos de ${rotuloMes}`,
           font: { size: 16, weight: 'bold' },
-          padding: { top: 10, bottom: 10 },
+          padding: { top: 8, bottom: 16 },
           color: __appText(),
         },
         tooltip: {

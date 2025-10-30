@@ -1373,7 +1373,10 @@ function ReportsModal({
                       const host = document.createElement('div');
                       host.id = 'cmp-chart';
                       host.style.marginTop = '16px';
+                      host.style.maxHeight = '70vh';     // 👈 só afeta o que aparece na tela
+                      host.style.overflowY = 'auto';     // 👈 barra de rolagem se ficar grande
                       content.appendChild(host);
+
 
                       const addNote = (txt) => {
                         const n = document.createElement('div');
@@ -1381,7 +1384,7 @@ function ReportsModal({
                         n.textContent = txt;
                         content.appendChild(n);
                       };
-                      const addCanvas = (h = '380px') => {
+                      const addCanvas = (h = '650px') => {
                         const wrap = document.createElement('div');
                         wrap.style.width = '100%';
                         wrap.style.height = h;
