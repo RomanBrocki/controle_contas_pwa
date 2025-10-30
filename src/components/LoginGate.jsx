@@ -1,3 +1,6 @@
+// ===========================================
+// 🔐 LoginGate - autenticação com Supabase
+// ===========================================
 function LoginGate({ onLogged }) {
   const [email, setEmail] = React.useState('');
   const [pwd, setPwd] = React.useState('');
@@ -8,21 +11,43 @@ function LoginGate({ onLogged }) {
     e.preventDefault();
     setErr('');
     setLoading(true);
+
     try {
-      // 🔌 Placeholder de login (mock)
-      // Trocar por supabase.auth.signInWithPassword({ email, password: pwd }) futuramente
+      const { supabase } = window.SupabaseClient || {};
+      if (!supabase) throw new Error('Supabase client não disponível');
+
+      // 1️⃣ tenta login real no Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password: pwd,
+      });
+
+      if (error) {
+        console.warn('[Auth] Erro Supabase:', error);
+        setErr(error.message || 'Falha ao autenticar.');
+        return;
+      }
+
+      const user = data.user;
+
+      // 2️⃣ espelha no mock para compatibilidade com o app existente
       window.MOCK_AUTH = {
-        user_id: window.CURRENT_UID || '8193908b-c37e-4639-b0f1-d646bc4ebf0b',
-        email: email || 'user@example.com',
+        user_id: user.id,
+        email: user.email,
       };
+
+      console.log('[Auth] logado como', user.id);
+
+      // 3️⃣ notifica o App.jsx que o login foi feito
       onLogged?.(window.MOCK_AUTH);
     } catch (e) {
+      console.error(e);
       setErr('Falha ao autenticar.');
     } finally {
       setLoading(false);
     }
   }
-
+  
   return (
     <div className="min-h-screen theme-gunmetal flex items-center justify-center p-6">
       <div className="modal solid max-w-sm w-full">
@@ -42,9 +67,7 @@ function LoginGate({ onLogged }) {
           <button className="btn primary w-full" type="submit" disabled={loading}>
             {loading ? 'Entrando…' : 'Entrar'}
           </button>
-          <div className="text-xs opacity-70 mt-2">
-            (Hoje é mock. Futuramente conecta no Supabase Auth.)
-          </div>
+      
         </form>
       </div>
     </div>

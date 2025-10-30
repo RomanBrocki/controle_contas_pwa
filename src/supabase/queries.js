@@ -236,10 +236,18 @@ export async function upsertProfile(p) {
 }
 
 
-// 🔹 Anos e meses reais do Supabase
-window.SupabaseQueries = { listYears, listMonthsByYear, listMes, payersDistinct, contasDistinct, contasDistinctUltimos12,
-    getProfile, upsertProfile
+window.SupabaseQueries = {
+  listYears,
+  listMonthsByYear,
+  listMes,
+  payersDistinct,
+  contasDistinct,
+  contasDistinctUltimos12,
+  getProfile,
+  upsertProfile,
+  insertConta,
+  updateConta,
+  deleteConta,
 };
-// Exponha as mutations também
-window.SupabaseMutations = { insertConta, updateConta, deleteConta };
+
 
