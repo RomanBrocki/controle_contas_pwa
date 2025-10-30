@@ -736,6 +736,7 @@ function ReportsModal({
 
           // === Inserir canvases (2 por página) ===
           canvases.forEach((cv, idx) => {
+            if (cv._forcePageBreak) { doc.addPage(); return; }   // nova página se flag
             if (idx > 0 && idx % 2 === 0) doc.addPage();
             const posInPage = idx % 2;
             const ratio = cv.width / cv.height;
@@ -872,111 +873,103 @@ function ReportsModal({
           return chunks;
         }
         function makeTabelaCanvases({ titulo, rows }) {
-          const W=1080,H=520;
-          const canvList = [];
-          const groups = splitRows(rows, 26); // ~26 linhas por canvas
+          const W = 1080;
+          const baseH = 460;
+          const titleY = 24;
+          const headerY = 52;
+          const firstRowY = 78;
+          const rowHeight = 22;
 
-          groups.forEach((subset, idx)=>{
-            const wrap = document.createElement('div'); wrap.style.width=`${W}px`; wrap.style.height=`${H}px`;
-            const c = document.createElement('canvas'); c.width=W; c.height=H; wrap.appendChild(c); host.appendChild(wrap);
-            const ctx = c.getContext('2d');
-            c._pdfLinks = []; // 👈 coletor de links clicáveis
+          // calcula altura dinâmica: cada linha soma 22 px + margens
+          const neededH = firstRowY + rows.length * rowHeight + 40;
+          const H = Math.max(baseH, neededH);
 
-            // header
-            ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H);
-            ctx.fillStyle='#111827'; ctx.font='bold 20px Arial';
-            ctx.fillText(`${titulo}${groups.length>1?` (pág. ${idx+1}/${groups.length})`:''}`, 24, 36);
+          const wrap = document.createElement('div');
+          wrap.style.width = `${W}px`;
+          wrap.style.height = `${H}px`;
+          const c = document.createElement('canvas');
+          c.width = W;
+          c.height = H;
+          wrap.appendChild(c);
+          host.appendChild(wrap);
 
-            // col titles
-            const cols = [
-              { x: 24,   label: '', w: 420 },
-              { x: 460,  label: 'Valor',            w: 120, align: 'right' },
-              { x: 600,  label: 'Dividida',         w: 70  },
-              { x: 700,  label: 'Boleto',           w: 150 },
-              { x: 900,  label: 'Comprovante',      w: 180 }
-            ];
-            ctx.font='bold 15px Arial';
-            cols.forEach(col => {
-              if (col.align === 'right') {
-                ctx.textAlign = 'right';
-                ctx.fillText(col.label, col.x + col.w, 68);
-              } else {
-                ctx.textAlign = 'left';
-                ctx.fillText(col.label, col.x, 68);
-              }
-            });
+          const ctx = c.getContext('2d');
+          c._pdfLinks = [];
 
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, W, H);
+          ctx.fillStyle = '#111827';
+          ctx.font = 'bold 18px Arial';
+          ctx.textAlign = 'left';
+          ctx.fillText(titulo, 24, titleY);
 
-            // linhas
-            ctx.font='15px Arial'; ctx.fillStyle='#111827';
-            let yRow = 92;
-            const rowHeight = 24;
+          const cols = [
+            { x: 24,   label: '',            w: 380 },
+            { x: 420,  label: 'Valor',       w: 110, align: 'right' },
+            { x: 540,  label: 'Dividida',    w: 60  },
+            { x: 620,  label: 'Boleto',      w: 150 },
+            { x: 780,  label: 'Comprovante', w: 180 },
+          ];
 
-            subset.forEach(r => {
-            // 1) se for header ("Quem pagou: ..."), desenha sozinho e sai
+          ctx.font = 'bold 14px Arial';
+          cols.forEach(col => {
+            ctx.textAlign = col.align === 'right' ? 'right' : 'left';
+            ctx.fillText(col.label, col.align === 'right' ? col.x + col.w : col.x, headerY);
+          });
+
+          ctx.font = '14px Arial';
+          ctx.fillStyle = '#111827';
+          let yRow = firstRowY;
+
+          rows.forEach(r => {
             if (r._header) {
-              ctx.font = 'bold 15px Arial';
-              ctx.textAlign = 'left';
+              ctx.font = 'bold 14px Arial';
               ctx.fillText(r.nome, 24, yRow);
-              yRow += 30; // deixa um espaço antes das contas desse pagador
-              // volta fonte padrão pra linhas normais
-              ctx.font = '15px Arial';
+              yRow += 20;
+              ctx.font = '14px Arial';
               return;
             }
-
-            // 2) linha normal da tabela
             const nomeInst = r.instancia ? `${r.nome} (${r.instancia})` : r.nome;
-            ctx.textAlign = 'left';
             ctx.fillText(nomeInst, cols[0].x, yRow);
 
-            // Valor (direita)
             const valTxt = `R$ ${r.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
             ctx.textAlign = 'right';
             ctx.fillText(valTxt, cols[1].x + cols[1].w, yRow);
             ctx.textAlign = 'left';
 
-            // Dividida
             ctx.fillText(r.dividida ? 'Sim' : 'Não', cols[2].x, yRow);
 
-            // Boleto / Comprovante
             ctx.fillStyle = '#0066cc';
-            const billetLabel = r.link_boleto ? '[Boleto]' : '';
-            const proofLabel  = r.link_comprovante ? '[Comprovante]' : '';
-            ctx.fillText(billetLabel, cols[3].x, yRow);
-            ctx.fillText(proofLabel,  cols[4].x, yRow);
-            ctx.fillStyle = '#111827'; // volta pro texto normal
-
-
-            // links clicáveis
-            const approxTextH = 14;
+            const approxH = 14; // altura estimada da linha
             if (r.link_boleto) {
+              ctx.fillText('[Boleto]', cols[3].x, yRow);
               c._pdfLinks.push({
                 url: r.link_boleto,
                 x: cols[3].x,
-                y: yRow - approxTextH + 4,
+                y: yRow - approxH + 4,
                 w: cols[3].w,
-                h: approxTextH + 6
+                h: approxH + 6
               });
             }
             if (r.link_comprovante) {
+              ctx.fillText('[Comprovante]', cols[4].x, yRow);
               c._pdfLinks.push({
                 url: r.link_comprovante,
                 x: cols[4].x,
-                y: yRow - approxTextH + 4,
+                y: yRow - approxH + 4,
                 w: cols[4].w,
-                h: approxTextH + 6
+                h: approxH + 6
               });
             }
+            ctx.fillStyle = '#111827';
 
-            yRow += 24;
+            yRow += rowHeight;
           });
 
-
-            canvList.push(c);
-          });
-
-          return canvList;
+          return [c];
         }
+
+
 
 
         try {
@@ -1000,6 +993,11 @@ function ReportsModal({
             { labels: contasAll, valores: valoresAll },
             rotPeriodo
           );
+          // aplica tema PDF igual ao mensal
+          if (cvPizza._chart && window.ChartFeatures?.applyPdfTheme) {
+            window.ChartFeatures.applyPdfTheme(cvPizza._chart);
+            cvPizza._chart.update('none');
+          }
 
           // 👇 mesmo truque do MENSAL: põe branco por baixo
           
@@ -1056,7 +1054,6 @@ function ReportsModal({
             canvases.push(cv);
 
           }
-          canvases.push(cvSpacer);
 
           // ====== 3) LISTAGENS — por MÊS, agrupadas por QUEM PAGOU ======
           for (const {y,m} of monthsList) {
@@ -1105,8 +1102,14 @@ function ReportsModal({
               rows  : rows
             });
 
-            canvases.push(...canvTab);
+            // Cada mês começa no topo da página, sem forçar 2-up nem página em branco
+            if (canvTab.length > 0) {
+              // Marca o primeiro canvas deste mês para iniciar nova página
+              canvTab[0]._forcePageBreak = true;
+              canvases.push(...canvTab);
+            }
           }
+
           // força fundo branco em todos os canvases (igual ao mensal)
           canvases.forEach((cv) => {
             const ctx = cv.getContext('2d');
