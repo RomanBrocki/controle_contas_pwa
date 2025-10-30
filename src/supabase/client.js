@@ -11,13 +11,16 @@ const SUPABASE_KEY =
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // fallback legado
-export const CURRENT_UID = '8193908b-c37e-4639-b0f1-d646bc4ebf0b';
+export const CURRENT_UID = null;
 
 // tenta sessão real → mock → fallback
 export async function getActiveUid() {
   try {
     const { data, error } = await supabase.auth.getSession();
     if (!error && data?.session?.user?.id) {
+      // cache global pra quem precisar de forma síncrona
+      window.SupabaseClient = window.SupabaseClient || {};
+      window.SupabaseClient.__lastAuthUid = data.session.user.id;
       return data.session.user.id;
     }
   } catch (e) {

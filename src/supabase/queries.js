@@ -8,14 +8,22 @@
 // public.controle_contas
 //  id | ano | mes | nome_da_conta | valor | data_de_pagamento | ...
 //
-// Nenhum filtro de usuário (auth) ainda.
+// Agora COM guard de UID.
 //
 
 import { supabase, CURRENT_UID } from './client.js';
 
-// helper de UID (mock agora, auth real no futuro)
 function uid() {
-  return (window.MOCK_AUTH && window.MOCK_AUTH.user_id) || CURRENT_UID;
+  // 1) se o LoginGate já preencheu, usa ele
+  if (window.MOCK_AUTH && window.MOCK_AUTH.user_id) {
+    return window.MOCK_AUTH.user_id;
+  }
+  // 2) se o client já descobriu uma sessão e pendurou no window, usa
+  if (window.SupabaseClient && window.SupabaseClient.__lastAuthUid) {
+    return window.SupabaseClient.__lastAuthUid;
+  }
+  // 3) senão, sem UID → devolve null
+  return null;
 }
 
 // Nome da tabela
@@ -25,10 +33,16 @@ const TABLE = 'controle_contas';
 // 🔍 Listar contas de um mês
 // -----------------------------
 export async function listMes(ano, mes) {
+  const u = uid();
+  if (!u) {
+    console.warn('[listMes] sem UID, retornando lista vazia');
+    return [];
+  }
+
   const { data, error } = await supabase
     .from(TABLE)
     .select('*')
-    .eq('user_id', uid())
+    .eq('user_id', u)
     .eq('ano', ano)
     .eq('mes', mes)
     .order('data_de_pagamento', { ascending: true });
@@ -44,10 +58,16 @@ export async function listMes(ano, mes) {
 // 📅 Listar anos distintos
 // -----------------------------
 export async function listYears() {
+  const u = uid();
+  if (!u) {
+    console.warn('[listYears] sem UID, retornando []');
+    return [];
+  }
+
   const { data, error } = await supabase
     .from(TABLE)
     .select('ano')
-    .eq('user_id', uid())
+    .eq('user_id', u)
     .order('ano', { ascending: false });
 
   if (error) return [];
@@ -59,10 +79,16 @@ export async function listYears() {
 // 📆 Listar meses por ano
 // -----------------------------
 export async function listMonthsByYear(ano) {
+  const u = uid();
+  if (!u) {
+    console.warn('[listMonthsByYear] sem UID, retornando []');
+    return [];
+  }
+
   const { data, error } = await supabase
     .from(TABLE)
     .select('mes')
-    .eq('user_id', uid())
+    .eq('user_id', u)
     .eq('ano', ano)
     .order('mes', { ascending: false });
 
@@ -74,10 +100,16 @@ export async function listMonthsByYear(ano) {
 // 🙋 Quem pagou (distinct)
 // -----------------------------
 export async function payersDistinct() {
+  const u = uid();
+  if (!u) {
+    console.warn('[payersDistinct] sem UID, retornando []');
+    return [];
+  }
+
   const { data, error } = await supabase
     .from(TABLE)
     .select('quem_pagou')
-    .eq('user_id', uid());
+    .eq('user_id', u);
 
   if (error) return [];
   return Array.from(new Set(data.map(d => d.quem_pagou).filter(Boolean)));
@@ -87,10 +119,16 @@ export async function payersDistinct() {
 // 💳 Contas distintas (nomes únicos)
 // -----------------------------
 export async function contasDistinct() {
+  const u = uid();
+  if (!u) {
+    console.warn('[contasDistinct] sem UID, retornando []');
+    return [];
+  }
+
   const { data, error } = await supabase
     .from(TABLE)
     .select('nome_da_conta')
-    .eq('user_id', uid());
+    .eq('user_id', u);
 
   if (error) return [];
   return Array.from(new Set(data.map(d => d.nome_da_conta).filter(Boolean)));
@@ -98,7 +136,12 @@ export async function contasDistinct() {
 
 // 💳 Contas distintas dos últimos 12 meses
 export async function contasDistinctUltimos12() {
-  const TABLE = 'controle_contas';
+  const u = uid();
+  if (!u) {
+    console.warn('[contasDistinctUltimos12] sem UID, retornando []');
+    return [];
+  }
+
   const hoje = new Date();
   const limite = new Date(hoje);
   limite.setFullYear(hoje.getFullYear() - 1);
@@ -106,7 +149,7 @@ export async function contasDistinctUltimos12() {
   const { data, error } = await supabase
     .from(TABLE)
     .select('nome_da_conta, data_de_pagamento')
-    .eq('user_id', uid())
+    .eq('user_id', u)
     .gte('data_de_pagamento', limite.toISOString().split('T')[0])
     .order('data_de_pagamento', { ascending: false });
 
@@ -122,13 +165,17 @@ export async function contasDistinctUltimos12() {
   return nomes.sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
-
-
 // ➕ Inserir nova conta (PWA): garante campos mínimos
 export async function insertConta(conta) {
+  const u = uid();
+  if (!u) {
+    console.error('[insertConta] sem UID, abortando insert');
+    return false;
+  }
+
   const d = new Date(conta.data_de_pagamento); // espera 'YYYY-MM-DD'
   const safe = {
-    user_id: uid(),                 // obrigatório na PWA
+    user_id: u,                 // obrigatório na PWA
     nome_da_conta: conta.nome_da_conta,
     valor: conta.valor,
     data_de_pagamento: conta.data_de_pagamento,
@@ -149,10 +196,14 @@ export async function insertConta(conta) {
   return true;
 }
 
-
-
 // ✏️ Atualizar conta existente (com guard de usuário)
 export async function updateConta(id, conta) {
+  const u = uid();
+  if (!u) {
+    console.error('[updateConta] sem UID, abortando update');
+    return false;
+  }
+
   const d = conta.data_de_pagamento ? new Date(conta.data_de_pagamento) : null;
   const safe = {
     nome_da_conta: conta.nome_da_conta,
@@ -163,19 +214,17 @@ export async function updateConta(id, conta) {
     dividida: conta.dividida !== undefined ? !!conta.dividida : undefined,
     link_boleto: conta.link_boleto ?? null,
     link_comprovante: conta.link_comprovante ?? null,
-    // se a data mudou e ano/mes não vieram, recalcula
     ...(d && (conta.ano === undefined) ? { ano: d.getFullYear() } : {}),
     ...(d && (conta.mes === undefined) ? { mes: (d.getMonth() + 1) } : {}),
   };
 
-  // remove chaves undefined (supabase não curte)
   Object.keys(safe).forEach(k => safe[k] === undefined && delete safe[k]);
 
   const { error } = await supabase
     .from(TABLE)
     .update(safe)
     .eq('id', id)
-    .eq('user_id', uid()); // guard
+    .eq('user_id', u); // guard
 
   if (error) {
     console.error('[updateConta] Erro:', error);
@@ -184,14 +233,19 @@ export async function updateConta(id, conta) {
   return true;
 }
 
-
 // 🗑️ Excluir conta (com guard de usuário)
 export async function deleteConta(id) {
+  const u = uid();
+  if (!u) {
+    console.error('[deleteConta] sem UID, abortando delete');
+    return false;
+  }
+
   const { error } = await supabase
     .from(TABLE)
     .delete()
     .eq('id', id)
-    .eq('user_id', uid()); // guard
+    .eq('user_id', u); // guard
 
   if (error) {
     console.error('[deleteConta] Erro:', error);
@@ -201,13 +255,17 @@ export async function deleteConta(id) {
 }
 
 // ===== profile =====
-// Tabela "profile": user_id (uuid) PK/FK, email text, payers_default text[], theme text,
-// chart_accounts text[]
 export async function getProfile() {
+  const u = uid();
+  if (!u) {
+    console.warn('[getProfile] sem UID, retornando null');
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('profile')
     .select('user_id, email, theme, chart_accounts')
-    .eq('user_id', uid())
+    .eq('user_id', u)
     .maybeSingle();
   if (error) {
     console.warn('[getProfile] erro:', error);
@@ -215,14 +273,18 @@ export async function getProfile() {
   }
   if (!data) return null;
 
-    // garante array válido
   const chart_accounts = Array.isArray(data.chart_accounts) ? data.chart_accounts : [];
   return { ...data, chart_accounts };
 }
 
 export async function upsertProfile(p) {
-  // guarda sempre sob o mesmo user_id do login
-  const payload = { user_id: uid() };
+  const u = uid();
+  if (!u) {
+    console.error('[upsertProfile] sem UID, abortando');
+    return false;
+  }
+
+  const payload = { user_id: u };
   if ('email' in p) payload.email = p.email ?? null;
   if ('theme' in p) payload.theme = p.theme ?? 'gunmetal';
   if ('chart_accounts' in p) payload.chart_accounts = (p.chart_accounts || []).slice(0, 7);
@@ -234,7 +296,6 @@ export async function upsertProfile(p) {
   }
   return true;
 }
-
 
 window.SupabaseQueries = {
   listYears,

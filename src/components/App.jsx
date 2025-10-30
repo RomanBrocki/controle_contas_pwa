@@ -1,14 +1,55 @@
-// src/components/App.jsx (trecho)
+// src/components/App.jsx
 function App() {
   const [authed, setAuthed] = React.useState(() => window.MOCK_AUTH || null);
   const [profile, setProfile] = React.useState(null);
+  const [checking, setChecking] = React.useState(() => !window.MOCK_AUTH);
 
+  // 🔍 checa sessão real do Supabase na montagem
   React.useEffect(() => {
+    if (window.MOCK_AUTH) return;
+
+    let alive = true;
     (async () => {
-      if (!authed) return;
       try {
-        // ✅ pega do window, não de require
+        const { supabase } = window.SupabaseClient || {};
+        if (!supabase) {
+          setChecking(false);
+          return;
+        }
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn('[App] getSession erro:', error);
+          if (alive) setChecking(false);
+          return;
+        }
+        const user = data?.session?.user;
+        if (user && alive) {
+          // 👇 isso é o que está “auto-logando” hoje
+          window.MOCK_AUTH = { user_id: user.id, email: user.email };
+          window.SupabaseClient = window.SupabaseClient || {};
+          window.SupabaseClient.__lastAuthUid = user.id;
+          setAuthed(window.MOCK_AUTH);
+        }
+      } catch (e) {
+        console.warn('[App] erro ao checar sessão:', e);
+      } finally {
+        if (alive) setChecking(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // 🧑‍💻 carrega o profile
+  React.useEffect(() => {
+    if (!authed) return;
+    let alive = true;
+    (async () => {
+      try {
         const prof = await window.SupabaseQueries.getProfile();
+        if (!alive) return;
         window.AppState = window.AppState || {};
         window.AppState.profile = prof;
         setProfile(prof);
@@ -16,24 +57,67 @@ function App() {
         console.error('[App] erro ao carregar profile:', e);
       }
     })();
+    return () => { alive = false; };
   }, [authed]);
 
+  // 🚪 logout
+  async function handleLogout() {
+    try {
+      const { supabase } = window.SupabaseClient || {};
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+    } catch (e) {
+      console.warn('[App] erro ao fazer signOut:', e);
+    }
+    // limpa mocks e cache
+    window.MOCK_AUTH = null;
+    if (window.SupabaseClient) {
+      window.SupabaseClient.__lastAuthUid = null;
+    }
+    setProfile(null);
+    setAuthed(null);
+    setChecking(false);
+  }
+
+  // ⏳ carregando
+  if (checking) {
+    return (
+      <>
+        <StyleTag theme="gunmetal" />
+        <div className="min-h-screen flex items-center justify-center text-gray-400">
+          Verificando sessão…
+        </div>
+      </>
+    );
+  }
+
+  // 🔒 não logado
   if (!authed) {
     return (
       <>
-        {/* injeta o mesmo tema usado no app inteiro */}
         <StyleTag theme="gunmetal" />
         <LoginGate onLogged={setAuthed} />
       </>
     );
   }
 
-
+  // ✅ logado
   return (
     <>
       <StyleTag theme={profile?.theme || 'gunmetal'} />
+      {/* cabeçalho simples só pra ter o botão */}
+      <div className="w-full flex justify-end gap-2 px-4 py-2">
+        <button
+          onClick={handleLogout}
+          className="text-sm px-3 py-1 rounded bg-red-500/80 hover:bg-red-500 text-white"
+        >
+          Sair
+        </button>
+      </div>
       <PostLoginMock />
     </>
   );
 }
+
 

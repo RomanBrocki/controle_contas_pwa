@@ -35,7 +35,8 @@ function LoginGate({ onLogged }) {
         user_id: user.id,
         email: user.email,
       };
-
+      window.SupabaseClient = window.SupabaseClient || {};
+      window.SupabaseClient.__lastAuthUid = user.id;
       console.log('[Auth] logado como', user.id);
 
       // 3️⃣ notifica o App.jsx que o login foi feito
