@@ -869,8 +869,8 @@ function ReportsModal({
 
             // col titles
             const cols = [
-              { x: 24,   label: 'Nome (Instância)', w: 420 },
-              { x: 460,  label: 'Valor',            w: 120, align: 'right' },
+              { x: 24,   label: '', w: 420 },
+              { x: 460,  label: 'Valor',            w: 120, align: 'left' },
               { x: 600,  label: 'Dividida',         w: 80  },
               { x: 700,  label: 'Boleto',           w: 180 },
               { x: 900,  label: 'Comprovante',      w: 180 }
