@@ -1,156 +1,152 @@
-# 💸 Controle de Contas — PWA com Supabase (Port do Streamlit)
+# 💸 Controle de Contas — PWA (porta do Streamlit)
+App de contas domésticas em **HTML + React UMD + Tailwind + Supabase**, rodando 100% no browser, com **relatórios em PDF** gerados no cliente e **múltiplos temas**.
 
-Aplicação web moderna para **controle doméstico de contas**, desenvolvida como **PWA 100% client‑side** (HTML + React UMD + Tailwind).  
-Este projeto é um **porte do app em Streamlit**: https://controlecontasapp-atdnfadfgd3ibqjsgj6v3p.streamlit.app/
+> Este projeto é o passo intermediário entre o app original em Streamlit e uma PWA React organizada. Aqui a gente já tem:
+> - mock de login,
+> - leitura/gravação no Supabase,
+> - tela mensal funcional,
+> - modais de edição, configurações e relatórios,
+> - geração de PDF (mensal e período),
+> - e gráficos do Chart.js forçados para tema de PDF.
 
 ---
 
-## 🧩 Arquitetura do Projeto
+## 🗂 Estrutura de Pastas e Arquivos
 
-```
-├─ index.html                         # carrega Tailwind (CDN), Babel in-browser e todos os componentes
+```text
+├─ index.html                         # ponto de entrada; carrega React UMD, Tailwind CDN e todos os JSX
 ├─ src/
-│  ├─ data-adapter.js                 # (se usado) adaptadores/utils de dados
-│  ├─ router.js                       # hash-based SPA (ex.: #/mes, #/relatorios) se aplicável
-│  └─ supabase/ 
-│     ├─ client.js                    # Supabase client + CURRENT_UID (mock)
-│     └─ queries.js                   # Funções de acesso ao DB (controle_contas, profile, listas distintas)
-│  └─ features/        
-│  	  ├─ charts.js                    # helpers de gráficos (linhas, barras, pizza, etc.)
-│     └─pdf.js                       # utilitários de exportação (PNG/PDF), ganchos p/ relatórios
+│  ├─ data-adapter.js                 # camada “bonita” de dados: pega do Supabase e devolve no formato que a UI espera
+│  ├─ router.js                       # SPA simples baseada em hash (#/mes, #/relatorios)
+│  ├─ supabase/
+│  │  ├─ client.js                    # inicializa o Supabase + CURRENT_UID (mock)
+│  │  └─ queries.js                   # consultas e mutações (contas, profile, listas distintas, últimos 12 meses, etc.)
+│  ├─ features/
+│  │  ├─ charts.js                    # helpers de gráficos + “ChartFeatures” usados no ReportsModal e nos PDFs
+│  │  └─ pdf.js                       # helpers de PDF (exporta 2 canvases por página, aplica tema PDF, etc.)
 │  └─ components/
-│     ├─ StyleTag.jsx                 # temas (gunmetal, synth, light) e variáveis (inclui tokens p/ PDF)
-│     ├─ PostLoginMock.jsx            # shell principal da tela (login mock, header, cards, modais)
-│     ├─ ContaCard.jsx                # card de exibição de cada conta (layout restaurado)
-│     ├─ EditPopup.jsx                # modal de Nova/Editar (com “Outro...” para quem pagou)
-│     ├─ SettingsModal.jsx            # ⚙️ Configurações (email, tema, chart_accounts)
-│     ├─ ReportsModal.jsx             # Relatórios (mensal, período, comparativos) + export PNG/PDF
-│     └─ App.jsx                      # monta raiz React e integra tudo
+│     ├─ StyleTag.jsx                 # temas (gunmetal, synth, light) + tokens para PDF + base dos modais
+│     ├─ LoginGate.jsx                # login mock (futuro: Supabase Auth)
+│     ├─ PostLoginMock.jsx            # shell pós-login (header, cards do mês, pendências, modais)
+│     ├─ ContaCard.jsx                # card de cada conta do mês
+│     ├─ EditPopup.jsx                # modal de criar/editar conta (com “Outro…” para pagador e links)
+│     ├─ SettingsModal.jsx            # configurações de perfil (email, tema, contas para gráficos)
+│     ├─ ReportsModal.jsx             # central de relatórios: mensal, período e comparativos
+│     └─ App.jsx                      # escolhe entre LoginGate e PostLoginMock e injeta StyleTag
 ```
 
-- **Roteamento:** hash‑based SPA (`#/mes`, `#/relatorios`), sem recarregar a página.
-- **Dados:** Supabase direto no front (Anon Key) com **RLS ativo**.
-- **UI:** React (UMD) + Tailwind; Babel Standalone (apenas para prototipagem).
+---
+
+## ⚙️ Fluxo Geral do App
+
+1. **index.html** sobe React, Tailwind e Babel direto no navegador.  
+2. **App.jsx** verifica se há uma sessão mock no `window.MOCK_AUTH`.  
+   - se **não** tiver → mostra **LoginGate.jsx**;  
+   - se **tiver** → mostra **PostLoginMock.jsx** (a tela toda).  
+3. **LoginGate.jsx** hoje só cria um objeto de auth fake e devolve para o App. Isso já deixa o caminho pronto para trocar por `supabase.auth.signInWithPassword(...)` depois.  
+4. **PostLoginMock.jsx** é onde tudo acontece:
+   - carrega **anos** e **meses por ano** reais do Supabase;
+   - monta o **resumo do mês** (total, seletor de ano/mês);
+   - busca **pendências** comparando mês atual x mês anterior;
+   - busca **itens do mês** via `DataAdapter.fetchMes(...)`;
+   - renderiza lista de contas com **ContaCard.jsx**;
+   - abre **EditPopup.jsx**, **SettingsModal.jsx**, e **ReportsModal.jsx**.
 
 ---
 
-## 🚀 Tecnologias
+## 🧠 Camada de Dados
 
-- **React 18 (UMD)** — renderização client‑side
-- **Tailwind CSS** — utilitários e temas
-- **Chart.js** + **chartjs-plugin-datalabels** + **piechart-outlabels**
-- **jsPDF** — exportação de múltiplos gráficos em PDF
-- **Supabase** — banco, API e RLS
-- **Babel** — transpila JSX no navegador (dev/prototipagem)
+### 1. `src/supabase/client.js`
+- inicializa o client do Supabase com **URL** e **anon key**;
+- deixa disponível um **CURRENT_UID (mock)** no `window`.
 
----
+### 2. `src/supabase/queries.js`
+- contém todas as **funções de acesso ao banco** (listar, inserir, atualizar, apagar, perfis e listas).
 
-## 🎨 Temas
-
-Três temas prontos no CSS do `index.html`:
-- 🧊 **Gunmetal Neon** (escuro padrão)
-- 🪩 **Synthwave Teal**
-- 🌤️ **Claro Metálico** (claro; com ajustes de contraste para gráficos no app)
-
-Para PDF, há uma paleta **PDF‑friendly** separada em `:root` (`--chart-*-pdf`), aplicada automaticamente na exportação para fundo branco.
+### 3. `src/data-adapter.js`
+- adapta os dados crus do banco para o formato visual do app (nomes, links, agrupamentos).
 
 ---
 
-## 📊 Gráficos e Relatórios (Comparativos)
-
-**Comparativos** (modal “Relatórios → Comparativos”):
-- **🍕 Pizza**: mês único ou período
-  - Rótulo interno ≥ ~8%; fatias pequenas usam rótulo externo com linha e anti‑colisão.
-- **📈 Linhas**: por conta, apenas quando há **reincidência ≥ 2 meses** no período.
-- **📊 Barras**: mês único, comparando **mês atual x mês anterior** e **mês atual x mesmo mês do ano anterior**.
-  - No app, limite prático de leitura: **até 7 contas**.
-
-**Exportação:**
-- **PNG**: baixa o **primeiro** gráfico renderizado no modal.
-- **PDF (todos)**: exporta **todos os gráficos renderizados**, **2 por página**, com ajuste automático de tema PDF.
+## 🎨 Estilos e Temas (`StyleTag.jsx`)
+Define três temas (`gunmetal`, `synth`, `light`) com variáveis CSS e tokens de cor usados também nos PDFs.
+Controla também aparência dos modais e do overlay escuro.
 
 ---
 
-## 🖼️ Exportação PDF
-
-Implementada em `src/features/pdf.js`:
-- `exportTwoPerPage(canvases, filename, { margin, gap })`
-- Aplica `--chart-*-pdf` (texto e linhas mais escuros) antes de capturar as imagens dos canvases.
-- Restaura o tema do app após a exportação.
-
----
-
-## 🗂️ Base de Dados (Supabase)
-
-Tabela atual (exemplo) — `public.controle_contas`:
-- `id` (PK), `ano`, `mes`, `nome_da_conta`, `valor`, `data_de_pagamento`,
-- `instancia`, `quem_pagou`, `dividida` (bool), `link_boleto`, `link_comprovante`.
-
-**Consultas disponíveis (src/supabase/queries.js):**
-- `listMes(ano, mes)` — itens do mês
-- `listYears()` — anos distintos (ordenados DESC)
-- `listMonthsByYear(ano)` — meses distintos do ano (ordenados DESC)
-- `payersDistinct()` e `contasDistinct()` — listas únicas
-- `insertConta`, `updateConta`, `deleteConta` — CRUD
-
-**Planejado (autenticação e multi‑usuário):**
-- Criar coluna **`user_id`** (UUID/ref `auth.users`), com índices.
-- Ajustar **RLS** para filtrar registros por usuário autenticado.
-- Atualizar inserções/edições para preencher `user_id`.
-- Preparar migração/seed para dados históricos sem `user_id` (atribuição retroativa).
+## 🧍🏽‍♂️ Fluxo Pós-Login (`PostLoginMock.jsx`)
+Gerencia toda a interface após login:
+- header com botões (Nova Conta, Relatórios, Configurações);
+- overlay de pendências;
+- seletor de ano/mês;
+- cards de contas;
+- modais: editar, configurações e relatórios.
 
 ---
 
-## ✅ O que já está funcionando
-
-- Tela **Mês** (listar, criar, editar, excluir) com total do mês e links de boleto/comprovante.
-- **Gráficos Comparativos** completos e dinâmicos:
-  - Seleção de alcance (mês/período) e **contas** derivadas **do próprio intervalo**.
-  - Geração de **pizza**, **linhas** (quando aplicável) e **barras**.
-  - **Baixar PNG** e **Baixar PDF (todos)** com 2 gráficos por página.
-- Paleta e contraste **automaticamente ajustados** no app e **otimizados para PDF**.
+## 📑 Central de Relatórios (`ReportsModal.jsx`)
+Reúne todas as funções de geração de relatórios e PDFs:
+1. **Mensal** — pizza, comparativos e listagem por pagador.
+2. **Período** — pizza consolidada, linhas e tabelas por mês.
+3. **Comparativos** — gráficos em tempo real com exportação PNG e PDF.
 
 ---
 
-## 🛣️ Roadmap (próximas etapas)
-
-1) **Relatórios PDF completos**
-   - **Mensal**: pizza do mês + resumo por pessoa + listagem consolidada com links.
-   - **Período**: pizza agregada + comparativos + listagem resumida do intervalo.
-   - Reutilizar canvases já renderizados no modal.
-
-2) **Autenticação (página de login)**
-   - Tela de **login** (Supabase Auth).
-   - **RLS** por usuário e fallback de sessão anônima (somente leitura, se desejado).
-   - Rotas protegidas e estado global de sessão.
-
-3) **Adequação da base para multi‑acesso**
-   - Inclusão de coluna **`user_id`** e migração de dados antigos.
-   - Policies de RLS por `user_id`.
-   - Ajustes no CRUD para sempre enviar/validar `user_id`.
-
-4) **Temas padronizados e tokens CSS**
-   - Consolidar `--chart-1..8`, `--chart-label-*` por tema (manutenção simples).
-   - Charts passam a consumir **apenas** tokens (nada hardcoded).
-5) **(Opcional) PWA completo**
-   - Refatoração do HTML para melhor manutenção.
-6) **(Opcional) PWA completo**
-   - Manifest, ícones e instalação “Add to Home Screen”.
-   - Build sem Babel Standalone (Tailwind + bundler), minificação e cache estático.
+## 📊 Gráficos (`src/features/charts.js`)
+Define e aplica o estilo global do Chart.js.  
+Fornece funções para gerar pizza, barras e linhas e ajustar o tema para PDF.
 
 ---
 
-## 🧪 Execução local (dev)
-
-1. Sirva a pasta com um server estático (VS Code Live Server ou `python -m http.server`).  
-2. Abra `index.html`.  
-3. Configure `src/supabase/client.js` com **URL** e **Anon Key** do seu projeto (RLS ativo).
-
-> **Atenção**: em produção, evite `Babel Standalone` e `cdn.tailwindcss.com`. Prefira build com bundler e Tailwind JIT.
+## 🧾 PDF Helpers (`src/features/pdf.js`)
+Oferece `exportTwoPerPage()` para montar PDF 2-a-2 por página com margens e espaçamento.
 
 ---
 
-## 📄 Licença
+## 👤 Perfil e Configurações
+`SettingsModal.jsx` salva email, tema e contas para gráficos no Supabase.  
+Aplica tema e sincroniza pagadores com os encontrados no banco.
 
-Uso pessoal e educacional.  
-© 2025 — Desenvolvido por **Roman Wladyslaw Brocki Neto** com auxílio do ChatGPT‑5.
+---
+
+## 🛡️ Login (mock) e Futuro Auth
+Atualmente é simulado via `LoginGate.jsx`.  
+Futuro: integração direta com `supabase.auth.signInWithPassword` e RLS por usuário.
+
+---
+
+## 🧪 Como Rodar
+1. Suba servidor local (ex.: `python -m http.server`).
+2. Abra `index.html` no navegador.
+3. Configure URL e anon key do Supabase.
+4. Faça login mock e teste.
+
+---
+
+## 📌 Funcionalidades Atuais
+- Listagem mensal (Supabase)
+- CRUD de contas
+- Links clicáveis (boleto e comprovante)
+- Pendências do mês anterior
+- Seletor de ano/mês
+- Temas dinâmicos
+- Perfil (email, tema, contas p/ gráficos)
+- PDF mensal e PDF por período
+- Gráficos comparativos e exportação
+- Router hash (#/mes, #/relatorios)
+
+---
+
+## 🛣️ Próximos Passos
+1. Substituir login mock por Supabase Auth.
+2. Ligar `user_id` nas mutações e ativar RLS.
+3. Fazer build real (sem Babel in-browser).
+4. Adicionar manifest e service worker para PWA.
+5. Modularizar ReportsModal.
+
+---
+
+## 📄 Créditos
+- Código e lógica: **Roman Wladyslaw Brocki Neto**  
+- Assistência técnica: **ChatGPT-5**  
+- Ano: **2025**
