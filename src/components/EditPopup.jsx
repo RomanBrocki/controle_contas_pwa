@@ -158,7 +158,13 @@ function EditPopup({ data, payers, typeOpts = [], onClose, onSave, onDelete }) {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-sm opacity-80">Instância</label>
-                  <input className="w-full input" placeholder="Residencial" value={form.instancia} onChange={e=>upd('instancia', e.target.value)} />
+                  <input
+                    className="w-full input"
+                    placeholder="Digite a instância (opcional)"
+                    value={form.instancia}
+                    onChange={e => upd('instancia', e.target.value)}
+                  />
+
                 </div>
                 <div>
                   <label className="text-sm opacity-80">Quem pagou</label>
