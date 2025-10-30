@@ -414,7 +414,7 @@ function ReportsModal({
           .filter(r => !allowSet || allowSet.has(r.name));
 
         // Layout ( espelha charts.js )
-        const margin = { t: 56, r: 40, b: 40, l: 0 };
+        const margin = { t: 56, r: 40, b: 40, l: 150 };
         const barH = 18, innerGap = 10, groupGap = 20, legendH = 26;
         const contentH = rows.length ? rows.length * (barH * 2 + innerGap + groupGap) - groupGap : 0;
         const totalH = margin.t + legendH + 16 + contentH + margin.b;
