@@ -1001,15 +1001,29 @@ function ReportsModal({
             payers.forEach(p=>{
               rows.push({ nome: `Quem pagou: ${p}`, instancia:'', valor:0, dividida:false, link_boleto:'', link_comprovante:'', _header:true });
               byPayer[p].sort((a,b)=> (a.nome+a.instancia).localeCompare(b.nome+b.instancia,'pt-BR')).forEach(it=>{
-                rows.push({
-                  nome: it.nome,
-                  instancia: it.instancia || '',
-                  valor: parseBRLnum(it.valor),
-                  dividida: !!it.dividida,
-                  link_boleto: it.link_boleto || '',
-                  link_comprovante: it.link_comprovante || ''
-                });
+              // normaliza porque no mensal vem em it.links.{boleto,comp}
+              const linkBoleto =
+                it.link_boleto ||
+                it.boleto ||
+                it.links?.boleto ||
+                '';
+              const linkComp =
+                it.link_comprovante ||
+                it.comprovante ||
+                it.links?.comp ||
+                it.links?.comprovante ||
+                '';
+
+              rows.push({
+                nome: it.nome,
+                instancia: it.instancia || '',
+                valor: parseBRLnum(it.valor),
+                dividida: !!it.dividida,
+                link_boleto: linkBoleto,
+                link_comprovante: linkComp
               });
+            });
+
             });
             const rowsVisuais = rows.flatMap(r=> r._header ? [{ nome:r.nome, instancia:'', valor:0, dividida:false, link_boleto:'', link_comprovante:'' }] : [r]);
             const canvTab = makeTabelaCanvases({ titulo: `Contas pagas — ${String(m).padStart(2,'0')}/${y}`, rows: rowsVisuais });
