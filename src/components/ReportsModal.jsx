@@ -55,9 +55,22 @@ function ReportsModal({
       function parseBRLnum(brl){
         return parseFloat(String(brl||'').replace(/[^\d,]/g,'').replace(/\.(?=\d)/g,'').replace(',','.'))||0;
       }
-      function sumByConta(items, contasSel){
-        return contasSel.map(c => items.filter(x=>x.nome===c).reduce((a,b)=>a+parseBRLnum(b.valor),0));
+      function sumByConta(items, contasSel) {
+        return contasSel.map((c) => {
+          const alvo = normalizeContaName(c);
+          return (items || [])
+            .filter(x => normalizeContaName(x.nome) === alvo)
+            .reduce((a, b) => a + parseBRLnum(b.valor), 0);
+        });
       }
+
+      function normalizeContaName(raw = '') {
+        // remove SOMENTE um sufixo no formato " (qualquer coisa)" no FINAL da string
+        return String(raw)
+          .replace(/\s*\([^()]*\)\s*$/, '')  // tira só "(...)" no fim
+          .trim();
+      }
+
       async function contasDistinctRange(range){
         // Sempre derive da lista real do período via DataAdapter.fetchMes
         if (range === 'mes') {
@@ -1087,7 +1100,11 @@ function ReportsModal({
               const valores = [];
               for (const {y,m} of monthsList) {
                 const mm = await window.DataAdapter.fetchMes(y,m) || [];
-                const soma = mm.filter(x=>x.nome===conta).reduce((a,b)=>a+parseBRLnum(b.valor),0);
+                const alvo = normalizeContaName(conta);
+                const soma = mm
+                  .filter(x => normalizeContaName(x.nome) === alvo)
+                  .reduce((a,b) => a + parseBRLnum(b.valor), 0);
+
                 valores.push(soma);
               }
               if (valores.filter(v=>v>0).length < 2) continue; // exige pelo menos 2 pontos >0
@@ -1494,10 +1511,16 @@ function ReportsModal({
 
                         let plotted = 0;
                         contasSel.forEach((conta) => {
+                          const alvo = normalizeContaName(conta);
                           const serie = respostas.map(items =>
-                            (items || []).filter(x => x.nome === conta)
-                              .reduce((a,b) => a + parseFloat(String(b.valor).replace(/[^\d,]/g,'').replace(/\.(?=\d)/g,'').replace(',','.')) || 0, 0)
+                            (items || [])
+                              .filter(x => normalizeContaName(x.nome) === alvo)
+                              .reduce((a,b) => a + parseFloat(String(b.valor)
+                                .replace(/[^\d,]/g,'')
+                                .replace(/\.(?=\d)/g,'')
+                                .replace(',','.')) || 0, 0)
                           );
+
                           const pontos = serie.filter(v => v > 0).length;
                           if (pontos >= 2) {
                             const c = addCanvas();
