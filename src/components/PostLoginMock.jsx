@@ -368,48 +368,58 @@ function PostLoginMock() {
           </header>
         
 
-          {/* Overlay pós-login (dinâmico) */}
-          {showOverlay && (
-            <div className="overlay hard" onClick={() => setShowOverlay(false)}>
-              <div className="modal solid max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-                <h2 className="text-lg font-semibold mb-3">💰 Contas Pendentes</h2>
+          {/* Overlay pós-login (dinâmico) — só no mês/ano atuais */}
+          {(() => {
+            const hoje = new Date();
+            const anoAtual = hoje.getFullYear();
+            const mesAtual = hoje.getMonth() + 1;
 
-                {pendentes === null || pendLoading ? (
-                  <div className="card text-center py-6">Calculando…</div>
-                ) : pendentes.length === 0 ? (
-                  <div className="card text-center py-6 text-sm opacity-70">
-                    Nenhuma conta do mês anterior está pendente.
-                  </div>
-                ) : (
-                  <ul className="space-y-2 mb-4">
-                    {pendentes.slice(0, 6).map((p, idx) => (
-                      <li key={`${keyFor(p)}-${idx}`} className="card flex justify-between items-center">
-                        <div>
-                          <strong>{p.nome}</strong><br />
-                          {/* Mostramos os dados do mês anterior só como contexto visual */}
-                          <span className="text-sm opacity-70">
-                            {p.instancia ? `${p.instancia} • ` : ''}{p.valor} • {p.data}
-                          </span>
-                        </div>
-                        <button
-                          className="btn primary"
-                          onClick={() => {
-                            // abre modal "Nova Conta" pré-preenchido (valor e data continuam padrão: vazio/hoje)
-                            setShowOverlay(false);
-                            openNew({ nome: p.nome, instancia: p.instancia, quem: p.quem, dividida: p.dividida });
-                          }}
-                        >
-                          Lançar agora
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+            const isMesAtual = yearSel === anoAtual && monthSel === mesAtual;
+            if (!isMesAtual) return null;
 
-                <button className="btn ghost w-full" onClick={() => setShowOverlay(false)}>Sair</button>
+            return showOverlay && (
+              <div className="overlay hard" onClick={() => setShowOverlay(false)}>
+                <div className="modal solid max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+                  <h2 className="text-lg font-semibold mb-3">💰 Contas Pendentes</h2>
+
+                  {pendentes === null || pendLoading ? (
+                    <div className="card text-center py-6">Calculando…</div>
+                  ) : pendentes.length === 0 ? (
+                    <div className="card text-center py-6 text-sm opacity-70">
+                      Nenhuma conta do mês anterior está pendente.
+                    </div>
+                  ) : (
+                    <ul className="space-y-2 mb-4">
+                      {pendentes.slice(0, 6).map((p, idx) => (
+                        <li key={`${keyFor(p)}-${idx}`} className="card flex justify-between items-center">
+                          <div>
+                            <strong>{p.nome}</strong><br />
+                            {/* Mostramos os dados do mês anterior só como contexto visual */}
+                            <span className="text-sm opacity-70">
+                              {p.instancia ? `${p.instancia} • ` : ''}{p.valor} • {p.data}
+                            </span>
+                          </div>
+                          <button
+                            className="btn primary"
+                            onClick={() => {
+                              // abre modal "Nova Conta" pré-preenchido (valor e data continuam padrão: vazio/hoje)
+                              setShowOverlay(false);
+                              openNew({ nome: p.nome, instancia: p.instancia, quem: p.quem, dividida: p.dividida });
+                            }}
+                          >
+                            Lançar agora
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <button className="btn ghost w-full" onClick={() => setShowOverlay(false)}>Sair</button>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
+
 
 
           {/* Resumo do mês + seletor ano/mês (meses DESC e nomes apenas) */}
