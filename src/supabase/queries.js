@@ -310,5 +310,10 @@ window.SupabaseQueries = {
   updateConta,
   deleteConta,
 };
+window.SupabaseMutations = {
+  insertConta,
+  updateConta,
+  deleteConta,
+};
 
 
