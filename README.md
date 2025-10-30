@@ -1,17 +1,50 @@
-# 💸 Controle de Contas — PWA (porta do Streamlit)
-App de contas domésticas em **HTML + React UMD + Tailwind + Supabase**, rodando 100% no browser, com **relatórios em PDF** gerados no cliente e **múltiplos temas**.
+# Controle de Contas PWA (versão HTML + React UMD + Supabase)
 
-> Este projeto é o passo intermediário entre o app original em Streamlit e uma PWA React organizada. Aqui a gente já tem:
-> - mock de login,
-> - leitura/gravação no Supabase,
-> - tela mensal funcional,
-> - modais de edição, configurações e relatórios,
-> - geração de PDF (mensal e período),
-> - e gráficos do Chart.js forçados para tema de PDF.
+Aplicação web para controle mensal de contas, com:
+
+- autenticação via Supabase (com fallback/mirror em `window.MOCK_AUTH`);
+- cadastro/edição de contas diretamente ligadas à tabela `public.controle_contas`;
+- personalização de perfil (tema, e-mail e contas que vão para gráficos) na tabela `public.profile`;
+- relatórios mensais e por período com **gráficos Chart.js**;
+- exportação de gráficos para **PDF** via jsPDF;
+- navegação SPA simples por **hash**.
+
+É uma **PWA em construção** rodando 100% no navegador com Babel e recursos via CDN. A ideia aqui é ter um **protótipo funcional** que usa o mesmo backend que o app “sério” (Supabase), mas sem precisar de bundler.
 
 ---
 
-## 🗂 Estrutura de Pastas e Arquivos
+## 1. Visão geral
+
+O projeto foi montado para ser:
+
+1. **Autocontido no navegador**: o `index.html` já carrega **React**, **ReactDOM**, **Tailwind**, **Chart.js**, **jsPDF** e os componentes JSX. Não precisa de build para rodar local.
+2. **Acoplado ao Supabase**: todas as operações de dados (listar contas, inserir, atualizar, deletar, pegar perfil) passam por `src/supabase/queries.js`, que por sua vez usa o client único em `src/supabase/client.js`.
+3. **Modular na UI**: cada pedaço da tela é um JSX separado em `src/components/`:
+   - login
+   - shell pós-login
+   - card de conta
+   - modal de edição
+   - modal de configurações
+   - modal de relatórios
+4. **Com camada de “embelezamento de dados”**: `src/data-adapter.js` pega o que vem “feio” do banco (números, datas ISO, nomes de campos diferentes) e dá o formato que a UI espera (BRL, `dd/mm/yyyy`, objetos de links).
+5. **Com temas e tokens centralizados**: `StyleTag.jsx` injeta os temas (`.theme-gunmetal`, `.theme-synth`, `.theme-light`) e também **as CSS vars usadas no modo PDF**.
+
+---
+
+## 2. Stack e motivo
+
+- **React 18 (UMD)**: para não depender de Vite/Webpack enquanto você está iterando o layout.  
+- **Babel no browser**: facilita alterar JSX rapidamente, mas **não é para produção** (o próprio console avisa).
+- **Tailwind via CDN**: dá utilitário rápido sem precisar de build.
+- **Supabase JS v2 (via ESM)**: `src/supabase/client.js` importa direto de `https://esm.sh/...` e já inicializa.
+- **Chart.js 3.9.1 + plugins**: já ajustado para pizza com outlabels e barras comparativas.
+- **jsPDF**: para gerar PDF com 2 gráficos por página.
+
+Isso tudo está no **`index.html`**. Ele é o cérebro do “boot”.
+
+---
+
+## 3. Estrutura de pastas
 
 ```text
 ├─ index.html                         # ponto de entrada; carrega React UMD, Tailwind CDN e todos os JSX
@@ -19,14 +52,14 @@ App de contas domésticas em **HTML + React UMD + Tailwind + Supabase**, rodando
 │  ├─ data-adapter.js                 # camada “bonita” de dados: pega do Supabase e devolve no formato que a UI espera
 │  ├─ router.js                       # SPA simples baseada em hash (#/mes, #/relatorios)
 │  ├─ supabase/
-│  │  ├─ client.js                    # inicializa o Supabase + CURRENT_UID (mock)
+│  │  ├─ client.js                    # inicializa o Supabase + expõe no window
 │  │  └─ queries.js                   # consultas e mutações (contas, profile, listas distintas, últimos 12 meses, etc.)
 │  ├─ features/
 │  │  ├─ charts.js                    # helpers de gráficos + “ChartFeatures” usados no ReportsModal e nos PDFs
 │  │  └─ pdf.js                       # helpers de PDF (exporta 2 canvases por página, aplica tema PDF, etc.)
 │  └─ components/
 │     ├─ StyleTag.jsx                 # temas (gunmetal, synth, light) + tokens para PDF + base dos modais
-│     ├─ LoginGate.jsx                # login mock (futuro: Supabase Auth)
+│     ├─ LoginGate.jsx                # login real (Supabase) + modo cadastro; espelha em window.MOCK_AUTH
 │     ├─ PostLoginMock.jsx            # shell pós-login (header, cards do mês, pendências, modais)
 │     ├─ ContaCard.jsx                # card de cada conta do mês
 │     ├─ EditPopup.jsx                # modal de criar/editar conta (com “Outro…” para pagador e links)
@@ -37,116 +70,112 @@ App de contas domésticas em **HTML + React UMD + Tailwind + Supabase**, rodando
 
 ---
 
-## ⚙️ Fluxo Geral do App
+## 4. Fluxo de execução
 
-1. **index.html** sobe React, Tailwind e Babel direto no navegador.  
-2. **App.jsx** verifica se há uma sessão mock no `window.MOCK_AUTH`.  
-   - se **não** tiver → mostra **LoginGate.jsx**;  
-   - se **tiver** → mostra **PostLoginMock.jsx** (a tela toda).  
-3. **LoginGate.jsx** hoje só cria um objeto de auth fake e devolve para o App. Isso já deixa o caminho pronto para trocar por `supabase.auth.signInWithPassword(...)` depois.  
-4. **PostLoginMock.jsx** é onde tudo acontece:
-   - carrega **anos** e **meses por ano** reais do Supabase;
-   - monta o **resumo do mês** (total, seletor de ano/mês);
-   - busca **pendências** comparando mês atual x mês anterior;
-   - busca **itens do mês** via `DataAdapter.fetchMes(...)`;
-   - renderiza lista de contas com **ContaCard.jsx**;
-   - abre **EditPopup.jsx**, **SettingsModal.jsx**, e **ReportsModal.jsx**.
+1. **`index.html` abre** → monta `<App />` no root.
+2. **`App.jsx` decide se está logado** → verifica sessão no Supabase.
+3. **`LoginGate.jsx`** → faz login/signup e espelha MOCK_AUTH.
+4. **`PostLoginMock.jsx`** → lista contas e abre modais.
+5. **`EditPopup` / `SettingsModal` / `ReportsModal`** → CRUD + gráficos + PDF.
 
 ---
 
-## 🧠 Camada de Dados
+## 5. Integração com Supabase
 
-### 1. `src/supabase/client.js`
-- inicializa o client do Supabase com **URL** e **anon key**;
-- deixa disponível um **CURRENT_UID (mock)** no `window`.
+### Schema
 
-### 2. `src/supabase/queries.js`
-- contém todas as **funções de acesso ao banco** (listar, inserir, atualizar, apagar, perfis e listas).
+```sql
+create table public.controle_contas (
+  id bigint generated by default as identity not null,
+  ano bigint not null,
+  mes bigint not null,
+  nome_da_conta text not null,
+  valor numeric not null,
+  data_de_pagamento date not null,
+  instancia text null,
+  quem_pagou text not null,
+  dividida boolean not null,
+  link_boleto text null,
+  link_comprovante text null,
+  user_id uuid not null,
+  constraint controle_contas_pkey primary key (id)
+);
 
-### 3. `src/data-adapter.js`
-- adapta os dados crus do banco para o formato visual do app (nomes, links, agrupamentos).
+create table public.profile (
+  user_id uuid not null,
+  email text null,
+  theme text null,
+  chart_accounts text[] null,
+  constraint profile_pkey primary key (user_id)
+);
+```
 
----
+### Queries
 
-## 🎨 Estilos e Temas (`StyleTag.jsx`)
-Define três temas (`gunmetal`, `synth`, `light`) com variáveis CSS e tokens de cor usados também nos PDFs.
-Controla também aparência dos modais e do overlay escuro.
+Todas as funções estão em `src/supabase/queries.js` e usam o UID ativo do usuário (via MOCK_AUTH ou sessão real).
 
----
-
-## 🧍🏽‍♂️ Fluxo Pós-Login (`PostLoginMock.jsx`)
-Gerencia toda a interface após login:
-- header com botões (Nova Conta, Relatórios, Configurações);
-- overlay de pendências;
-- seletor de ano/mês;
-- cards de contas;
-- modais: editar, configurações e relatórios.
-
----
-
-## 📑 Central de Relatórios (`ReportsModal.jsx`)
-Reúne todas as funções de geração de relatórios e PDFs:
-1. **Mensal** — pizza, comparativos e listagem por pagador.
-2. **Período** — pizza consolidada, linhas e tabelas por mês.
-3. **Comparativos** — gráficos em tempo real com exportação PNG e PDF.
-
----
-
-## 📊 Gráficos (`src/features/charts.js`)
-Define e aplica o estilo global do Chart.js.  
-Fornece funções para gerar pizza, barras e linhas e ajustar o tema para PDF.
-
----
-
-## 🧾 PDF Helpers (`src/features/pdf.js`)
-Oferece `exportTwoPerPage()` para montar PDF 2-a-2 por página com margens e espaçamento.
+Principais:
+- `listMes(ano, mes)` → busca contas do mês
+- `insertConta(conta)` → adiciona nova conta
+- `updateConta(id, conta)` → edita conta
+- `deleteConta(id)` → exclui conta
+- `getProfile()` / `upsertProfile()` → manipula o perfil
 
 ---
 
-## 👤 Perfil e Configurações
-`SettingsModal.jsx` salva email, tema e contas para gráficos no Supabase.  
-Aplica tema e sincroniza pagadores com os encontrados no banco.
+## 6. Componentes React
+
+### `App.jsx`
+Controla o estado de autenticação e o tema.
+
+### `LoginGate.jsx`
+Gerencia login e cadastro. Espelha o usuário logado em `window.MOCK_AUTH`.
+
+### `PostLoginMock.jsx`
+Shell principal pós-login: renderiza as contas, botões e modais.
+
+### `ContaCard.jsx`
+Renderiza visualmente uma conta (nome, valor, links).
+
+### `EditPopup.jsx`
+Modal de criação/edição com validações.
+
+### `SettingsModal.jsx`
+Configurações do perfil (tema e contas de gráfico).
+
+### `ReportsModal.jsx`
+Renderiza relatórios mensais e de período, integra com gráficos e PDF.
+
+### `StyleTag.jsx`
+Define temas, tokens de cor e estilos base da interface.
 
 ---
 
-## 🛡️ Login (mock) e Futuro Auth
-Atualmente é simulado via `LoginGate.jsx`.  
-Futuro: integração direta com `supabase.auth.signInWithPassword` e RLS por usuário.
+## 7. Gráficos e PDF
+
+- `src/features/charts.js` → funções para pizza, barras e linhas (`ChartFeatures`).
+- `src/features/pdf.js` → exporta 2 gráficos por página (A4) usando jsPDF.
 
 ---
 
-## 🧪 Como Rodar
-1. Suba servidor local (ex.: `python -m http.server`).
-2. Abra `index.html` no navegador.
-3. Configure URL e anon key do Supabase.
-4. Faça login mock e teste.
+## 8. Router (SPA Hash)
+
+`src/router.js` → roteamento via `#/mes` e `#/relatorios`.  
+Chamadas de rota acionam `window.AppRoutes.mes()` e `window.AppRoutes.relatorios()`.
 
 ---
 
-## 📌 Funcionalidades Atuais
-- Listagem mensal (Supabase)
-- CRUD de contas
-- Links clicáveis (boleto e comprovante)
-- Pendências do mês anterior
-- Seletor de ano/mês
-- Temas dinâmicos
-- Perfil (email, tema, contas p/ gráficos)
-- PDF mensal e PDF por período
-- Gráficos comparativos e exportação
-- Router hash (#/mes, #/relatorios)
+## 9. Pontos de atenção
+
+- Babel/Tailwind via CDN são apenas para protótipo.  
+- Não atualizar Chart.js sem testar `chartjs-plugin-piechart-outlabels`.
+- Logout **não apaga** `window.AppState.profile` (intencional).  
+- Modo PDF precisa setar `window.__PDF_MODE = true` antes de renderizar.
 
 ---
 
-## 🛣️ Próximos Passos
-1. Substituir login mock por Supabase Auth.
-2. Ligar `user_id` nas mutações e ativar RLS.
-3. Fazer build real (sem Babel in-browser).
-4. Adicionar manifest e service worker para PWA.
-5. Modularizar ReportsModal.
+## 10. Resumo / Portfólio
 
----
-
-## 📄 Créditos
-- Código e lógica: **Roman Wladyslaw Brocki Neto**  
-- Assistência técnica: **ChatGPT-5**  
-- Ano: **2025**
+> **Controle de Contas PWA** é um protótipo funcional de um app de finanças pessoais que roda 100% no navegador usando React UMD e Supabase como backend. Ele permite cadastrar contas mensais, personalizar tema, gerar relatórios com gráficos Chart.js e exportar tudo para PDF.  
+>  
+> A arquitetura foi feita para depuração e ensino, com código modular, componentes JSX carregados via Babel e todas as integrações com Supabase centralizadas em um único arquivo (`queries.js`).
