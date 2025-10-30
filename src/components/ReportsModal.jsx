@@ -539,7 +539,10 @@ function ReportsModal({
         const chartAccounts =
           (Array.isArray(window.AppState?.profile?.chart_accounts) && window.AppState.profile.chart_accounts.length)
             ? window.AppState.profile.chart_accounts
-            : contasProfile;
+            : (Array.isArray(window.DataAdapter?.profile?.chart_accounts) && window.DataAdapter.profile.chart_accounts.length)
+              ? window.DataAdapter.profile.chart_accounts
+              : contasProfile;
+
 
         // Helpers
         const monthNamePT = (mm) =>
