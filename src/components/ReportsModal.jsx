@@ -587,27 +587,74 @@ function ReportsModal({
 
           // Card-resumo (imagem simples)
           function makeResumoCanvas(host, { total, porPagador, totalDividida, deltaTexto }) {
-            const W = 1100, H = 240;
-            const wrap = document.createElement('div'); wrap.style.width = `${W}px`; wrap.style.height = `${H}px`;
-            const c = document.createElement('canvas'); c.width = W; c.height = H; wrap.appendChild(c); host.appendChild(wrap);
+            const PAGE_W = 1100;      // largura do slot que a gente usa pros outros canvases
+            const CARD_W = 760;       // 👈 largura real do card (menor que a página)
+            const H = 240;
+
+            const wrap = document.createElement('div');
+            wrap.style.width = `${PAGE_W}px`;
+            wrap.style.height = `${H}px`;
+
+            const c = document.createElement('canvas');
+            c.width = PAGE_W;
+            c.height = H;
+            wrap.appendChild(c);
+            host.appendChild(wrap);
+
             const ctx = c.getContext('2d');
 
-            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
-            ctx.fillStyle = '#111827'; ctx.font = 'bold 22px Arial';
-            ctx.fillText(`Resumo de ${rotMes}`, 24, 34);
+            // fundo geral (página)
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, PAGE_W, H);
 
-            ctx.font = '16px Arial';
+            // centraliza o card
+            const xCard = (PAGE_W - CARD_W) / 2;   // 👈 centralizado
+            const yCard = 20;
+            const r = 14;
+
+            // card com borda
+            ctx.fillStyle = '#ffffff';
+            ctx.strokeStyle = '#d1d5db';
+            ctx.lineWidth = 2;
+
+            // round rect
+            ctx.beginPath();
+            ctx.moveTo(xCard + r, yCard);
+            ctx.lineTo(xCard + CARD_W - r, yCard);
+            ctx.quadraticCurveTo(xCard + CARD_W, yCard, xCard + CARD_W, yCard + r);
+            ctx.lineTo(xCard + CARD_W, yCard + H - 40 - r);
+            ctx.quadraticCurveTo(xCard + CARD_W, yCard + H - 40, xCard + CARD_W - r, yCard + H - 40);
+            ctx.lineTo(xCard + r, yCard + H - 40);
+            ctx.quadraticCurveTo(xCard, yCard + H - 40, xCard, yCard + H - 40 - r);
+            ctx.lineTo(xCard, yCard + r);
+            ctx.quadraticCurveTo(xCard, yCard, xCard + r, yCard);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // título
+            ctx.fillStyle = '#111827';
+            ctx.font = 'bold 20px Inter, Arial, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Resumo de ${rotMes}`, xCard + 20, yCard + 34);
+
+            // linhas de conteúdo
+            ctx.font = '14px Inter, Arial, sans-serif';
             const linhas = [
               `Total gasto no mês: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
               `Total em contas DIVIDIDAS: R$ ${totalDividida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
               `Por pagador: ${porPagador.map(p => `${p.nome}: R$ ${p.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`).join(' | ')}`,
               `Acerto: ${deltaTexto}`
             ];
-            let yText = 70; ctx.fillStyle = '#111827';
-            for (const ln of linhas) { ctx.fillText(ln, 24, yText); yText += 26; }
+            let yText = yCard + 70;
+            linhas.forEach((ln) => {
+              ctx.fillText(ln, xCard + 20, yText);
+              yText += 24;
+            });
 
             return c;
           }
+
 
           // === Dados ===
           const itensMes = await window.DataAdapter.fetchMes(y, m) || [];
@@ -645,12 +692,19 @@ function ReportsModal({
             .map(([nome, valor]) => ({ nome, valor }))
             .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
           let deltaTexto = 'Sem diferença a acertar.';
-          if (porPagador.length >= 2) {
-            const ranked = [...porPagador].sort((a, b) => b.valor - a.valor);
-            const top = ranked[0], low = ranked[ranked.length - 1];
-            const delta = top.valor - low.valor;
-            if (delta > 0) deltaTexto = `${low.nome} deve R$ ${delta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para ${top.nome}`;
+          if (porPagador.length === 2) {
+            const [p1, p2] = [...porPagador].sort((a, b) => b.valor - a.valor);
+            const delta = p1.valor - p2.valor;
+            if (delta > 0.009) {
+              deltaTexto = `${p2.nome} deve R$ ${delta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para ${p1.nome}`;
+            }
+          } else if (porPagador.length === 0) {
+            deltaTexto = 'Sem pagadores neste mês.';
+          } else {
+            // 1 pagador ou 3+ → não mostra relação direta
+            deltaTexto = 'Acerto não calculado porque há número diferente de 2 pagadores.';
           }
+
 
           // === PDF ===
           const { jsPDF } = window.jspdf || {};
