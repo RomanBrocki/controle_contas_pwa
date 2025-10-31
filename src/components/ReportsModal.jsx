@@ -777,10 +777,22 @@ function ReportsModal({
           }
 
           // Card-resumo (imagem simples)
-          function makeResumoCanvas(host, { total, porPagador, totalDividida, deltaTexto }) {
-            const PAGE_W = 1100;      // largura do slot que a gente usa pros outros canvases
-            const CARD_W = 760;       // 👈 largura real do card (menor que a página)
-            const H = 240;
+          function makeResumoCanvas(
+            host,
+            {
+              total,
+              porPagador,
+              totalDividida,
+              porPagadorDividida = [],
+              deltaTexto
+            }
+          ) {
+            const PAGE_W = 1100;
+            const CARD_W = 760;
+
+            // se tiver a linha extra de divididas por pagador, vamos dar um pouco mais de altura
+            const temLinhaDiv = porPagadorDividida.length > 0;
+            const H = temLinhaDiv ? 280 : 240;
 
             const wrap = document.createElement('div');
             wrap.style.width = `${PAGE_W}px`;
@@ -794,21 +806,18 @@ function ReportsModal({
 
             const ctx = c.getContext('2d');
 
-            // fundo geral (página)
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, PAGE_W, H);
 
-            // centraliza o card
-            const xCard = (PAGE_W - CARD_W) / 2;   // 👈 centralizado
+            const xCard = (PAGE_W - CARD_W) / 2;
             const yCard = 20;
             const r = 14;
 
-            // card com borda
+            // card
             ctx.fillStyle = '#ffffff';
             ctx.strokeStyle = '#d1d5db';
             ctx.lineWidth = 2;
 
-            // round rect
             ctx.beginPath();
             ctx.moveTo(xCard + r, yCard);
             ctx.lineTo(xCard + CARD_W - r, yCard);
@@ -831,12 +840,26 @@ function ReportsModal({
 
             // linhas de conteúdo
             ctx.font = '14px Inter, Arial, sans-serif';
+            const linhaPorPagadorGeral = `Por pagador (total): ${porPagador
+              .map(p => `${p.nome}: R$ ${p.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`)
+              .join(' | ')}`;
+
+            // se existir pelo menos 1 pagador que pagou dividida, mostramos essa linha
+            const linhaPorPagadorDividida =
+              porPagadorDividida.length > 0
+                ? `Por pagador (divididas): ${porPagadorDividida
+                    .map(p => `${p.nome}: R$ ${p.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`)
+                    .join(' | ')}`
+                : null;
+
             const linhas = [
               `Total gasto no mês: R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
               `Total em contas DIVIDIDAS: R$ ${totalDividida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-              `Por pagador: ${porPagador.map(p => `${p.nome}: R$ ${p.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`).join(' | ')}`,
+              linhaPorPagadorGeral,
+              ...(linhaPorPagadorDividida ? [linhaPorPagadorDividida] : []),
               `Acerto: ${deltaTexto}`
             ];
+
             let yText = yCard + 70;
             linhas.forEach((ln) => {
               ctx.fillText(ln, xCard + 20, yText);
@@ -845,6 +868,7 @@ function ReportsModal({
 
             return c;
           }
+
 
 
           // === Dados ===
@@ -869,32 +893,84 @@ function ReportsModal({
           const antVals = sumByConta(itensAnt, contasBarras);
           const anoAntVals = sumByConta(itensAnoAnt, contasBarras);
 
-          // Resumo por pagador (⚠ usa campo `quem` do DataAdapter) + balanço
+          // Resumo por pagador (⚠ usa campo `quem` do DataAdapter) + balanços
           const totalMes = itensMes.reduce((a, b) => a + parseBRLnum(b.valor), 0);
+
+          // 1) total só de divididas
           let totalDividida = 0;
-          const porPagadorMap = new Map();
+
+          // 2) mapas separados: geral x só divididas
+          const porPagadorGeral = new Map();     // tudo que o pagador pagou
+          const porPagadorDividida = new Map();  // só o que for it.dividida === true
+
           itensMes.forEach(it => {
             const v = parseBRLnum(it.valor);
-            if (it.dividida) totalDividida += v;
-            const k = it.quem || '—';  // <— AQUI (não é quem_pagou)
-            porPagadorMap.set(k, (porPagadorMap.get(k) || 0) + v);
+            const k = it.quem || '—';
+
+            // total geral
+            porPagadorGeral.set(k, (porPagadorGeral.get(k) || 0) + v);
+
+            // total de dividida
+            if (it.dividida) {
+              totalDividida += v;
+              porPagadorDividida.set(k, (porPagadorDividida.get(k) || 0) + v);
+            }
           });
-          const porPagador = Array.from(porPagadorMap.entries())
+
+          // transforma em arrays ordenados
+          const arrGeral = Array.from(porPagadorGeral.entries())
             .map(([nome, valor]) => ({ nome, valor }))
             .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-          let deltaTexto = 'Sem diferença a acertar.';
-          if (porPagador.length === 2) {
-            const [p1, p2] = [...porPagador].sort((a, b) => b.valor - a.valor);
-            const delta = p1.valor - p2.valor;
-            if (delta > 0.009) {
-              deltaTexto = `${p2.nome} deve R$ ${delta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} para ${p1.nome}`;
-            }
-          } else if (porPagador.length === 0) {
-            deltaTexto = 'Sem pagadores neste mês.';
+
+          const arrDividida = Array.from(porPagadorDividida.entries())
+            .map(([nome, valor]) => ({ nome, valor }))
+            .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+          // 3) cálculo do acerto: SOMENTE sobre divididas e SOMENTE se houver 2 pagadores
+          let deltaTexto = 'Acerto não calculado porque há número diferente de 2 pagadores.';
+          if (arrDividida.length === 0) {
+            // não teve conta dividida
+            deltaTexto = 'Sem contas divididas neste mês.';
           } else {
-            // 1 pagador ou 3+ → não mostra relação direta
-            deltaTexto = 'Acerto não calculado porque há número diferente de 2 pagadores.';
+            // montar lista completa de pagadores (mesmos do geral), mas com valor de dividida = 0 se não tiver
+            const nomesPagadores = arrGeral.map(p => p.nome);
+            const arrDivididaFull = nomesPagadores.map(nome => {
+              const found = arrDividida.find(p => p.nome === nome);
+              return { nome, valor: found ? found.valor : 0 };
+            });
+
+            if (arrDivididaFull.length === 2) {
+              const totalDiv = totalDividida; // já calculado lá em cima
+              const quota = totalDiv / 2;
+
+              // ordena só pra ficar previsível
+              const [p1, p2] = arrDivididaFull;
+
+              const excesso1 = p1.valor - quota; // pode ser negativo
+              const excesso2 = p2.valor - quota;
+
+              if (excesso1 > 0.009) {
+                // p1 pagou mais que a metade → p2 deve para p1
+                deltaTexto = `${p2.nome} deve R$ ${excesso1.toLocaleString('pt-BR', {
+                  minimumFractionDigits: 2
+                })} para ${p1.nome}`;
+              } else if (excesso2 > 0.009) {
+                // p2 pagou mais que a metade → p1 deve para p2
+                deltaTexto = `${p1.nome} deve R$ ${excesso2.toLocaleString('pt-BR', {
+                  minimumFractionDigits: 2
+                })} para ${p2.nome}`;
+              } else {
+                deltaTexto = 'Valores de divididas já estão equilibrados.';
+              }
+            } else if (arrDivididaFull.length === 1) {
+              deltaTexto = 'Apenas 1 pagador com contas divididas.';
+            }
           }
+
+          // vamos passar os dois arrays pro card
+          const porPagador = arrGeral;
+          const porPagadorDiv = arrDividida;
+
 
 
           // === PDF ===
@@ -936,7 +1012,14 @@ function ReportsModal({
             canvases.push(cvPizza);
 
             // 1b) Card-resumo
-            const cvResumo = makeResumoCanvas(host, { total: totalMes, porPagador, totalDividida, deltaTexto });
+            const cvResumo = makeResumoCanvas(host, {
+              total: totalMes,
+              porPagador: porPagador,                 // geral
+              totalDividida,
+              porPagadorDividida: arrDividida,        // 👈 novo
+              deltaTexto
+            });
+
             canvases.push(cvResumo);
 
             // 2) Barras — mês anterior
