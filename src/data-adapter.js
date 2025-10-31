@@ -9,7 +9,12 @@ async function fetchMes(y, m) {
     nome: r.nome_da_conta,
     instancia: r.instancia || '',
     valor: (r.valor ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-    data: new Date(r.data_de_pagamento).toLocaleDateString('pt-BR'),
+    data: (() => {
+      const s = r.data_de_pagamento; // "2025-10-31"
+      if (!s) return '';
+      const [yyyy, mm, dd] = s.split('-');
+      return `${dd}/${mm}/${yyyy}`;
+    })(),
     quem: r.quem_pagou,
     dividida: !!r.dividida,
     links: {
