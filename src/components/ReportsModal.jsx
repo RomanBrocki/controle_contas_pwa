@@ -860,13 +860,36 @@ function ReportsModal({
               `Acerto: ${deltaTexto}`
             ];
 
+            function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight) {
+              const words = text.split(' ');
+              let line = '';
+
+              for (let n = 0; n < words.length; n++) {
+                const testLine = line + words[n] + ' ';
+                const metrics = ctx.measureText(testLine);
+                const testWidth = metrics.width;
+                if (testWidth > maxWidth && n > 0) {
+                  ctx.fillText(line, x, y);
+                  line = words[n] + ' ';
+                  y += lineHeight;
+                } else {
+                  line = testLine;
+                }
+              }
+              ctx.fillText(line, x, y);
+              return y + lineHeight;
+            }
+
+            const MAX_WIDTH = CARD_W - 40; // 20px de margem de cada lado
+            const LINE_HEIGHT = 24;
+
             let yText = yCard + 70;
             linhas.forEach((ln) => {
-              ctx.fillText(ln, xCard + 20, yText);
-              yText += 24;
+              yText = drawWrappedText(ctx, ln, xCard + 20, yText, MAX_WIDTH, LINE_HEIGHT);
             });
 
             return c;
+
           }
 
 
