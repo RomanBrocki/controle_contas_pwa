@@ -154,25 +154,15 @@
   }
 </script>
 <script>
-  (function () {
-    let startY = 0;
-
-    window.addEventListener('touchstart', function (e) {
-      // posição do toque
-      startY = e.touches[0].clientY;
-    }, { passive: false });
-
-    window.addEventListener('touchmove', function (e) {
-      const currentY = e.touches[0].clientY;
-      const isScrollingDown = currentY > startY;
-
-      // se estamos no topo da página e o usuário puxou pra baixo -> bloqueia refresh
-      if (window.scrollY === 0 && isScrollingDown) {
-        e.preventDefault();
-      }
-    }, { passive: false });
-  })();
+  // bloqueia o gesto nativo de "pull to refresh" em navegadores mobile
+  document.addEventListener('touchmove', function (e) {
+    // se está no topo e puxou pra baixo, cancela o comportamento padrão
+    if (window.scrollY === 0 && e.touches[0].clientY > 0) {
+      e.preventDefault();
+    }
+  }, { passive: false });
 </script>
+
 
 
 </body>
