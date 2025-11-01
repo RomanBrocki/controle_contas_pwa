@@ -158,14 +158,23 @@
   }
 </script>
 <script>
-  // bloqueia o gesto nativo de "pull to refresh" em navegadores mobile
-  document.addEventListener('touchmove', function (e) {
-    // se está no topo e puxou pra baixo, cancela o comportamento padrão
-    if (window.scrollY === 0 && e.touches[0].clientY > 0) {
-      e.preventDefault();
-    }
-  }, { passive: false });
+  // Evita apenas o "pull to refresh", sem travar rolagem normal
+  (function () {
+    let startY = 0;
+    window.addEventListener('touchstart', e => {
+      startY = e.touches[0].clientY;
+    }, { passive: false });
+
+    window.addEventListener('touchmove', e => {
+      const currentY = e.touches[0].clientY;
+      const isScrollingDown = currentY > startY;
+      if (window.scrollY === 0 && isScrollingDown) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+  })();
 </script>
+
 
 
 
