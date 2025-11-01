@@ -1198,7 +1198,7 @@ function ReportsModal({
               }
             }
 
-            doc.save(`relatorio_mensal_${y}_${String(m).padStart(2, '0')}.pdf`);
+            doc.save(`relatorio_${String(m).padStart(2, '0')}_${y}.pdf`);
           } finally {
             window.__PDF_MODE = false;
             host?.parentNode?.removeChild(host);
@@ -1536,7 +1536,7 @@ function ReportsModal({
             // ====== EXPORTA ======
             window.PDFHelpers.exportTwoPerPage(
               canvases,
-              `relatorio_periodo_${y1}-${String(m1).padStart(2,'0')}_a_${y2}-${String(m2).padStart(2,'0')}.pdf`,
+              `relatorio_${String(m1).padStart(2,'0')}_${y1}_a_${String(m2).padStart(2,'0')}_${y2}.pdf`,
               { margin: 28, gap: 24 }
             );
 

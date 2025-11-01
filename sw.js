@@ -1,6 +1,6 @@
 // sw.js - service worker básico para o Controle de Contas PWA
 
-const CACHE_NAME = "contas-pwa-v3";
+const CACHE_NAME = "contas-pwa-v4";
 
 // ⚠️ Coloque aqui só o que está NO SEU DOMÍNIO (GitHub Pages).
 
