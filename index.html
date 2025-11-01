@@ -21,6 +21,11 @@
   <style>
     /* Evita flash branco ao carregar */
     html, body, #root { height: 100%; margin:0; }
+
+    /* Evita o "pull-to-refresh" no mobile */
+    html, body {
+      overscroll-behavior-y: contain;
+    }
   </style>
 </head>
 <body>
