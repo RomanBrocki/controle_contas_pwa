@@ -358,7 +358,18 @@ function PostLoginMock() {
           <div className="mx-auto w-full max-w-5xl">
           {/* Header */}
           <header className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center mb-6">
-            <h1 className="brand text-center md:text-left w-full">💸 Controle de Contas</h1>
+            <h1 className="brand text-center md:text-left w-full flex items-center gap-3 relative">
+              <img
+                src="./icons/icon-512.png"
+                alt="Ícone Controle de Contas"
+                width="62"
+                height="62"
+                className="absolute left-0 translate-x-[-10%] md:static md:translate-x-0 rounded-full shadow-md"
+              />
+              <span className="w-full text-center md:w-auto md:text-left block">Controle de Contas</span>
+            </h1>
+
+
             <div className="flex flex-col gap-2 w-full sm:grid sm:grid-cols-2 md:flex md:flex-row md:items-center">
               <button className={`btn primary w-full md:w-auto ${activeId==='new' ? 'pop' : ''}`} onClick={()=>openNew()}>+ Nova Conta</button>
               <button className="btn ghost w-full md:w-auto" onClick={()=>{ setReportsTab('home'); setShowReports(true); }}>📊 Relatórios</button>

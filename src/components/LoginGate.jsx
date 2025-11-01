@@ -114,8 +114,19 @@ function LoginGate({ onLogged }) {
 
   return (
     <div className="min-h-screen theme-gunmetal flex items-center justify-center p-6">
-      <div className="modal solid max-w-sm w-full">
-        <h1 className="brand mb-4">💸 Controle de Contas</h1>
+      <div className="modal solid max-w-md w-full md:max-w-lg">
+        <h1 className="brand mb-4 flex items-center gap-3 relative">
+          <img
+            src="./icons/icon-512.png"
+            alt="Ícone Controle de Contas"
+            width="62"
+            height="62"
+            className="absolute left-0 translate-x-[-20%] md:translate-x-[-20%] rounded-full shadow-md"
+          />
+          <span className="w-full text-center block">Controle de Contas</span>
+        </h1>
+
+
 
         {/* toggle de modo */}
         <div className="flex mb-4 gap-2">
