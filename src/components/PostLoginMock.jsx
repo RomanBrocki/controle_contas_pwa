@@ -14,7 +14,12 @@ function MonthPickerBlock({
               <label htmlFor={`${idPrefix}-ano`}>Ano</label>
               <select id={`${idPrefix}-ano`} className="select"
                       value={year} onChange={e=>setYear(Number(e.target.value))}>
-                {years.map(y=> <option key={y} value={y}>{y}</option>)}
+                {[...years, Math.max(...years, new Date().getFullYear()) + 1]
+                  .sort((a,b)=>a-b)
+                  .map(y => (
+                    <option key={y} value={y}>{y}</option>
+                ))}
+
               </select>
             </div>
             <div className="cell" style={{justifyContent:'flex-end'}}>
@@ -122,8 +127,9 @@ function PostLoginMock() {
       }, [editing]); // quando abrir/fechar o modal
 
 
-      const [yearSel, setYearSel] = React.useState(2025);
-      const [monthSel, setMonthSel] = React.useState(10); // outubro atual
+      const now = new Date();
+      const [yearSel, setYearSel] = React.useState(now.getFullYear());
+      const [monthSel, setMonthSel] = React.useState(now.getMonth() + 1);
 
       // ---- Pendências (dinâmico): estados + helpers ----
       const [pendentes, setPendentes] = React.useState(null); // null = calculando
@@ -163,12 +169,7 @@ function PostLoginMock() {
       }, []);
 
 
-      React.useEffect(()=>{
-        const avail = monthsByYear[yearSel] || [];
-        if (!avail.includes(monthSel)) {
-          setMonthSel(avail[0] || monthSel); // mais recente do ano
-        }
-      }, [yearSel]);
+
 
       // ---- Calcula pendências comparando mês atual x anterior ----
       React.useEffect(() => {
@@ -390,8 +391,18 @@ function PostLoginMock() {
 
             return showOverlay && (
               <div className="overlay hard" onClick={() => setShowOverlay(false)}>
-                <div className="modal solid max-w-md w-full" onClick={(e) => e.stopPropagation()}>
-                  <h2 className="text-lg font-semibold mb-3">💰 Contas Pendentes</h2>
+                <div className="modal solid w-full md:max-w-2xl" onClick={(e) => e.stopPropagation()}>
+                  <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                    <img
+                      src="./icons/icon-512.png"
+                      alt="Ícone Controle de Contas"
+                      width="32"
+                      height="32"
+                      className="rounded-full shadow-sm"
+                    />
+                    <span>Contas Pendentes</span>
+                  </h2>
+
 
                   {pendentes === null || pendLoading ? (
                     <div className="card text-center py-6">Calculando…</div>
@@ -401,7 +412,7 @@ function PostLoginMock() {
                     </div>
                   ) : (
                     <ul className="space-y-2 mb-4">
-                      {pendentes.slice(0, 6).map((p, idx) => (
+                      {pendentes.map((p, idx) => (
                         <li key={`${keyFor(p)}-${idx}`} className="card flex justify-between items-center">
                           <div>
                             <strong>{p.nome}</strong><br />
@@ -452,22 +463,45 @@ function PostLoginMock() {
                   Router.go(`#/mes?ano=${y}&mes=${monthSel}`);
                 }}
               >
-                {years.map(y=> <option key={y} value={y}>{y}</option>)}
+                {[...years, Math.max(...years, new Date().getFullYear()) + 1]
+                  .sort((a,b)=>a-b)
+                  .map(y=> <option key={y} value={y}>{y}</option>)
+                }
               </select>
+
               <label className="text-sm opacity-70">Mês</label>
-              <select
-                className="select"
-                value={monthSel}
-                onChange={e=>{
-                  const m = Number(e.target.value);
-                  setMonthSel(m);
-                  Router.go(`#/mes?ano=${yearSel}&mes=${m}`);
-                }}
-              >
-                {(monthsByYear[yearSel]||[]).map(m=> (
-                  <option key={m} value={m}>{monthNamePT(m)}</option>
-                ))}
-              </select>
+              {(() => {
+                const dbMonths = monthsByYear[yearSel] || [];
+                const all12 = [1,2,3,4,5,6,7,8,9,10,11,12];
+
+                // se o ano tem meses no banco, usa esses; senão usa 1..12
+                const monthsToShow = dbMonths.length ? [...dbMonths] : [...all12];
+
+                // garante que o mês selecionado atual apareça na lista
+                if (!monthsToShow.includes(monthSel)) {
+                  monthsToShow.push(monthSel);
+                }
+
+                // ordena
+                monthsToShow.sort((a, b) => a - b);
+
+                return (
+                  <select
+                    className="select"
+                    value={monthSel}
+                    onChange={e=>{
+                      const m = Number(e.target.value);
+                      setMonthSel(m);
+                      Router.go(`#/mes?ano=${yearSel}&mes=${m}`);
+                    }}
+                  >
+                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
+                      <option key={m} value={m}>{monthNamePT(m)}</option>
+                    ))}
+                  </select>
+                );
+              })()}
+
             </div>
           </section>
 
