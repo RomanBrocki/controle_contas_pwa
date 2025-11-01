@@ -241,33 +241,33 @@ function PostLoginMock() {
       }
 
       async function handleSave(mode, initialId, form){
-        try{
-          // resolve '  '
+        try {
           const quem = form.quemMode === 'outro'
             ? (form.quemOutro || '').trim()
             : (form.quem || '').trim();
 
-          const d = new Date(form.data || todayISO());
-          const ano = d.getFullYear();
-          const mes = d.getMonth() + 1;
+          // 1) data que o usuário colocou (pode ser outubro)
+          const isoFromForm = form.data || todayISO();
+
+          // 2) mês/ano que o usuário ESTÁ TRABALHANDO na tela
+          const ano = yearSel;                 // 👈 força ano da tela
+          const mes = monthSel;                // 👈 força mês da tela
 
           const draft = {
             nome_da_conta: (form.nome || '').trim(),
             valor: parseBRL(form.valor),
-            data_de_pagamento: form.data || todayISO(),
+            data_de_pagamento: isoFromForm,    // 👈 aqui fica outubro, por ex.
             instancia: (form.instancia || '').trim(),
             quem_pagou: quem,
             dividida: !!form.dividida,
             link_boleto: cleanUrl(form.boleto),
             link_comprovante: cleanUrl(form.comp),
-            ano, mes
+            ano,                               // 👈 aqui vai novembro
+            mes,                               // 👈 aqui vai 11
           };
 
-          // 🔐 SAFE CALL
           const muts = window.SupabaseMutations || window.SupabaseQueries;
-          if (!muts) {
-            throw new Error('SupabaseMutations/Queries não carregados');
-          }
+          if (!muts) throw new Error('SupabaseMutations/Queries não carregados');
 
           let ok = false;
           if (mode === 'new') {
@@ -275,16 +275,18 @@ function PostLoginMock() {
           } else {
             ok = await muts.updateConta(initialId, draft);
           }
-          if(!ok) throw new Error('Falha no Supabase');
+
+          if (!ok) throw new Error('Falha no Supabase');
 
           await reloadMonth();
-          showToast('Conta salva ✅','ok');
+          showToast('Conta salva ✅', 'ok');
           setEditing(null);
-        } catch(e){
+        } catch (e) {
           console.error('[save] erro', e);
-          showToast('Erro ao salvar ❌','err');
+          showToast('Erro ao salvar ❌', 'err');
         }
       }
+
 
 
       async function handleDelete(id){
@@ -333,20 +335,30 @@ function PostLoginMock() {
 
       function openNew(prefill){
         popCard('new');
+
+        // monta data baseada no mês/ano que o usuário está vendo
+        const yyyy = yearSel;
+        const mm = String(monthSel).padStart(2, '0');
+        // pode ser dia 1, pra não ter surpresa de dia inválido
+        const dd = '01';
+        const isoFromSel = `${yyyy}-${mm}-${dd}`;
+
         setEditing({
           mode:'new',
           item: {
-            id:null,
+            id: null,
             nome: prefill?.nome || '',
-            valor:'',
-            data: todayISO(),
+            valor: '',
+            // 👇 agora respeita o mês/ano da tela
+            data: isoFromSel,
             instancia: prefill?.instancia || '',
             quem: prefill?.quem || '',
             dividida: !!prefill?.dividida,
-            links: { boleto:'', comp:'' }
+            links: { boleto: '', comp: '' }
           }
         });
       }
+
 
       function openEdit(item){
         popCard(item.id);

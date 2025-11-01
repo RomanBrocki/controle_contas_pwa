@@ -173,19 +173,27 @@ export async function insertConta(conta) {
     return false;
   }
 
-  const d = new Date(conta.data_de_pagamento); // espera 'YYYY-MM-DD'
+  // ✅ extrai ano/mês da string, sem Date (pra não cair pro dia anterior)
+  let anoFromIso = null;
+  let mesFromIso = null;
+  if (conta.data_de_pagamento) {
+    const [yyyy, mm] = conta.data_de_pagamento.split('-');
+    anoFromIso = Number(yyyy);
+    mesFromIso = Number(mm);
+  }
+
   const safe = {
-    user_id: u,                 // obrigatório na PWA
+    user_id: u,
     nome_da_conta: conta.nome_da_conta,
     valor: conta.valor,
     data_de_pagamento: conta.data_de_pagamento,
     instancia: conta.instancia ?? null,
     quem_pagou: conta.quem_pagou,
-    dividida: !!conta.dividida,           // força boolean
+    dividida: !!conta.dividida,
     link_boleto: conta.link_boleto ?? null,
     link_comprovante: conta.link_comprovante ?? null,
-    ano: conta.ano ?? d.getFullYear(),
-    mes: conta.mes ?? (d.getMonth() + 1),
+    ano: conta.ano ?? anoFromIso,
+    mes: conta.mes ?? mesFromIso,
   };
 
   const { error } = await supabase.from(TABLE).insert([safe]);
@@ -196,6 +204,7 @@ export async function insertConta(conta) {
   return true;
 }
 
+
 // ✏️ Atualizar conta existente (com guard de usuário)
 export async function updateConta(id, conta) {
   const u = uid();
@@ -204,7 +213,13 @@ export async function updateConta(id, conta) {
     return false;
   }
 
-  const d = conta.data_de_pagamento ? new Date(conta.data_de_pagamento) : null;
+  let anoFromIso = null;
+  let mesFromIso = null;
+  if (conta.data_de_pagamento) {
+    const [yyyy, mm] = conta.data_de_pagamento.split('-');
+    anoFromIso = Number(yyyy);
+    mesFromIso = Number(mm);
+  }
   const safe = {
     nome_da_conta: conta.nome_da_conta,
     valor: conta.valor,
@@ -214,8 +229,8 @@ export async function updateConta(id, conta) {
     dividida: conta.dividida !== undefined ? !!conta.dividida : undefined,
     link_boleto: conta.link_boleto ?? null,
     link_comprovante: conta.link_comprovante ?? null,
-    ...(d && (conta.ano === undefined) ? { ano: d.getFullYear() } : {}),
-    ...(d && (conta.mes === undefined) ? { mes: (d.getMonth() + 1) } : {}),
+    ...(conta.data_de_pagamento && conta.ano === undefined ? { ano: anoFromIso } : {}),
+    ...(conta.data_de_pagamento && conta.mes === undefined ? { mes: mesFromIso } : {}),
   };
 
   Object.keys(safe).forEach(k => safe[k] === undefined && delete safe[k]);
