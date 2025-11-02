@@ -121,7 +121,7 @@ async function handleLogout() {
           }}
           className="text-sm px-3 py-1 rounded bg-slate-500/40 hover:bg-slate-500/70 text-white"
         >
-          🗣️ Fale sozinho
+          🤬 Fale com tosco
         </button>
 
         <button

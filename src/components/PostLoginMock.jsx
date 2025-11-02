@@ -80,56 +80,72 @@ function PostLoginMock() {
       const [contasDisp, setContasDisp] = React.useState([]);
       const [showSelfChat, setShowSelfChat] = React.useState(false);
       const SELF_REPLIES = React.useRef([
-        'Entendi…',
-        'Ah, claro!',
-        'Hmm, interessante!',
-        'Pode deixar 😉',
-        'Sim, exatamente isso.',
-        'Certo, faz sentido!',
-        'Ótimo ponto!',
-        'Perfeito!',
-        'Ah sim, já vi isso acontecer!',
-        'Verdade, acontece bastante.',
-        'Boa observação!',
-        'Com certeza!',
-        'Ah sim, isso é clássico!',
-        'Haha, boa!',
-        'Sim, é assim mesmo 😅',
-        'Beleza então!',
-        'Uhum, estamos alinhados!',
-        'Certo, tô acompanhando!',
-        'Sim, sem problema!',
-        'Exatamente!',
-        'Pode crer!',
-        'Ah, entendi agora!',
-        'Acontece com todo mundo 😂',
-        'Show de bola!',
-        'Perfeito, obrigado!',
-        'É, esse é o jeito certo mesmo!',
-        'Tranquilo!',
-        'Tudo certo então!',
-        'Sim, claro!',
-        'Ah, olha só!',
-        'Aham!',
-        'Haha, justo!',
-        'É isso mesmo 😄',
-        'Nossa, total!',
-        'Concordo contigo.',
-        'Hahaha sim!',
-        'Anotado ✅',
-        'Uhum, deixa comigo!',
-        'Pode ser sim!',
-        'Ah, verdade!',
-        'Nossa, nunca tinha pensado nisso!',
-        'Excelente!',
-        'Haha, boa tentativa 😂',
-        'Aí sim!',
-        'Certo, pode continuar!',
-        'Ah, entendi o ponto!',
-        'Show! 👍',
-        'Faz todo sentido!',
-        'Perfeito, seguimos então!',
+        'E?',
+        'Aham…',
+        'Aham…',
+        'Aham…',
+        'Aham…',
+        'Aham…',
+        'Aham…',
+        'Aham…',
+        'Aham…',
+        'Aham…',
+        'Aham…',
+        'Aham…',
+        'Aham…',
+        'Aham…',
+        'Aham…',
+        'Tá me dando sono.',
+        'Já tentou colocar no arroz?',
+        'Reinicia o app.',
+        'Reinicia o celular.',
+        'Dorme e tenta amanhã.',
+        'Ih, complicado…',
+        'Nossa, nunca vi isso.',
+        'Não entendi.',
+        'Pode ser problema temporário.',
+        'Tenta atualizar a página.',
+        'Ué, funcionou aqui.',
+        'Isso é normal (acho).',
+        'Estranho… mas ok.',
+        'Tem certeza que ligou?',
+        'okay...',
+        'okay...',
+        'okay...',
+        'okay...',
+        'Ah, isso aí é assim mesmo.',
+        'Você apertou o botão certo?',
+        'Talvez se você ignorar, resolva.',
+        'Hahaha, boa sorte.',
+        'Tenta soprar o cabo USB.',
+        'Isso não é comigo, é com o setor 7.',
+        'Putz, que chato, hein?',
+        'Deve ser o cache quântico.',
+        'Então tá certo, né?',
+        'Já tentou limpar o cache?',
+        'Já tentou usar outro dispositivo?',
+        'Funciona se você acreditar.',
+        'Ah, mas isso é do sistema.',
+        'Hmm, isso parece magia negra.',
+        'Já pensou em desistir?',
+        'Uau, que desastre elegante!',
+        'São os Aliens, cara.',
+        'Não entendi nada, mas parece sério.',
+        'Pode repetir?',
+        'Explica em outras palavras.',
+        'Hmm, interessante….',
+        'O problema tá entre a cadeira e o teclado.',
+        'Ah, isso é normal. Ninguém entende também.',
+        'Pode deixar que iremos demitir o estagiário',
+        'Ah, isso aí é culpa do Mercúrio retrógrado.',
+        'Já tentou não fazer isso?',
+        'Pode repetir?',
+        'Espera um pouco que talvez resolva sozinho.',
+        'Tá com cara de “problema seu”.',
+        'Parece coisa de Windows.',
+        'Sei lá, tenta outro navegador.',
       ]);
+
 
 
       const [selfMsgs, setSelfMsgs] = React.useState([]);
@@ -684,8 +700,8 @@ function PostLoginMock() {
               >
                 <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">🗣️ Fale sozinho</span>
-                    <span className="text-xs opacity-60">modo terapêutico v0.0.1</span>
+                    <span className="text-lg">🤬 Fale com tosco</span>
+                    <span className="text-xs opacity-60">nível de suporte: baixo</span>
                   </div>
                   <button
                     className="text-sm font-bold text-red-500 hover:text-red-600 transition-colors"
@@ -699,14 +715,14 @@ function PostLoginMock() {
                 <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
                   {selfMsgs.length === 0 && (
                     <div className="text-sm opacity-60">
-                      Diga qualquer coisa… eu vou concordar 😌
+                      Manda aí… vou responder qualquer coisa
                     </div>
                   )}
                   {selfMsgs.map((m, idx) => (
                     <div key={idx} className="space-y-1">
                       <div className="text-xs opacity-60">Você</div>
                       <div className="bg-white/5 rounded px-3 py-2 text-sm">{m.user}</div>
-                      <div className="text-xs opacity-60 mt-1">Fale sozinho</div>
+                      <div className="text-xs opacity-60 mt-1">Fale com tosco</div>
                       <div className="bg-white/0 rounded px-3 py-2 text-sm">
                         {m.bot}
                       </div>
