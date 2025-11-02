@@ -448,21 +448,16 @@ function PostLoginMock() {
       function openNew(prefill){
         popCard('new');
 
-        // monta data baseada no mês/ano que o usuário está vendo
-        const yyyy = yearSel;
-        const mm = String(monthSel).padStart(2, '0');
-        // pode ser dia 1, pra não ter surpresa de dia inválido
-        const dd = '01';
-        const isoFromSel = `${yyyy}-${mm}-${dd}`;
+        // agora a data padrão é hoje, e NÃO o dia 01 do mês selecionado
+        const isoToday = todayISO();
 
         setEditing({
-          mode:'new',
+          mode: 'new',
           item: {
             id: null,
             nome: prefill?.nome || '',
             valor: '',
-            // 👇 agora respeita o mês/ano da tela
-            data: isoFromSel,
+            data: isoToday,                 // 👈 default visível no popup
             instancia: prefill?.instancia || '',
             quem: prefill?.quem || '',
             dividida: !!prefill?.dividida,
@@ -470,6 +465,7 @@ function PostLoginMock() {
           }
         });
       }
+
 
 
       function openEdit(item){
