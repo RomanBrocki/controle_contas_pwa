@@ -114,7 +114,16 @@ async function handleLogout() {
     <>
       <StyleTag theme={profile?.theme || 'gunmetal'} />
       {/* cabeçalho simples só pra ter o botão */}
-      <div className="w-full flex justify-end gap-2 px-4 py-2">
+      <div className="w-full flex justify-between items-center gap-2 px-4 py-2">
+        <button
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent('open-self-chat'));
+          }}
+          className="text-sm px-3 py-1 rounded bg-slate-500/40 hover:bg-slate-500/70 text-white"
+        >
+          🗣️ Fale sozinho
+        </button>
+
         <button
           onClick={handleLogout}
           className="text-sm px-3 py-1 rounded bg-red-500/80 hover:bg-red-500 text-white"
@@ -123,6 +132,7 @@ async function handleLogout() {
         </button>
       </div>
       <PostLoginMock />
+
     </>
   );
 }

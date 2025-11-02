@@ -34,6 +34,38 @@ function MonthPickerBlock({
       );
     }
 
+
+function FaleSozinhoInput({ onSend }) {
+  const [txt, setTxt] = React.useState('');
+  const ref = React.useRef(null);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    const v = txt.trim();
+    if (!v) return;
+    onSend?.(v);
+    setTxt('');
+    // volta foco
+    ref.current?.focus();
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="border-t border-[var(--border)] px-3 py-2 flex gap-2">
+      <input
+        ref={ref}
+        value={txt}
+        onChange={(e) => setTxt(e.target.value)}
+        className="flex-1 input"
+        placeholder="Fale…"
+        autoFocus
+      />
+      <button className="btn primary" type="submit">
+        ➤
+      </button>
+    </form>
+  );
+}
+
 function PostLoginMock() {
       const [theme, setTheme] = React.useState('gunmetal');
       const [showOverlay, setShowOverlay] = React.useState(true);
@@ -46,11 +78,75 @@ function PostLoginMock() {
       const [showSettings, setShowSettings] = React.useState(false);
       const [profile, setProfile] = React.useState(null); // {email, theme, payers_default, chart_accounts}
       const [contasDisp, setContasDisp] = React.useState([]);
+      const [showSelfChat, setShowSelfChat] = React.useState(false);
+      const SELF_REPLIES = React.useRef([
+        'Entendi…',
+        'Ah, claro!',
+        'Hmm, interessante!',
+        'Pode deixar 😉',
+        'Sim, exatamente isso.',
+        'Certo, faz sentido!',
+        'Ótimo ponto!',
+        'Perfeito!',
+        'Ah sim, já vi isso acontecer!',
+        'Verdade, acontece bastante.',
+        'Boa observação!',
+        'Com certeza!',
+        'Ah sim, isso é clássico!',
+        'Haha, boa!',
+        'Sim, é assim mesmo 😅',
+        'Beleza então!',
+        'Uhum, estamos alinhados!',
+        'Certo, tô acompanhando!',
+        'Sim, sem problema!',
+        'Exatamente!',
+        'Pode crer!',
+        'Ah, entendi agora!',
+        'Acontece com todo mundo 😂',
+        'Show de bola!',
+        'Perfeito, obrigado!',
+        'É, esse é o jeito certo mesmo!',
+        'Tranquilo!',
+        'Tudo certo então!',
+        'Sim, claro!',
+        'Ah, olha só!',
+        'Aham!',
+        'Haha, justo!',
+        'É isso mesmo 😄',
+        'Nossa, total!',
+        'Concordo contigo.',
+        'Hahaha sim!',
+        'Anotado ✅',
+        'Uhum, deixa comigo!',
+        'Pode ser sim!',
+        'Ah, verdade!',
+        'Nossa, nunca tinha pensado nisso!',
+        'Excelente!',
+        'Haha, boa tentativa 😂',
+        'Aí sim!',
+        'Certo, pode continuar!',
+        'Ah, entendi o ponto!',
+        'Show! 👍',
+        'Faz todo sentido!',
+        'Perfeito, seguimos então!',
+      ]);
+
+
+      const [selfMsgs, setSelfMsgs] = React.useState([]);
 
 
       // 🔹 Anos e meses reais do Supabase
       const [years, setYears] = React.useState([]);
       const [monthsByYear, setMonthsByYear] = React.useState({});
+      React.useEffect(() => {
+        function handleOpenSelfChat() {
+          setShowSelfChat(true);
+          setSelfMsgs([]);
+        }
+        window.addEventListener('open-self-chat', handleOpenSelfChat);
+        return () => window.removeEventListener('open-self-chat', handleOpenSelfChat);
+      }, []);
+
 
       React.useEffect(() => {
         if (!showSettings) return;
@@ -387,7 +483,7 @@ function PostLoginMock() {
               <button className={`btn primary w-full md:w-auto ${activeId==='new' ? 'pop' : ''}`} onClick={()=>openNew()}>+ Nova Conta</button>
               <button className="btn ghost w-full md:w-auto" onClick={()=>{ setReportsTab('home'); setShowReports(true); }}>📊 Relatórios</button>
               <button className="btn ghost" onClick={()=> setShowSettings(true)}>⚙️ Configurações</button>
-              
+                            
             </div>
           </header>
         
@@ -577,6 +673,65 @@ function PostLoginMock() {
             />
           )}
 
+          {showSelfChat && (
+            <div
+              className="fixed inset-0 z-[999] flex items-end justify-end p-4 pointer-events-none"
+              onClick={() => setShowSelfChat(false)}
+            >
+              <div
+                className="pointer-events-auto w-full max-w-sm bg-[var(--surface)] rounded-xl shadow-2xl border border-[var(--border)] flex flex-col max-h-[70vh]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--border)]">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🗣️ Fale sozinho</span>
+                    <span className="text-xs opacity-60">modo terapêutico v0.0.1</span>
+                  </div>
+                  <button
+                    className="text-sm font-bold text-red-500 hover:text-red-600 transition-colors"
+                    onClick={() => setShowSelfChat(false)}
+                  >
+                    Fechar
+                  </button>
+
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+                  {selfMsgs.length === 0 && (
+                    <div className="text-sm opacity-60">
+                      Diga qualquer coisa… eu vou concordar 😌
+                    </div>
+                  )}
+                  {selfMsgs.map((m, idx) => (
+                    <div key={idx} className="space-y-1">
+                      <div className="text-xs opacity-60">Você</div>
+                      <div className="bg-white/5 rounded px-3 py-2 text-sm">{m.user}</div>
+                      <div className="text-xs opacity-60 mt-1">Fale sozinho</div>
+                      <div className="bg-white/0 rounded px-3 py-2 text-sm">
+                        {m.bot}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <FaleSozinhoInput
+                  onSend={(text) => {
+                    const list = SELF_REPLIES.current;
+                    const reply = list[Math.floor(Math.random() * list.length)];
+                    setSelfMsgs((prev) => [...prev, { user: text, bot: '...' }]);
+                    setTimeout(() => {
+                      setSelfMsgs((prev) => {
+                        const copy = [...prev];
+                        copy[copy.length - 1] = { user: text, bot: reply };
+                        return copy;
+                      });
+                    }, 400 + Math.random() * 700);
+                  }}
+                />
+
+              </div>
+            </div>
+          )}
 
           {toast && (
             <div className="fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg border"
