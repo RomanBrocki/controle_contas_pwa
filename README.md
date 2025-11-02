@@ -105,6 +105,31 @@ Gerados por `jsPDF`:
 ### 3️⃣ Comparativos
 A aba **“Gráficos comparativos”** do `ReportsModal` permite gerar e baixar PNG ou PDF dos gráficos diretamente na tela.
 
+### 🤬 Fale com Tosco
+
+O **Fale com Tosco** é uma função cômica que simula um **“Fale Conosco” sem suporte real**.  
+Ela foi criada para dar um toque de humor ao app e entreter o usuário em momentos de frustração — afinal, o Tosco responde, mas **não ajuda em nada**.
+
+Ao clicar no botão **“🤬 Fale com Tosco”**, no topo da tela principal, abre-se um pequeno chat local onde o “atendente” envia respostas automáticas, aleatórias e sarcásticas — como um *easter egg* escondido no aplicativo.
+
+**Características:**
+- 💬 Nenhum backend ou IA — todas as respostas são locais e aleatórias.  
+- 🧠 O Tosco tem dezenas de frases pré-programadas com ironias, desculpas e conselhos inúteis.  
+- 🔒 Nenhuma mensagem é salva nem enviada — tudo acontece apenas no navegador.  
+- 🎭 É uma brincadeira, não um canal real de suporte.
+
+**Localização no código:**
+- Gatilho: botão “🤬 Fale com Tosco” → [`App.jsx`](./src/components/App.jsx)  
+- Lógica e respostas: [`PostLoginMock.jsx`](./src/components/PostLoginMock.jsx)
+
+**Exemplo de conversa:**
+
+🧑 Você: Tá travando de novo!
+🤬 Tosco: Já tentou colocar no arroz?
+
+🧑 Você: Acho que bugou.
+🤬 Tosco: Hmm, interessante….
+
 ---
 
 ## 💾 Cache e Offline (Service Worker)
