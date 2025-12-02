@@ -300,8 +300,14 @@ function PostLoginMock() {
 
             if (!alive) return;
             setPendentes(listaPend);
-            // se houver pendência, mostra overlay; se não, esconde
-            setShowOverlay(listaPend.length > 0);
+
+            // 🔹 só abre automaticamente se for o mês vigente
+            const hoje = new Date();
+            const anoAtual = hoje.getFullYear();
+            const mesAtual = hoje.getMonth() + 1;
+            const isMesAtual = yearSel === anoAtual && monthSel === mesAtual;
+
+            setShowOverlay(isMesAtual && listaPend.length > 0);
           } catch (e) {
             console.error('[pendentes] erro ao calcular', e);
             if (!alive) return;
@@ -313,6 +319,7 @@ function PostLoginMock() {
         })();
         return () => { alive = false; };
       }, [yearSel, monthSel]);
+
 
       // Itens reais do mês (Supabase) + loading
       const [itens, setItens] = React.useState(null); // null = carregando
@@ -492,75 +499,103 @@ function PostLoginMock() {
 
 
             <div className="flex flex-col gap-2 w-full sm:grid sm:grid-cols-2 md:flex md:flex-row md:items-center">
-              <button className={`btn primary w-full md:w-auto ${activeId==='new' ? 'pop' : ''}`} onClick={()=>openNew()}>+ Nova Conta</button>
-              <button className="btn ghost w-full md:w-auto" onClick={()=>{ setReportsTab('home'); setShowReports(true); }}>📊 Relatórios</button>
-              <button className="btn ghost" onClick={()=> setShowSettings(true)}>⚙️ Configurações</button>
-                            
-            </div>
+            <button
+              className={`btn primary w-full md:w-auto ${activeId === 'new' ? 'pop' : ''}`}
+              onClick={() => openNew()}
+            >
+              + Nova Conta
+            </button>
+
+            <button
+              className="btn ghost w-full md:w-auto"
+              onClick={() => {
+                setReportsTab('home');
+                setShowReports(true);
+              }}
+            >
+              📊 Relatórios
+            </button>
+
+            {/* 🔔 Botão de lembrete de pendências */}
+            <button
+              className={
+                "btn ghost w-full md:w-auto" +
+                ((pendentes && pendentes.length > 0) ? "" : " opacity-60 cursor-not-allowed")
+              }
+              onClick={() => {
+                if (!pendentes || pendentes.length === 0) {
+                  showToast('Nenhuma pendência para este mês.', 'ok');
+                  return;
+                }
+                // toggle: se estiver aberto, fecha; se estiver fechado, abre
+                setShowOverlay(v => !v);
+              }}
+            >
+              🔔 Lembrete de pendentes
+            </button>
+
+            <button
+              className="btn ghost w-full md:w-auto"
+              onClick={() => setShowSettings(true)}
+            >
+              ⚙️ Configurações
+            </button>
+          </div>
+
           </header>
         
 
-          {/* Overlay pós-login (dinâmico) — só no mês/ano atuais */}
-          {(() => {
-            const hoje = new Date();
-            const anoAtual = hoje.getFullYear();
-            const mesAtual = hoje.getMonth() + 1;
+          {/* Overlay de contas pendentes (agora pode ser para qualquer mês; auto só no mês atual) */}
+          {showOverlay && (
+            <div className="overlay hard" onClick={() => setShowOverlay(false)}>
+              <div className="modal solid w-full md:max-w-2xl" onClick={(e) => e.stopPropagation()}>
+                <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <img
+                    src="./icons/icon-512.png"
+                    alt="Ícone Controle de Contas"
+                    width="32"
+                    height="32"
+                    className="rounded-full shadow-sm"
+                  />
+                  <span>Contas Pendentes</span>
+                </h2>
 
-            const isMesAtual = yearSel === anoAtual && monthSel === mesAtual;
-            if (!isMesAtual) return null;
+                {/* você mantém aqui exatamente o mesmo corpo que já existe */}
+                {pendentes === null || pendLoading ? (
+                  <div className="card text-center py-6">Calculando…</div>
+                ) : pendentes.length === 0 ? (
+                  <div className="card text-center py-6 text-sm opacity-70">
+                    Nenhuma conta do mês anterior está pendente.
+                  </div>
+                ) : (
+                  <ul className="space-y-2 mb-4">
+                    {pendentes.map((p, idx) => (
+                      <li key={`${keyFor(p)}-${idx}`} className="card flex justify-between items-center">
+                        <div>
+                          <strong>{p.nome}</strong><br />
+                          <span className="text-sm opacity-70">
+                            {p.instancia ? `${p.instancia} • ` : ''}{p.valor} • {p.data}
+                          </span>
+                        </div>
+                        <button
+                          className="btn primary"
+                          onClick={() => {
+                            setShowOverlay(false);
+                            openNew({ nome: p.nome, instancia: p.instancia, quem: p.quem, dividida: p.dividida });
+                          }}
+                        >
+                          Lançar agora
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
-            return showOverlay && (
-              <div className="overlay hard" onClick={() => setShowOverlay(false)}>
-                <div className="modal solid w-full md:max-w-2xl" onClick={(e) => e.stopPropagation()}>
-                  <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                    <img
-                      src="./icons/icon-512.png"
-                      alt="Ícone Controle de Contas"
-                      width="32"
-                      height="32"
-                      className="rounded-full shadow-sm"
-                    />
-                    <span>Contas Pendentes</span>
-                  </h2>
-
-
-                  {pendentes === null || pendLoading ? (
-                    <div className="card text-center py-6">Calculando…</div>
-                  ) : pendentes.length === 0 ? (
-                    <div className="card text-center py-6 text-sm opacity-70">
-                      Nenhuma conta do mês anterior está pendente.
-                    </div>
-                  ) : (
-                    <ul className="space-y-2 mb-4">
-                      {pendentes.map((p, idx) => (
-                        <li key={`${keyFor(p)}-${idx}`} className="card flex justify-between items-center">
-                          <div>
-                            <strong>{p.nome}</strong><br />
-                            {/* Mostramos os dados do mês anterior só como contexto visual */}
-                            <span className="text-sm opacity-70">
-                              {p.instancia ? `${p.instancia} • ` : ''}{p.valor} • {p.data}
-                            </span>
-                          </div>
-                          <button
-                            className="btn primary"
-                            onClick={() => {
-                              // abre modal "Nova Conta" pré-preenchido (valor e data continuam padrão: vazio/hoje)
-                              setShowOverlay(false);
-                              openNew({ nome: p.nome, instancia: p.instancia, quem: p.quem, dividida: p.dividida });
-                            }}
-                          >
-                            Lançar agora
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  <button className="btn ghost w-full" onClick={() => setShowOverlay(false)}>Sair</button>
-                </div>
+                <button className="btn ghost w-full" onClick={() => setShowOverlay(false)}>Sair</button>
               </div>
-            );
-          })()}
+            </div>
+          )}
+
 
 
 
