@@ -237,7 +237,14 @@ function PostLoginMock() {
           }
         })();
       }, [editing]); // quando abrir/fechar o modal
-
+      // Evento global para abrir o overlay de pendências
+      React.useEffect(() => {
+        function openManual() {
+          setShowOverlay(true);
+        }
+        window.addEventListener('open-reminder-manual', openManual);
+        return () => window.removeEventListener('open-reminder-manual', openManual);
+      }, []);
 
       const now = new Date();
       const [yearSel, setYearSel] = React.useState(now.getFullYear());
@@ -499,48 +506,11 @@ function PostLoginMock() {
 
 
             <div className="flex flex-col gap-2 w-full sm:grid sm:grid-cols-2 md:flex md:flex-row md:items-center">
-            <button
-              className={`btn primary w-full md:w-auto ${activeId === 'new' ? 'pop' : ''}`}
-              onClick={() => openNew()}
-            >
-              + Nova Conta
-            </button>
+              <button className={`btn primary w-full md:w-auto ${activeId==='new' ? 'pop' : ''}`} onClick={()=>openNew()}>+ Nova Conta</button>
+              <button className="btn ghost w-full md:w-auto" onClick={()=>{ setReportsTab('home'); setShowReports(true); }}>📊 Relatórios</button>
+              <button className="btn ghost" onClick={()=> setShowSettings(true)}>⚙️ Configurações</button>
+            </div>
 
-            <button
-              className="btn ghost w-full md:w-auto"
-              onClick={() => {
-                setReportsTab('home');
-                setShowReports(true);
-              }}
-            >
-              📊 Relatórios
-            </button>
-
-            {/* 🔔 Botão de lembrete de pendências */}
-            <button
-              className={
-                "btn ghost w-full md:w-auto" +
-                ((pendentes && pendentes.length > 0) ? "" : " opacity-60 cursor-not-allowed")
-              }
-              onClick={() => {
-                if (!pendentes || pendentes.length === 0) {
-                  showToast('Nenhuma pendência para este mês.', 'ok');
-                  return;
-                }
-                // toggle: se estiver aberto, fecha; se estiver fechado, abre
-                setShowOverlay(v => !v);
-              }}
-            >
-              🔔 Lembrete de pendentes
-            </button>
-
-            <button
-              className="btn ghost w-full md:w-auto"
-              onClick={() => setShowSettings(true)}
-            >
-              ⚙️ Configurações
-            </button>
-          </div>
 
           </header>
         
