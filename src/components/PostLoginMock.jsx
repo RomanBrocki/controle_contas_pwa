@@ -68,6 +68,11 @@ function FaleSozinhoInput({ onSend }) {
 
 function PostLoginMock() {
       const [theme, setTheme] = React.useState('gunmetal');
+      const [currentView, setCurrentView] = React.useState(() => (
+        window.location.hash && window.location.hash.startsWith('#/dashboard')
+          ? 'dashboard'
+          : 'controle'
+      ));
       const [showOverlay, setShowOverlay] = React.useState(true);
       const [editing, setEditing] = React.useState(null); // {mode:'edit'|'new', item:{...}}
       const [typeOpts, setTypeOpts] = React.useState([]);
@@ -276,12 +281,19 @@ function PostLoginMock() {
       React.useEffect(() => {
         window.AppRoutes = {
           mes: ({ ano, mes } = {}) => {
+            setCurrentView('controle');
+            setShowReports(false);
             if (ano) setYearSel(Number(ano));
             if (mes) setMonthSel(Number(mes));
           },
           relatorios: () => {
+            setCurrentView('controle');
             setReportsTab('home');
             setShowReports(true);
+          },
+          dashboard: () => {
+            setCurrentView('dashboard');
+            setShowReports(false);
           }
         };
         return () => { if (window.AppRoutes) delete window.AppRoutes; };
@@ -506,8 +518,18 @@ function PostLoginMock() {
 
 
             <div className="flex flex-col gap-2 w-full sm:grid sm:grid-cols-2 md:flex md:flex-row md:items-center">
-              <button className={`btn primary w-full md:w-auto ${activeId==='new' ? 'pop' : ''}`} onClick={()=>openNew()}>+ Nova Conta</button>
+              {currentView === 'controle' ? (
+                <button className={`btn primary w-full md:w-auto ${activeId==='new' ? 'pop' : ''}`} onClick={()=>openNew()}>+ Nova Conta</button>
+              ) : null}
               <button className="btn ghost w-full md:w-auto" onClick={()=>{ setReportsTab('home'); setShowReports(true); }}>📊 Relatórios</button>
+              {currentView === 'dashboard' ? (
+                <button
+                className="btn ghost w-full md:w-auto"
+                onClick={()=> Router.go(`#/mes?ano=${yearSel}&mes=${monthSel}`)}
+              >
+                ⌂ Home
+                </button>
+              ) : null}
               <button className="btn ghost" onClick={()=> setShowSettings(true)}>⚙️ Configurações</button>
             </div>
 
@@ -515,6 +537,16 @@ function PostLoginMock() {
           </header>
         
 
+          {currentView === 'dashboard' ? (
+            <DashboardView
+              years={years}
+              monthsByYear={monthsByYear}
+              currentYear={yearSel}
+              currentMonth={monthSel}
+              onGoControlToMonth={(ano, mes) => Router.go(`#/mes?ano=${ano}&mes=${mes}`)}
+            />
+          ) : (
+            <>
           {/* Overlay de contas pendentes (agora pode ser para qualquer mês; auto só no mês atual) */}
           {showOverlay && (
             <div className="overlay hard" onClick={() => setShowOverlay(false)}>
@@ -647,10 +679,12 @@ function PostLoginMock() {
               ))}
             </main>
           )}
+            </>
+          )}
 
 
 
-          {editing && (
+          {editing && currentView === 'controle' && (
             <EditPopup
               data={editing}
               payers={payersDB}
@@ -667,6 +701,10 @@ function PostLoginMock() {
               tab={reportsTab}
               onChangeTab={setReportsTab}
               onClose={()=>setShowReports(false)}
+              onOpenDashboard={() => {
+                setShowReports(false);
+                Router.go('#/dashboard');
+              }}
               years={years}
               monthsByYear={monthsByYear}
               currentYear={yearSel}

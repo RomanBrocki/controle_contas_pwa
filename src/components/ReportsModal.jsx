@@ -1,5 +1,6 @@
 function ReportsModal({
   tab, onChangeTab, onClose,
+  onOpenDashboard,
   years, monthsByYear, currentYear, currentMonth,
   contasDistinct,
   defaultSel = []
@@ -1568,7 +1569,7 @@ function ReportsModal({
               <div className="grid gap-3">
                 <button className="btn primary" onClick={()=>onChangeTab('mensal')}>Relatório mensal</button>
                 <button className="btn primary" onClick={()=>onChangeTab('periodo')}>Relatório por período</button>
-                <button className="btn primary" onClick={()=>onChangeTab('comparativos')}>Gráficos comparativos</button>
+                <button className="btn primary" onClick={() => { onClose?.(); onOpenDashboard?.(); }}>Dashboard BI</button>
               </div>
             )}
 

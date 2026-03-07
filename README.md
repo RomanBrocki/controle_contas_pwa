@@ -1,219 +1,252 @@
 # 💸 Controle de Contas — PWA
 
-**Controle de Contas** é uma aplicação **Progressive Web App (PWA)** desenvolvida em **React UMD + Tailwind + Supabase**, que permite gerenciar e visualizar contas mensais, gerar relatórios completos (em PDF e gráficos interativos) e manter dados sincronizados por usuário autenticado.
+**Controle de Contas** é uma aplicação **Progressive Web App (PWA)** feita em **React UMD + Tailwind + Supabase**, voltada para controle financeiro mensal, relatórios formais em PDF e análise visual via dashboard BI.
 
-A arquitetura é modular, legível e projetada para funcionar **100% client-side**, sem build tools — ideal para hospedar em **GitHub Pages** ou ambientes estáticos.
+O projeto roda **100% client-side**, sem build tool e sem backend próprio. A ideia central é manter tudo simples para operar em **Supabase free + GitHub Pages**, preservando o fluxo principal do app e acrescentando novas camadas de valor sem quebrar o legado.
 
 ---
 
-## 🚀 Principais Recursos
+## 🚀 Visão Geral
 
-- **Autenticação real com Supabase** (login e cadastro por e-mail/senha)  
-- **Perfil por usuário**, com tema, e seleção de contas favoritas para gráficos  
-- **Dashboard mensal interativo**: cards de contas, pendências e totais  
-- **Edição completa de contas** com links de boleto e comprovante clicáveis  
-- **Relatórios formais em PDF** (mensal e por período, com gráficos)  
-- **Gráficos comparativos** (pizza, barras e linhas) com seleção dinâmica  
-- **Temas visuais**: Gunmetal Neon, Synthwave Teal e Claro Metálico  
-- **Funcionamento offline via Service Worker**  
-- **Modo PWA instalável** (ícones, splash, standalone)  
+O app foi desenhado para registrar contas por usuário autenticado, separando cada lançamento por:
+
+- **tipo da conta** (`nome_da_conta`)
+- **instância**, quando existir (`instancia`)
+- **quem pagou** (`quem_pagou`)
+- **se a conta é dividida ou não** (`dividida`)
+- **valor**
+- **data de pagamento**
+- **link de boleto**
+- **link de comprovante**
+
+Com esse modelo, o sistema consegue:
+
+- mostrar o **controle mensal**
+- destacar **pendências**
+- gerar **relatórios mensais e por período**
+- exportar **PDFs formais**
+- montar um **dashboard BI** com filtros e leitura interativa
+
+---
+
+## ✨ Principais Recursos
+
+- **Autenticação real com Supabase** por e-mail e senha
+- **Separação por usuário** com `user_id`
+- **Listagem mensal** das contas do período
+- **Cadastro, edição e exclusão** de lançamentos
+- **Pendências automáticas** comparando mês atual com mês anterior
+- **Perfil por usuário**, com tema e preferências
+- **Links clicáveis** de boleto e comprovante
+- **Relatório mensal em PDF**
+- **Relatório por período em PDF**
+- **Dashboard BI em rota própria** (`#/dashboard`)
+- **Funcionamento offline básico** com Service Worker
+- **Instalação como PWA**
+
+---
+
+## 🧭 Fluxos Principais do Produto
+
+### 1. Controle mensal
+
+Fluxo principal do app:
+
+- login
+- seleção de ano e mês
+- visualização dos cards/lançamentos do mês
+- criação ou edição das contas
+- acompanhamento do total do mês
+
+### 2. Pendências
+
+O sistema compara o mês atual com o mês anterior e aponta contas que ainda não foram relançadas.
+
+Esse fluxo existe para acelerar o preenchimento recorrente do mês e continua sendo parte do legado funcional.
+
+### 3. Relatórios
+
+O modal de relatórios hoje expõe:
+
+- **Relatório mensal**
+- **Relatório por período**
+- **Dashboard BI**
+
+Os comparativos antigos continuam existindo no código legado, mas o dashboard passou a concentrar a leitura analítica mais rica e interativa.
+
+### 4. Dashboard BI
+
+O dashboard foi criado para coexistir com o legado, não para substituir o controle mensal.
+
+Ele entra por:
+
+- botão dentro de `Relatórios`
+- rota própria `#/dashboard`
+
+O dashboard trabalha em cima dos mesmos dados do app e respeita o filtro do topo antes de recalcular os blocos analíticos.
+
+---
+
+## 📊 Dashboard BI
+
+A camada de BI fica isolada em `src/dashboard/` e foi pensada para não misturar regra analítica nova com o fluxo legado do controle e dos relatórios formais.
+
+### Objetivo do dashboard
+
+Entregar leitura executiva e analítica do período selecionado, mantendo o processamento local e sem custo adicional de infraestrutura.
+
+### Filtros do dashboard
+
+O dashboard trabalha com filtros em abas:
+
+- **Período**
+  - anos
+  - meses
+- **Contas**
+  - tipos de conta encontrados no recorte de período
+- **Pagador e divisão**
+  - pagadores
+  - divididas / não divididas
+
+O comportamento é:
+
+- o usuário monta o recorte
+- o dashboard só recalcula quando clica em **Atualizar dashboard**
+- se o filtro aplicado ficar vazio, o dashboard entra em **estado vazio guiado**
+
+### Blocos analíticos atuais
+
+- **KPIs principais**
+  - total do período
+  - valor total dividido
+  - maiores gastos por pagador
+- **Acerto entre pagadores**
+- **Maior categoria / maior conta do recorte**
+- **Quantidade de lançamentos**
+- **Evolução por conta**
+- **Top 5 contas + Outros**
+- **Ranking de gastos**
+- **Pagadores**
+- **Contas nos últimos 12 meses**
+- **Categorias ao longo do tempo**
+
+### Interação entre blocos
+
+Os blocos principais do dashboard conversam entre si por foco temporário:
+
+- `Top 5`
+- `Ranking`
+- `Evolução por conta`
+- `Contas nos últimos 12 meses`
+
+Ao selecionar uma conta em um desses blocos, os demais sincronizam o destaque dessa mesma conta, sem alterar os filtros reais do topo.
+
+### Regras de UX do dashboard
+
+- o dashboard não altera a lógica do controle mensal
+- o dashboard não substitui os relatórios formais
+- o botão de `Pendências` não aparece na visão BI
+- o usuário pode voltar para `#/mes` a qualquer momento
 
 ---
 
 ## 🧱 Estrutura de Pastas
 
 ```text
-├─ index.html                         # Ponto de entrada — carrega React UMD, Tailwind e todos os JSX
-├─ manifest.json                      # Manifest PWA (ícones, tema, start_url)
-├─ sw.js                              # Service Worker (cache first, offline básico)
+├─ index.html                         # Entrada da aplicação; carrega React UMD, Babel, Tailwind e os JSX
+├─ manifest.json                      # Manifest do PWA
+├─ sw.js                              # Service Worker e política de atualização/cache
+├─ icons/
+│  ├─ icon-192.png                    # Ícone padrão 192x192
+│  ├─ icon-512.png                    # Ícone padrão 512x512
+│  ├─ icon-192-launcher.png           # Ícone maskable/launcher 192x192
+│  └─ icon-512-launcher.png           # Ícone maskable/launcher 512x512
 ├─ src/
-│  ├─ data-adapter.js                 # Adaptador de dados: formata respostas Supabase para a UI
-│  ├─ router.js                       # Router SPA baseado em hash (#/mes, #/relatorios)
-│  ├─ supabase/
-│  │  ├─ client.js                    # Inicializa o Supabase e expõe no window
-│  │  └─ queries.js                   # Consultas e mutações: contas, perfil, listas e filtros
+│  ├─ data-adapter.js                 # Adapta dados do banco para o formato usado pela UI
+│  ├─ router.js                       # Router hash-based
+│  ├─ dashboard/
+│  │  ├─ DashboardView.jsx            # Tela principal do dashboard BI
+│  │  └─ README.md                    # Guia técnico da camada de BI
 │  ├─ features/
-│  │  ├─ charts.js                    # Configurações globais e renderizadores Chart.js (pizza, barras, linhas)
-│  │  └─ pdf.js                       # Exportador PDF (2 gráficos por página, tema PDF, links clicáveis)
-│  ├─ icons/
-│  │  ├─ icon-192.png                 # Ícone menor do PWA
-│  │  └─ icon-512.png                 # Ícone maior (Android/instalação)
+│  │  ├─ charts.js                    # Renderização e helpers de gráficos
+│  │  └─ pdf.js                       # Helpers de exportação de PDF
+│  ├─ supabase/
+│  │  ├─ client.js                    # Inicialização do Supabase
+│  │  └─ queries.js                   # CRUD, perfil e consultas por mês/período
 │  └─ components/
-│     ├─ StyleTag.jsx                 # CSS global + tokens de tema e ajustes responsivos
-│     ├─ LoginGate.jsx                # Tela de login/cadastro Supabase
-│     ├─ PostLoginMock.jsx            # Shell pós-login (dashboard, cards, modais)
-│     ├─ ContaCard.jsx                # Card individual de conta (valor, pagador, links)
-│     ├─ EditPopup.jsx                # Modal de criação/edição de conta
-│     ├─ SettingsModal.jsx            # Configurações do perfil (e-mail, tema e contas de gráfico)
-│     ├─ ReportsModal.jsx             # Central de relatórios (mensal, período e comparativos)
-│     └─ App.jsx                      # Componente raiz (controle de sessão, logout e roteamento)
+│     ├─ App.jsx                      # Componente raiz; sessão, header e logout
+│     ├─ LoginGate.jsx                # Login/cadastro
+│     ├─ PostLoginMock.jsx            # Shell pós-login e fluxo principal do controle
+│     ├─ ContaCard.jsx                # Card individual de lançamento
+│     ├─ EditPopup.jsx                # Modal de criação/edição
+│     ├─ SettingsModal.jsx            # Perfil e preferências
+│     ├─ ReportsModal.jsx             # Relatórios formais e entrada para o dashboard
+│     └─ StyleTag.jsx                 # CSS global e temas
 ```
+
+---
+
+## 🧠 Arquitetura Real do Projeto
+
+Este repositório não usa bundler. O app mistura:
+
+- **scripts JSX carregados com `type="text/babel"`**
+- **módulos ES com `type="module"`**
+- **objetos globais em `window`**
+
+Alguns contratos importantes:
+
+- `window.SupabaseClient`
+- `window.SupabaseQueries`
+- `window.SupabaseMutations`
+- `window.DataAdapter`
+- `window.AppRoutes`
+- `window.MOCK_AUTH`
+
+Isso significa que:
+
+- a ordem de carga dos scripts em `index.html` importa
+- mudanças em arquivos novos precisam ser refletidas no `sw.js`
+- refatorações grandes no legado são naturalmente mais arriscadas
 
 ---
 
 ## ⚙️ Fluxo de Autenticação
 
-1. **LoginGate.jsx** usa `supabase.auth.signInWithPassword()` para autenticação real.  
-   - Modo “Criar conta” faz `signUp()` e alterna para login automático ou aviso de confirmação.  
-2. O App mantém o estado `authed` e reflete em `window.MOCK_AUTH` (compatibilidade com código legado).  
-3. O UID autenticado é lido globalmente via `window.SupabaseClient.__lastAuthUid`.
+1. `LoginGate.jsx` usa `supabase.auth.signInWithPassword()` para autenticação.
+2. Em cadastro, usa `signUp()`.
+3. O app espelha o usuário autenticado em `window.MOCK_AUTH` por compatibilidade com o legado.
+4. O profile do usuário é carregado depois do login.
+5. Após autenticar, o fluxo padrão de entrada vai para `#/mes`.
 
 ---
 
 ## 🧩 Integração com Supabase
 
-- O **cliente** (`client.js`) é inicializado globalmente:
-  ```js
-  export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-  ```
-- Todas as operações de CRUD e leitura passam por `queries.js`, com **guard de UID**:
-  - `listMes()` – lista contas de um mês  
-  - `insertConta()`, `updateConta()`, `deleteConta()` – operações com `user_id` obrigatório  
-  - `getProfile()` e `upsertProfile()` – controle de tema, e-mail e seleção de contas para gráficos  
+O cliente é inicializado em `src/supabase/client.js`.
 
-Os resultados são adaptados por `data-adapter.js` para exibição formatada (datas pt-BR, valores em R$).
+As leituras e mutações passam por `src/supabase/queries.js`, incluindo:
 
----
+- listagem mensal
+- inserção
+- atualização
+- exclusão
+- leitura de perfil
+- gravação de perfil
 
-## 🎨 Interface e Temas
+O `data-adapter.js` organiza esses dados para a UI, lidando com:
 
-**StyleTag.jsx** injeta todas as variáveis de tema no DOM (`--bg`, `--text`, `--primary`, etc.)  
-Três temas estão disponíveis:
-- **Gunmetal Neon** — padrão, fundo escuro com ciano  
-- **Synthwave Teal** — variação mais viva e futurista  
-- **Claro Metálico** — superfícies prateadas e contraste alto  
-
-Todos os componentes reagem automaticamente à classe de tema (`theme-gunmetal`, `theme-synth`, `theme-light`).
+- datas
+- valores monetários
+- nomes
+- links
+- estrutura consumida pelos cards e pelos relatórios
 
 ---
 
-## 📊 Gráficos e Relatórios
+## 🗃️ Banco de Dados
 
-A renderização é feita com **Chart.js 3.9.1** e **chartjs-plugin-datalabels**.
-
-### 1️⃣ Gráficos Interativos
-- **Pizza:** com linhas externas, anticolisão e legenda circular  
-- **Barras:** comparativos mês vs mês anterior / mesmo mês do ano anterior  
-- **Linhas:** evolução de contas ao longo de um período
-
-### 2️⃣ Relatórios PDF
-Gerados por `jsPDF`:
-- **Mensal:** Pizza + Resumo + Barras + Listagem detalhada (com links clicáveis)  
-- **Período:** Pizza consolidada + Linhas 2-up + Tabelas mensais segmentadas  
-- Função `exportTwoPerPage()` (em `pdf.js`) monta dois gráficos por página com margens e espaçamento automáticos.
-
-### 3️⃣ Comparativos
-A aba **“Gráficos comparativos”** do `ReportsModal` permite gerar e baixar PNG ou PDF dos gráficos diretamente na tela.
-
-### 🤬 Fale com Tosco
-
-O **Fale com Tosco** é uma função cômica que simula um **“Fale Conosco” sem suporte real**.  
-Ela foi criada para dar um toque de humor ao app e entreter o usuário em momentos de frustração — afinal, o Tosco responde, mas **não ajuda em nada**.
-
-Ao clicar no botão **“🤬 Fale com Tosco”**, no topo da tela principal, abre-se um pequeno chat local onde o “atendente” envia respostas automáticas, aleatórias e sarcásticas — como um *easter egg* escondido no aplicativo.
-
-**Características:**
-- 💬 Nenhum backend ou IA — todas as respostas são locais e aleatórias.  
-- 🧠 O Tosco tem dezenas de frases pré-programadas com ironias, desculpas e conselhos inúteis.  
-- 🔒 Nenhuma mensagem é salva nem enviada — tudo acontece apenas no navegador.  
-- 🎭 É uma brincadeira, não um canal real de suporte.
-
-**Localização no código:**
-- Gatilho: botão “🤬 Fale com Tosco” → [`App.jsx`](./src/components/App.jsx)  
-- Lógica e respostas: [`PostLoginMock.jsx`](./src/components/PostLoginMock.jsx)
-
-**Exemplo de conversa:**
-
-🧑 Você: Tá travando de novo!
-🤬 Tosco: Já tentou colocar no arroz?
-
-🧑 Você: Acho que bugou.
-🤬 Tosco: Hmm, interessante….
-
----
-
-## 💾 Cache e Offline (Service Worker)
-
-Arquivo: **`sw.js`**
-
-- Implementa cache local básico (`cache-first`) para páginas, scripts JSX e assets locais.  
-- Scripts externos (React, Tailwind, Supabase, Chart.js, Babel, jsPDF) são sempre carregados via CDN.  
-- Na atualização, o `activate` remove caches antigos (`contas-pwa-v3`).
-
----
-
-## 📱 Instalação PWA
-
-Arquivo: **`manifest.json`**
-
-- `display: "standalone"` — o app abre como aplicativo nativo  
-- Ícones:
-  - `icons/icon-192.png`
-  - `icons/icon-512.png`
-- `start_url` e `scope` ajustados para `/controle_contas_pwa/` (compatível com GitHub Pages)
-- Cor principal: `#0f172a`
-
-O `index.html` registra o Service Worker automaticamente:
-```js
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js").then(() => {
-    console.log("✅ Service Worker registrado.");
-  });
-}
-```
-
----
-
-## 🧭 Navegação SPA
-
-Arquivo: **`router.js`**
-
-- Implementa roteamento baseado em `window.location.hash`
-- Roteia para:
-  - `#/mes` → tela mensal
-  - `#/relatorios` → central de relatórios
-- Mantém estado e evita recarregar a página
-
----
-
-## 🧠 Componentes Principais
-
-| Componente | Função |
-|-------------|--------|
-| **App.jsx** | Gerencia autenticação, sessão e tema global |
-| **LoginGate.jsx** | Tela de login e cadastro Supabase |
-| **PostLoginMock.jsx** | Dashboard pós-login: cards, pendências, modais |
-| **ContaCard.jsx** | Renderiza cada conta mensal (valor, data, links) |
-| **EditPopup.jsx** | Modal para criar/editar conta com validações |
-| **SettingsModal.jsx** | Configura e salva preferências de usuário (tema, email, contas) |
-| **ReportsModal.jsx** | Interface de relatórios (mensal, período e comparativos) |
-| **StyleTag.jsx** | CSS injetado dinamicamente com variáveis e temas |
-
----
-
-## 🧰 Stack Técnica
-
-| Área | Tecnologia |
-|------|-------------|
-| Frontend | React 18 (UMD) + Tailwind CSS |
-| Backend | Supabase (PostgreSQL + Auth) |
-| Charts | Chart.js 3.9.1 + chartjs-plugin-datalabels |
-| PDF | jsPDF 2.5.1 |
-| PWA | Manifest + Service Worker (cache-first) |
-| Build | Nenhum — Babel transforma JSX no navegador |
-| Hosting | GitHub Pages (estático, com offline) |
-
----
-
-## 🔒 Segurança e Escopo
-
-Cada usuário só acessa seus próprios registros:
-- Todas as queries Supabase filtram por `user_id`
-- RLS (Row-Level Security) deve estar **ativado** no Supabase com políticas por usuário
-
----
-
-## 🧾 Banco de Dados — Estrutura
+Estrutura esperada:
 
 ```sql
 create table public.controle_contas (
@@ -239,36 +272,258 @@ create table public.profile (
 );
 ```
 
+### Significado prático do schema
+
+- `nome_da_conta`: tipo da conta, como Escola, Luz, Empregada, Cartão etc.
+- `instancia`: detalhamento adicional, como parcela, aluno, unidade, semanal, diária etc.
+- `quem_pagou`: pagador responsável naquele lançamento
+- `dividida`: informa se entra na lógica de balanço/acerto entre pagadores
+- `link_boleto` e `link_comprovante`: preservam rastreabilidade do pagamento
+
 ---
 
-## 🧑‍💻 Execução Local
+## 🎨 Interface e Temas
 
-1. Clone o repositório https://github.com/RomanBrocki/controle_contas_pwa .  
-2. Abra `index.html` no navegador (não requer servidor).  
-3. Configure o `SUPABASE_URL` e `SUPABASE_KEY` em `src/supabase/client.js` se for usar seu próprio backend.  
-4. O app funcionará offline após o primeiro carregamento.
+Os temas são injetados por `StyleTag.jsx` com CSS variables.
+
+Temas disponíveis:
+
+- **Gunmetal Neon**
+- **Synthwave Teal**
+- **Claro Metálico**
+
+O dashboard respeita o tema ativo da aplicação.
 
 ---
 
-## 🧩 Deploy (GitHub Pages)
+## 📑 Relatórios e PDFs
 
-1. Crie o repositório `controle_contas_pwa`.  
-2. Configure o GitHub Pages com **branch `main` / pasta raiz**.  
-3. Certifique-se de que `start_url` e `scope` em `manifest.json` estejam corretos:
-   ```json
-   "start_url": "/controle_contas_pwa/",
-   "scope": "/controle_contas_pwa/"
-   ```
-4. Após o deploy, acesse:
-   ```
-   https://<usuario>.github.io/controle_contas_pwa/
-   ```
+O app possui dois relatórios formais principais:
+
+### Relatório mensal
+
+Gera um PDF com:
+
+- pizza do mês
+- resumo por pagador
+- barras comparativas
+- listagem detalhada com links
+
+### Relatório por período
+
+Gera um PDF com:
+
+- pizza consolidada do período
+- gráficos de linha por conta
+- tabelas segmentadas por mês
+
+### Comparativos legados
+
+Os comparativos continuam no código, mas deixaram de ser o caminho principal na UI.
+
+O motivo é simples: o dashboard BI cobre melhor a leitura exploratória sem duplicar tanta navegação.
+
+---
+
+## 📈 Gráficos
+
+O app usa **Chart.js 3.9.1** e **chartjs-plugin-datalabels**.
+
+Tipos utilizados no sistema:
+
+- pizza
+- barras
+- linhas
+- composições analíticas do dashboard
+
+No dashboard, parte da visualização é feita de forma mais leve e customizada, sem depender de uma nova biblioteca pesada de BI.
+
+---
+
+## 🤬 Fale com Tosco
+
+Existe um microfluxo cômico chamado **Fale com Tosco**.
+
+Ele:
+
+- não usa IA real
+- não envia nada para backend
+- responde localmente com frases fixas/aleatórias
+- serve como easter egg do projeto
+
+Gatilho:
+
+- topo do app, na área pós-login
+
+Lógica:
+
+- `App.jsx`
+- `PostLoginMock.jsx`
+
+---
+
+## 📱 Navegação SPA
+
+O roteamento é hash-based:
+
+- `#/mes` → controle mensal
+- `#/relatorios` → abre o modal de relatórios
+- `#/dashboard` → dashboard BI
+
+O router fica em `src/router.js` e chama handlers expostos pela própria app via `window.AppRoutes`.
+
+---
+
+## 💾 PWA, Cache e Atualização
+
+Arquivos principais:
+
+- `manifest.json`
+- `sw.js`
+- registro no `index.html`
+
+### O que o PWA faz hoje
+
+- instala o app
+- mantém cache local dos arquivos do domínio
+- funciona offline de forma básica
+- tenta assumir a atualização assim que uma nova versão é publicada
+
+### Estratégia atual de atualização
+
+O `sw.js` atual:
+
+- usa `CACHE_NAME` versionado
+- chama `skipWaiting()` no install
+- chama `clients.claim()` no activate
+- usa atualização automática via registro do `index.html`
+- revalida arquivos same-origin em rede quando possível
+
+### Manifest
+
+O `manifest.json` hoje inclui:
+
+- `id`
+- `start_url`
+- `scope`
+- `display: "standalone"`
+- ícones padrão
+- ícones `maskable`
+
+### Observação prática
+
+Depois de publicar uma nova versão:
+
+1. abra o app online
+2. aguarde o service worker novo assumir
+3. faça um hard refresh na primeira validação, se necessário
+
+Se a PWA instalada estiver presa numa versão antiga, limpar os dados do site/app resolve.
+
+---
+
+## 🧠 Componentes Principais
+
+| Arquivo | Papel |
+|--------|-------|
+| `App.jsx` | sessão, header, logout e orquestração do topo |
+| `LoginGate.jsx` | login e cadastro |
+| `PostLoginMock.jsx` | fluxo principal do controle, pendências, modais e navegação interna |
+| `ReportsModal.jsx` | relatórios formais e entrada para o dashboard |
+| `DashboardView.jsx` | dashboard BI |
+| `SettingsModal.jsx` | tema e preferências |
+| `EditPopup.jsx` | criação/edição/exclusão |
+| `ContaCard.jsx` | exibição do lançamento |
+| `StyleTag.jsx` | CSS global, temas e ajustes visuais |
+
+---
+
+## 🧰 Stack Técnica
+
+| Área | Tecnologia |
+|------|------------|
+| Frontend | React 18 UMD |
+| UI | Tailwind via CDN |
+| Banco/Auth | Supabase |
+| Charts | Chart.js |
+| PDF | jsPDF |
+| Roteamento | hash router próprio |
+| PWA | Manifest + Service Worker |
+| Build | nenhum; Babel transpila JSX no navegador |
+| Deploy | GitHub Pages |
+
+---
+
+## 🔒 Segurança e Escopo
+
+Cada usuário só deve acessar seus próprios registros.
+
+Premissas:
+
+- `user_id` obrigatório nas operações
+- RLS habilitado no Supabase
+- políticas por usuário no banco
+
+---
+
+## 🧪 Execução Local
+
+Para validar UI básica, dá para abrir localmente.
+
+Para validar corretamente:
+
+- service worker
+- manifest
+- cache
+- fluxo PWA
+
+o ideal é servir por HTTP estático.
+
+Exemplo:
+
+```powershell
+python -m http.server 4173
+```
+
+Depois abra:
+
+```text
+http://localhost:4173/
+```
+
+---
+
+## 🚀 Deploy em GitHub Pages
+
+1. publique o repositório
+2. aponte o GitHub Pages para a branch/pasta correta
+3. confirme `start_url` e `scope` no `manifest.json`
+4. publique
+5. abra o app online para permitir atualização do service worker
+
+URL esperada:
+
+```text
+https://<usuario>.github.io/controle_contas_pwa/
+```
+
+---
+
+## 🛠️ Observações de Manutenção
+
+- o projeto mistura JSX Babel e módulos ES
+- globais em `window` fazem parte da arquitetura atual
+- mudanças novas devem ser preferencialmente aditivas
+- `PostLoginMock.jsx` e `ReportsModal.jsx` concentram muito comportamento legado
+- o dashboard deve continuar isolado em `src/dashboard/`
+- se adicionar arquivos carregados pela app, atualize `index.html` e `sw.js`
 
 ---
 
 ## 🧭 Créditos e Licença
 
-Desenvolvido por **Roman W. Brocki Neto** — projeto pessoal para controle financeiro familiar, evoluído em PWA completo.
+Desenvolvido por **Roman W. Brocki Neto**.
 
-Licença: **MIT**  
-Frameworks: React, Tailwind, Supabase, Chart.js, jsPDF.
+Projeto pessoal de controle financeiro familiar evoluído para PWA com relatórios e dashboard BI.
+
+Licença: **MIT**

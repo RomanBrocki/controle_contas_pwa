@@ -8,14 +8,14 @@
 
   <title>Controle de Contas</title>
 
-  <!-- Tailwind (utilitários como flex/grid/gap/...) -->
+  <!-- Tailwind (utilitÃ¡rios como flex/grid/gap/...) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- React 18 + ReactDOM (UMD) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 
-  <!-- Babel para transformar JSX no navegador (apenas para protótipo) -->
+  <!-- Babel para transformar JSX no navegador (apenas para protÃ³tipo) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
@@ -39,6 +39,7 @@
   <script type="text/babel" src="./src/components/SettingsModal.jsx"></script>
   <script type="text/babel" src="./src/components/ReportsModal.jsx"></script>
   <script type="text/babel" src="./src/components/LoginGate.jsx"></script>
+  <script type="text/babel" src="./src/dashboard/DashboardView.jsx"></script>
   <script type="text/babel" src="./src/components/App.jsx"></script>
 
     
@@ -81,7 +82,7 @@
       );
     }
     // Top 10 tipos de conta (mock)
-    const COMMON_TYPES = ['Luz','Internet','Condomínio','Escola','Celular','Empregada','Mercado','Cartão de Crédito','Gás'];
+    const COMMON_TYPES = ['Luz','Internet','CondomÃ­nio','Escola','Celular','Empregada','Mercado','CartÃ£o de CrÃ©dito','GÃ¡s'];
 
     
     // ====== Mount App ======
@@ -106,13 +107,13 @@
   syncTheme();
   new MutationObserver(syncTheme).observe(rootEl, { attributes:true, childList:true, subtree:true });
   </script>
-    <!-- === Gráficos === -->
+    <!-- === GrÃ¡ficos === -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
 
   <script type="module" src="./src/features/charts.js"></script>
 
-  <!-- jsPDF para exportar múltiplos gráficos em PDF -->
+  <!-- jsPDF para exportar mÃºltiplos grÃ¡ficos em PDF -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <!-- PDF features -->
   <script src="./src/features/pdf.js"></script>
@@ -120,15 +121,15 @@
 
 
   <script type="module" src="./src/router.js"></script>
-  <!-- novo: boot do router como módulo -->
+  <!-- novo: boot do router como mÃ³dulo -->
   <script type="module" src="./src/data-adapter.js"></script>
 
   <script type="module">
     import { Router } from './src/router.js';
-    window.Router = Router; // 👈 torna global p/ o JSX
+    window.Router = Router; // ðŸ‘ˆ torna global p/ o JSX
 
     Router.register('#/', () => {
-      // rota default: cai na tela do mês atual (sem mudar estado)
+      // rota default: cai na tela do mÃªs atual (sem mudar estado)
       Router.go('#/mes');
     });
 
@@ -141,19 +142,49 @@
       window.AppRoutes?.relatorios();
     });
 
+    Router.register('#/dashboard', () => {
+      window.AppRoutes?.dashboard();
+    });
+
     Router.start();
   </script>
   <script>
   if ("serviceWorker" in navigator) {
-    window.addEventListener("load", function () {
-      navigator.serviceWorker
-        .register("./sw.js")
-        .then(function () {
-          console.log("✅ Service Worker registrado.");
-        })
-        .catch(function (err) {
-          console.warn("❌ Service Worker falhou:", err);
+    window.addEventListener("load", async function () {
+      const hadController = Boolean(navigator.serviceWorker.controller);
+      let refreshing = false;
+
+      function watchInstallingWorker(worker) {
+        if (!worker) return;
+        worker.addEventListener("statechange", function () {
+          if (worker.state === "installed" && navigator.serviceWorker.controller) {
+            worker.postMessage({ type: "SKIP_WAITING" });
+          }
         });
+      }
+
+      navigator.serviceWorker.addEventListener("controllerchange", function () {
+        if (!hadController || refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+
+      try {
+        const registration = await navigator.serviceWorker.register("./sw.js");
+        watchInstallingWorker(registration.installing);
+        registration.addEventListener("updatefound", function () {
+          watchInstallingWorker(registration.installing);
+        });
+
+        if (registration.waiting) {
+          registration.waiting.postMessage({ type: "SKIP_WAITING" });
+        }
+
+        registration.update().catch(function () {});
+        console.log("Service Worker registrado.");
+      } catch (err) {
+        console.warn("Service Worker falhou:", err);
+      }
     });
   }
 </script>

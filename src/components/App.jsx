@@ -3,6 +3,25 @@ function App() {
   const [authed, setAuthed] = React.useState(() => window.MOCK_AUTH || null);
   const [profile, setProfile] = React.useState(null);
   const [checking, setChecking] = React.useState(() => !window.MOCK_AUTH);
+  const [currentSection, setCurrentSection] = React.useState(() => (
+    window.location.hash && window.location.hash.startsWith('#/dashboard')
+      ? 'dashboard'
+      : 'controle'
+  ));
+
+  React.useEffect(() => {
+    function syncCurrentSection() {
+      setCurrentSection(
+        window.location.hash && window.location.hash.startsWith('#/dashboard')
+          ? 'dashboard'
+          : 'controle'
+      );
+    }
+
+    syncCurrentSection();
+    window.addEventListener('hashchange', syncCurrentSection);
+    return () => window.removeEventListener('hashchange', syncCurrentSection);
+  }, []);
 
   // 🔍 checa sessão real do Supabase na montagem
   React.useEffect(() => {
@@ -24,6 +43,9 @@ function App() {
         }
         const user = data?.session?.user;
         if (user && alive) {
+          if (window.location.hash !== '#/mes') {
+            window.location.hash = '#/mes';
+          }
           // 👇 isso é o que está “auto-logando” hoje
           window.MOCK_AUTH = { user_id: user.id, email: user.email };
           window.SupabaseClient = window.SupabaseClient || {};
@@ -86,6 +108,13 @@ async function handleLogout() {
   setChecking(false);
 }
 
+  function handleLogged(auth) {
+    if (window.location.hash !== '#/mes') {
+      window.location.hash = '#/mes';
+    }
+    setAuthed(auth);
+  }
+
 
   // ⏳ carregando
   if (checking) {
@@ -104,7 +133,7 @@ async function handleLogout() {
     return (
       <>
         <StyleTag theme="gunmetal" />
-        <LoginGate onLogged={setAuthed} />
+        <LoginGate onLogged={handleLogged} />
       </>
     );
   }
@@ -123,12 +152,14 @@ async function handleLogout() {
           🤬 Fale com tosco
         </button>
 
-        <button
-          onClick={() => window.dispatchEvent(new CustomEvent('open-reminder-manual'))}
-          className="text-sm px-3 py-1 rounded bg-slate-500/40 hover:bg-slate-500/70 text-white"
-        >
-          🔔 Pendências
-        </button>
+        {currentSection !== 'dashboard' ? (
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('open-reminder-manual'))}
+            className="text-sm px-3 py-1 rounded bg-slate-500/40 hover:bg-slate-500/70 text-white"
+          >
+            🔔 Pendências
+          </button>
+        ) : null}
 
         <button
           onClick={handleLogout}
@@ -144,5 +175,3 @@ async function handleLogout() {
     </>
   );
 }
-
-
