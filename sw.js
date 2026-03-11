@@ -1,11 +1,12 @@
 // sw.js - service worker do Controle de Contas PWA
 
-const CACHE_NAME = "contas-pwa-v22";
+const APP_VERSION = "2026-03-11-1";
+const CACHE_NAME = `contas-pwa-${APP_VERSION}`;
 
 const URLS_TO_CACHE = [
   "./",
   "./index.html",
-  "./manifest.json",
+  `./manifest.json?v=${APP_VERSION}`,
   "./src/data-adapter.js",
   "./src/router.js",
   "./src/supabase/client.js",
