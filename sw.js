@@ -1,6 +1,6 @@
 // sw.js - service worker do Controle de Contas PWA
 
-const CACHE_NAME = "contas-pwa-v21";
+const CACHE_NAME = "contas-pwa-v22";
 
 const URLS_TO_CACHE = [
   "./",
@@ -14,6 +14,7 @@ const URLS_TO_CACHE = [
   "./src/features/pdf.js",
   "./src/components/App.jsx",
   "./src/components/LoginGate.jsx",
+  "./src/components/SelectPopoverField.jsx",
   "./src/components/PostLoginMock.jsx",
   "./src/components/ContaCard.jsx",
   "./src/components/EditPopup.jsx",

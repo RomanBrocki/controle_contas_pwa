@@ -1,3 +1,150 @@
+function ChevronSelectField(props) {
+      const {
+        id,
+        label,
+        value,
+        onChange,
+        children,
+        wrapperClassName = '',
+        selectClassName = '',
+        labelClassName = 'text-sm opacity-70'
+      } = props;
+
+      return (
+        <label className={`flex min-w-0 flex-col gap-1 ${wrapperClassName}`.trim()}>
+          {label ? <span className={labelClassName}>{label}</span> : null}
+          <div className="select-shell">
+            <select
+              id={id}
+              className={`select select-shell__input ${selectClassName}`.trim()}
+              value={value}
+              onChange={onChange}
+            >
+              {children}
+            </select>
+            <div className="select-shell__icon" aria-hidden="true">
+              <svg viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M5.5 7.5L10 12l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
+        </label>
+      );
+    }
+
+function parseEditableYear(raw) {
+      const digits = String(raw || '').replace(/[^\d]/g, '').slice(0, 4);
+      if (digits.length !== 4) return null;
+      const year = Number(digits);
+      if (!Number.isFinite(year) || year < 1900 || year > 9999) return null;
+      return year;
+    }
+
+function renderYearOptions(years, selectedYear) {
+      return Array.from(
+        new Set(
+          [...(Array.isArray(years) ? years : []), new Date().getFullYear(), Number(selectedYear)]
+            .map((year) => Number(year))
+            .filter((year) => Number.isFinite(year) && year > 0)
+        )
+      )
+        .sort((a, b) => a - b)
+        .map((year) => (
+          <option key={year} value={year}>{year}</option>
+        ));
+    }
+
+function HomeInfoTooltip({ content, testId, align = 'right' }) {
+      const [open, setOpen] = React.useState(false);
+      const ref = React.useRef(null);
+
+      React.useEffect(() => {
+        if (!open) return undefined;
+
+        function handlePointerDown(event) {
+          if (!ref.current || ref.current.contains(event.target)) return;
+          setOpen(false);
+        }
+
+        document.addEventListener('mousedown', handlePointerDown);
+        return () => document.removeEventListener('mousedown', handlePointerDown);
+      }, [open]);
+
+      return (
+        <div className="relative shrink-0" ref={ref}>
+          <button
+            type="button"
+            className="h-7 w-7 rounded-full border text-xs font-semibold"
+            style={{ borderColor: 'var(--border)', background: 'var(--chip)', color: 'var(--text)' }}
+            onClick={() => setOpen((prev) => !prev)}
+            data-home-tooltip-button={testId}
+            aria-label="Mais informações"
+            aria-expanded={open}
+          >
+            i
+          </button>
+          {open ? (
+            <div
+              className={`absolute top-full z-40 mt-2 rounded-2xl border p-3 text-sm leading-relaxed ${align === 'left' ? 'left-0' : 'right-0'}`}
+              style={{
+                width: 'min(20rem, calc(100vw - 2rem))',
+                borderColor: 'var(--border)',
+                background: 'color-mix(in srgb, var(--surface) 96%, black 4%)',
+                boxShadow: '0 10px 30px rgba(0,0,0,.32)'
+              }}
+              data-home-tooltip={testId}
+            >
+              {content}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
+function LegacyMonthPickerBlock({
+      title,
+      year, setYear,
+      month, setMonth,
+      years,
+      monthOptions,
+      idPrefix
+    }) {
+      return (
+        <div className="subpick">
+          <h3>{title}</h3>
+          <div className="row">
+            <div className="cell" style={{flexDirection:'column', alignItems:'stretch'}}>
+              <SelectPopoverField
+                id={`${idPrefix}-ano`}
+                label="Ano"
+                value={year}
+                onChange={e=>setYear(Number(e.target.value))}
+                allowCustomValue
+                customInputPlaceholder="Digite um ano"
+                customInputButtonLabel={(candidate) => `Usar ${candidate}`}
+                customInputMaxLength={4}
+                customValueParser={parseEditableYear}
+                panelWidth="min(280px, calc(100vw - 2rem))"
+              >
+                {renderYearOptions(years, year)}
+              </SelectPopoverField>
+            </div>
+            <div className="cell" style={{flexDirection:'column', alignItems:'stretch'}}>
+              <label htmlFor={`${idPrefix}-mes`}>Mês</label>
+              <SelectPopoverField
+                id={`${idPrefix}-mes`}
+                label={'M\u00eas'}
+                value={month}
+                onChange={e=>setMonth(Number(e.target.value))}
+              >
+                {monthOptions(year)}
+              </SelectPopoverField>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
 function MonthPickerBlock({
       title,
       year, setYear,
@@ -10,24 +157,31 @@ function MonthPickerBlock({
         <div className="subpick">
           <h3>{title}</h3>
           <div className="row">
-            <div className="cell">
-              <label htmlFor={`${idPrefix}-ano`}>Ano</label>
-              <select id={`${idPrefix}-ano`} className="select"
-                      value={year} onChange={e=>setYear(Number(e.target.value))}>
-                {[...years, Math.max(...years, new Date().getFullYear()) + 1]
-                  .sort((a,b)=>a-b)
-                  .map(y => (
-                    <option key={y} value={y}>{y}</option>
-                ))}
-
-              </select>
+            <div className="cell" style={{flexDirection:'column', alignItems:'stretch'}}>
+              <SelectPopoverField
+                id={`${idPrefix}-ano`}
+                label="Ano"
+                value={year}
+                onChange={e=>setYear(Number(e.target.value))}
+                allowCustomValue
+                customInputPlaceholder="Digite um ano"
+                customInputButtonLabel={(candidate) => `Usar ${candidate}`}
+                customInputMaxLength={4}
+                customValueParser={parseEditableYear}
+                panelWidth="min(280px, calc(100vw - 2rem))"
+              >
+                {renderYearOptions(years, year)}
+              </SelectPopoverField>
             </div>
-            <div className="cell" style={{justifyContent:'flex-end'}}>
-              <label htmlFor={`${idPrefix}-mes`}>Mês</label>
-              <select id={`${idPrefix}-mes`} className="select"
-                      value={month} onChange={e=>setMonth(Number(e.target.value))}>
+            <div className="cell" style={{flexDirection:'column', alignItems:'stretch'}}>
+              <SelectPopoverField
+                id={`${idPrefix}-mes`}
+                label={'M\u00eas'}
+                value={month}
+                onChange={e=>setMonth(Number(e.target.value))}
+              >
                 {monthOptions(year)}
-              </select>
+              </SelectPopoverField>
             </div>
           </div>
         </div>
@@ -205,7 +359,7 @@ function PostLoginMock() {
       
       // Se o ano padrão (2025) não existir no banco, pega o mais recente disponível
       React.useEffect(() => {
-        if (years.length && !years.includes(yearSel)) {
+        if (years.length && (yearSel == null || Number.isNaN(Number(yearSel)))) {
           setYearSel(years[0]); // assumindo que listYears() já retorna DESC
         }
       }, [years]);
@@ -500,11 +654,32 @@ function PostLoginMock() {
         setEditing({ mode:'edit', item: { ...JSON.parse(JSON.stringify(item)), data: isoDate } });
       }
 
+      const navigationHelp = (
+        <div className="space-y-2">
+          <div>Use estes botões para trocar de área dentro da aplicação.</div>
+          <ul className="list-disc space-y-1 pl-4">
+            <li><strong>Controle</strong> mostra o mês em trabalho.</li>
+            <li><strong>Dashboard</strong> abre a leitura analítica do período filtrado.</li>
+          </ul>
+        </div>
+      );
+      const actionsHelp = (
+        <div className="space-y-2">
+          <div>Estas ações resolvem tarefas do dia a dia sem trocar de área.</div>
+          <ul className="list-disc space-y-1 pl-4">
+            <li><strong>Nova conta</strong> abre o cadastro de um novo lançamento no período exibido no Controle.</li>
+            <li><strong>Relatórios</strong> abre a geração dos relatórios formais em PDF do app.</li>
+            <li><strong>Configurações</strong> ajusta tema, perfil e preferências.</li>
+          </ul>
+          <div>No dashboard, a ação de <strong>Nova conta</strong> sai de cena para manter o foco na leitura analítica.</div>
+        </div>
+      );
+
       return (
         <div className={`theme-${theme} min-h-screen relative p-4 md:p-6`}>
           <div className="mx-auto w-full max-w-5xl">
           {/* Header */}
-          <header className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center mb-6">
+          <header className="mb-6 flex flex-col gap-3">
             <h1 className="brand text-center md:text-left w-full flex items-center gap-3 relative">
               <img
                 src="./icons/icon-512.png"
@@ -516,23 +691,64 @@ function PostLoginMock() {
               <span className="w-full text-center md:w-auto md:text-left block">Controle de Contas</span>
             </h1>
 
+            <div className="flex w-full flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex w-full flex-col gap-1 lg:w-auto">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs uppercase tracking-[0.16em] opacity-60">{'Navega\u00e7\u00e3o'}</span>
+                  <HomeInfoTooltip content={navigationHelp} testId="navigation" align="left" />
+                </div>
+                <div className="grid w-full grid-cols-2 gap-2 lg:w-auto">
+                  <button
+                    className={`btn w-full lg:w-auto ${currentView === 'controle' ? 'primary' : 'ghost'}`}
+                    onClick={() => Router.go(`#/mes?ano=${yearSel}&mes=${monthSel}`)}
+                    aria-current={currentView === 'controle' ? 'page' : undefined}
+                  >
+                    Controle
+                  </button>
+                  <button
+                    className={`btn w-full lg:w-auto ${currentView === 'dashboard' ? 'primary' : 'ghost'}`}
+                    onClick={() => Router.go('#/dashboard')}
+                    aria-current={currentView === 'dashboard' ? 'page' : undefined}
+                  >
+                    Dashboard
+                  </button>
+                </div>
+              </div>
 
-            <div className="flex flex-col gap-2 w-full sm:grid sm:grid-cols-2 md:flex md:flex-row md:items-center">
-              {currentView === 'controle' ? (
-                <button className={`btn primary w-full md:w-auto ${activeId==='new' ? 'pop' : ''}`} onClick={()=>openNew()}>+ Nova Conta</button>
-              ) : null}
-              <button className="btn ghost w-full md:w-auto" onClick={()=>{ setReportsTab('home'); setShowReports(true); }}>📊 Relatórios</button>
-              {currentView === 'dashboard' ? (
-                <button
-                className="btn ghost w-full md:w-auto"
-                onClick={()=> Router.go(`#/mes?ano=${yearSel}&mes=${monthSel}`)}
-              >
-                ⌂ Home
-                </button>
-              ) : null}
-              <button className="btn ghost" onClick={()=> setShowSettings(true)}>⚙️ Configurações</button>
+              <div className="flex w-full flex-col gap-1 lg:w-auto lg:min-w-[520px]">
+                <div className="flex items-center gap-2 lg:justify-end">
+                  <span className="text-xs uppercase tracking-[0.16em] opacity-60">{'A\u00e7\u00f5es'}</span>
+                  <HomeInfoTooltip content={actionsHelp} testId="actions" align="right" />
+                </div>
+                <div className={`grid w-full gap-2 ${currentView === 'controle' ? 'sm:grid-cols-3' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
+                  {currentView === 'controle' ? (
+                    <div className="w-full">
+                      <button
+                        className={`btn primary w-full inline-flex items-center justify-center gap-2 ${activeId==='new' ? 'pop' : ''}`}
+                        onClick={()=>openNew()}
+                      >
+                        <span
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full text-base font-bold"
+                          style={{ background: 'rgba(10,10,10,.14)' }}
+                          aria-hidden="true"
+                        >
+                          +
+                        </span>
+                        <span>Nova conta</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="hidden lg:block" aria-hidden="true" />
+                  )}
+                  <button className="btn ghost w-full" onClick={()=>{ setReportsTab('home'); setShowReports(true); }}>
+                    {'Relat\u00f3rios'}
+                  </button>
+                  <button className="btn ghost w-full" onClick={()=> setShowSettings(true)}>
+                    {'Configura\u00e7\u00f5es'}
+                  </button>
+                </div>
+              </div>
             </div>
-
 
           </header>
         
@@ -602,39 +818,42 @@ function PostLoginMock() {
 
 
           {/* Resumo do mês + seletor ano/mês (meses DESC e nomes apenas) */}
-          <section className="card mb-6 flex flex-wrap items-center gap-4">
+          <section className="card mb-6 flex flex-col gap-4 md:flex-row md:items-center">
             <div>
               <div className="text-sm opacity-70">Total do mês</div>
               <div className="text-2xl font-semibold" style={{textShadow:'var(--glow)'}}>
                 {totalMes.toLocaleString('pt-BR', { style:'currency', currency:'BRL' })}
               </div>
             </div>
-            <div className="ml-auto flex items-center gap-2">
-              <label className="text-sm opacity-70">Ano</label>
-              <select
-                className="select"
+            <div className="grid w-full gap-3 sm:grid-cols-2 md:ml-auto md:w-auto">
+              <SelectPopoverField
+                id="home-ano"
+                label="Ano"
                 value={yearSel}
                 onChange={e=>{
                   const y = Number(e.target.value);
                   setYearSel(y);
                   Router.go(`#/mes?ano=${y}&mes=${monthSel}`);
                 }}
+                allowCustomValue
+                customInputPlaceholder="Digite um ano"
+                customInputButtonLabel={(candidate) => `Usar ${candidate}`}
+                customInputMaxLength={4}
+                customValueParser={parseEditableYear}
+                panelWidth="min(280px, calc(100vw - 2rem))"
+                wrapperClassName="w-full md:w-[120px]"
               >
-                {[...years, Math.max(...years, new Date().getFullYear()) + 1]
-                  .sort((a,b)=>a-b)
-                  .map(y=> <option key={y} value={y}>{y}</option>)
-                }
-              </select>
+                {renderYearOptions(years, yearSel)}
+              </SelectPopoverField>
 
-              <label className="text-sm opacity-70">Mês</label>
               {(() => {
                 const dbMonths = monthsByYear[yearSel] || [];
                 const all12 = [1,2,3,4,5,6,7,8,9,10,11,12];
 
-                // se o ano tem meses no banco, usa esses; senão usa 1..12
+                // se o ano tem meses no banco, usa esses; senÃ£o usa 1..12
                 const monthsToShow = dbMonths.length ? [...dbMonths] : [...all12];
 
-                // garante que o mês selecionado atual apareça na lista
+                // garante que o mÃªs selecionado atual apareÃ§a na lista
                 if (!monthsToShow.includes(monthSel)) {
                   monthsToShow.push(monthSel);
                 }
@@ -643,19 +862,21 @@ function PostLoginMock() {
                 monthsToShow.sort((a, b) => a - b);
 
                 return (
-                  <select
-                    className="select"
+                  <SelectPopoverField
+                    id="home-mes"
+                    label={'M\u00eas'}
                     value={monthSel}
                     onChange={e=>{
                       const m = Number(e.target.value);
                       setMonthSel(m);
                       Router.go(`#/mes?ano=${yearSel}&mes=${m}`);
                     }}
+                    wrapperClassName="w-full md:w-[180px]"
                   >
-                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
-                      <option key={m} value={m}>{monthNamePT(m)}</option>
-                    ))}
-                  </select>
+                      {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
+                        <option key={m} value={m}>{monthNamePT(m)}</option>
+                      ))}
+                  </SelectPopoverField>
                 );
               })()}
 

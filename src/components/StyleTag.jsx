@@ -83,7 +83,39 @@ body, #root { background: var(--bg); color: var(--text); }
   opacity: 1 !important;
 }
 
-input.input, select.select { background: #0c0f14; color: var(--text); border:1px solid var(--border); border-radius:12px; padding:10px 12px; }
+ input.input, select.select { background: #0c0f14; color: var(--text); border:1px solid var(--border); border-radius:12px; padding:10px 12px; }
+ .select-shell { position: relative; width: 100%; min-width: 0; }
+ .select-shell__icon {
+   pointer-events: none;
+   position: absolute;
+   right: 8px;
+   top: 50%;
+   transform: translateY(-50%);
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   width: 34px;
+   height: 34px;
+   border-radius: 9999px;
+   border: 1px solid var(--border);
+   background: color-mix(in srgb, var(--surface) 92%, black 8%);
+   color: var(--muted);
+   transition: border-color .18s ease, background-color .18s ease, color .18s ease;
+  }
+ .select-shell:focus-within .select-shell__icon {
+   border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+   background: color-mix(in srgb, var(--primary) 12%, var(--surface));
+   color: var(--primary);
+  }
+ select.select.select-shell__input {
+   width: 100%;
+   padding-right: 52px;
+   appearance: none;
+   -webkit-appearance: none;
+   -moz-appearance: none;
+   background-image: none;
+ }
+ select.select.select-shell__input::-ms-expand { display: none; }
 /* Ajustes de campo no tema claro para contraste adequado */
 .theme-light input.input, .theme-light select.select { background: #ffffff; color: #0b1220; border-color: #d7e0ea; }
 .theme-light .modal { background: #fff !important; color:#0b1220; }

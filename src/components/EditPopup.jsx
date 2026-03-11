@@ -1,3 +1,48 @@
+function EditPopupInfoTooltip({ content }) {
+      const [open, setOpen] = React.useState(false);
+      const ref = React.useRef(null);
+
+      React.useEffect(() => {
+        if (!open) return undefined;
+
+        function handlePointerDown(event) {
+          if (!ref.current || ref.current.contains(event.target)) return;
+          setOpen(false);
+        }
+
+        document.addEventListener('mousedown', handlePointerDown);
+        return () => document.removeEventListener('mousedown', handlePointerDown);
+      }, [open]);
+
+      return (
+        <div className="relative shrink-0" ref={ref}>
+          <button
+            type="button"
+            className="h-7 w-7 rounded-full border text-xs font-semibold"
+            style={{ borderColor: 'var(--border)', background: 'var(--chip)', color: 'var(--text)' }}
+            onClick={() => setOpen((prev) => !prev)}
+            aria-label="Mais informações"
+            aria-expanded={open}
+          >
+            i
+          </button>
+          {open ? (
+            <div
+              className="absolute right-0 top-full z-40 mt-2 rounded-2xl border p-3 text-sm leading-relaxed"
+              style={{
+                width: 'min(20rem, calc(100vw - 2rem))',
+                borderColor: 'var(--border)',
+                background: 'color-mix(in srgb, var(--surface) 96%, black 4%)',
+                boxShadow: '0 10px 30px rgba(0,0,0,.32)'
+              }}
+            >
+              {content}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
 function EditPopup({ data, payers, typeOpts = [], onClose, onSave, onDelete }) {
       const { mode, item: initial } = data;
       // Fecha o modal ao pressionar Esc (desktop apenas)
@@ -54,11 +99,29 @@ function EditPopup({ data, payers, typeOpts = [], onClose, onSave, onDelete }) {
         onDelete(initial.id); // parent resolve exclusão
       }
 
+      const newAccountHelp = (
+        <div className="space-y-2">
+          <div>Use <strong>Nova conta</strong> para registrar um novo lançamento no mês e ano exibidos na home.</div>
+          <ul className="list-disc space-y-1 pl-4">
+            <li><strong>Tipo de conta</strong>: usa categorias sugeridas e também aceita <strong>Outro...</strong>.</li>
+            <li><strong>Valor</strong> e <strong>Quem pagou</strong> são obrigatórios para salvar.</li>
+            <li><strong>Data de pagamento</strong> registra quando a conta foi paga; o período de trabalho vem da seleção de ano e mês da tela.</li>
+            <li><strong>Instância</strong> ajuda a diferenciar recorrências da mesma conta quando existir mais de uma.</li>
+            <li><strong>Dividida</strong> marca se a conta entra na lógica de divisão entre pagadores.</li>
+            <li><strong>Link boleto</strong> e <strong>Link comprovante</strong> guardam URLs de referência; o app não faz upload de arquivo ou imagem.</li>
+          </ul>
+          <div>Ao salvar, o lançamento entra na lista do período aberto e passa a alimentar relatórios e dashboard do usuário autenticado.</div>
+        </div>
+      );
+
 
       return (
         <div className="overlay" onClick={onClose}>
           <div className="modal max-w-lg w-full pop" role="dialog" aria-modal="true" aria-labelledby="edit-title" onClick={e=>e.stopPropagation()}>
-            <h3 id="edit-title" className="text-lg font-semibold mb-3">{mode==='new' ? 'Nova Conta' : 'Editar Conta'}</h3>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 id="edit-title" className="text-lg font-semibold">{mode==='new' ? 'Nova Conta' : 'Editar Conta'}</h3>
+              {mode==='new' ? <EditPopupInfoTooltip content={newAccountHelp} /> : null}
+            </div>
             <form className="space-y-3" onSubmit={e=>e.preventDefault()} onKeyDown={(e)=>{ if(e.key==='Enter' && (e.ctrlKey||e.metaKey) && isFormValid){ onSubmit(); } }}>
               {/* Tipo de conta: Top10 + “Outro…” */}
               <div>

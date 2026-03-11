@@ -169,7 +169,7 @@ function ReportsModal({
 
 
       function monthOptions(y){
-        return (monthsByYear[y]||[]).map(m => <option key={m} value={m}>{monthNamePT(m)}</option>);
+        return [1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={m}>{monthNamePT(m)}</option>);
       }
 
       function toggleConta(name){
@@ -1564,15 +1564,13 @@ function ReportsModal({
               </div>
             </div>
 
-            {/* Tela inicial com 3 opções */}
+            {/* Tela inicial com 2 opcoes */}
             {tab==='home' && (
               <div className="grid gap-3">
-                <button className="btn primary" onClick={()=>onChangeTab('mensal')}>Relatório mensal</button>
-                <button className="btn primary" onClick={()=>onChangeTab('periodo')}>Relatório por período</button>
-                <button className="btn primary" onClick={() => { onClose?.(); onOpenDashboard?.(); }}>Dashboard BI</button>
+                <button className="btn primary" onClick={()=>onChangeTab('mensal')}>{'Relat\u00f3rio mensal'}</button>
+                <button className="btn primary" onClick={()=>onChangeTab('periodo')}>{'Relat\u00f3rio por per\u00edodo'}</button>
               </div>
             )}
-
             {/* MENSAL */}
             {tab==='mensal' && (
               <>
@@ -1637,13 +1635,11 @@ function ReportsModal({
                   <div className="subpick">
                     <h3>Alcance</h3>
                     <div className="row">
-                      <div className="cell" style={{gridColumn:'1 / -1'}}>
-                        <label className="text-sm opacity-70" htmlFor="cmp-range">Tipo</label>
-                        <select id="cmp-range" className="select"
-                                value={cmpRange} onChange={e=>setCmpRange(e.target.value)}>
+                      <div className="cell" style={{gridColumn:'1 / -1', flexDirection:'column', alignItems:'stretch'}}>
+                        <SelectPopoverField id="cmp-range" label="Tipo" value={cmpRange} onChange={e=>setCmpRange(e.target.value)}>
                           <option value="mes">Mês único</option>
                           <option value="periodo">Período</option>
-                        </select>
+                        </SelectPopoverField>
                       </div>
                     </div>
                   </div>
@@ -1682,8 +1678,8 @@ function ReportsModal({
                   <div className="subpick">
                     <h3>Tipo de gráfico</h3>
                     <div className="row">
-                      <div className="cell" style={{gridColumn:'1 / -1'}}>
-                        <select className="select" value={cmpType} onChange={e=>setCmpType(e.target.value)}>
+                      <div className="cell" style={{gridColumn:'1 / -1', flexDirection:'column', alignItems:'stretch'}}>
+                        <SelectPopoverField label="Visual" value={cmpType} onChange={e=>setCmpType(e.target.value)}>
                           {cmpRange==='mes' && (<>
                             <option value="pizza">Pizza</option>
                             <option value="barras">Barras</option>
@@ -1692,7 +1688,7 @@ function ReportsModal({
                             <option value="pizza">Pizza</option>
                             <option value="linhas">Linhas</option>
                           </>)}
-                        </select>
+                        </SelectPopoverField>
 
                       </div>
                     </div>

@@ -40,6 +40,9 @@ Com esse modelo, o sistema consegue:
 - **Links clicáveis** de boleto e comprovante
 - **Relatório mensal em PDF**
 - **Relatório por período em PDF**
+- **Filtros de data com ano editável e meses completos**
+- **Ajuda contextual na home e no modal de Nova conta**
+- **Navegação dedicada entre Controle e Dashboard**
 - **Dashboard BI em rota própria** (`#/dashboard`)
 - **Funcionamento offline básico** com Service Worker
 - **Instalação como PWA**
@@ -58,6 +61,15 @@ Fluxo principal do app:
 - criação ou edição das contas
 - acompanhamento do total do mês
 
+O seletor de data do controle foi desenhado para equilibrar conveniência e liberdade operacional:
+
+- os anos sugeridos partem da base existente no banco
+- o ano atual também é garantido na navegação, mesmo que ainda não exista lançamento nele
+- o usuário pode digitar e confirmar manualmente qualquer ano válido com quatro dígitos
+- os meses permanecem sempre disponíveis de janeiro a dezembro
+
+Na prática, isso evita que o filtro de data vire uma barreira para lançar contas em anos passados, no ano corrente ou em anos futuros ainda sem histórico.
+
 ### 2. Pendências
 
 O sistema compara o mês atual com o mês anterior e aponta contas que ainda não foram relançadas.
@@ -70,9 +82,10 @@ O modal de relatórios hoje expõe:
 
 - **Relatório mensal**
 - **Relatório por período**
-- **Dashboard BI**
 
-Os comparativos antigos continuam existindo no código legado, mas o dashboard passou a concentrar a leitura analítica mais rica e interativa.
+Os mesmos seletores de data do fluxo principal são reaproveitados aqui, preservando o comportamento de ano editável com confirmação explícita e meses completos.
+
+Os comparativos antigos continuam existindo no código legado, mas o dashboard passou a concentrar a leitura analítica mais rica e interativa, fora do modal principal de relatórios.
 
 ### 4. Dashboard BI
 
@@ -80,10 +93,28 @@ O dashboard foi criado para coexistir com o legado, não para substituir o contr
 
 Ele entra por:
 
-- botão dentro de `Relatórios`
+- navegação principal do topo
 - rota própria `#/dashboard`
 
 O dashboard trabalha em cima dos mesmos dados do app e respeita o filtro do topo antes de recalcular os blocos analíticos.
+
+### 5. Navegação principal
+
+O topo da aplicação segue um padrão mais explícito de separação entre navegação e ação:
+
+- **Navegação**: `Controle` e `Dashboard`
+- **Ações no controle**: `Nova conta`, `Relatórios` e `Configurações`
+- **Ações no dashboard**: `Relatórios` e `Configurações`
+
+Esse desenho preserva o fluxo legado do controle mensal e, ao mesmo tempo, deixa claro quando o usuário está trocando de área e quando está apenas abrindo um modal de ação.
+
+Para reforçar essa leitura sem transformar a interface em manual, a home também oferece ajudas contextuais pontuais:
+
+- um `i` em **Navegação**, explicando a diferença entre `Controle` e `Dashboard`
+- um `i` em **Ações**, explicando `Nova conta`, `Relatórios` e `Configurações`
+- um `i` no topo do modal de **Nova conta**, detalhando campos obrigatórios, opcionais e o uso de links de boleto/comprovante como URLs de referência
+
+Na prática, `Relatórios` segue sendo a entrada para a geração dos relatórios formais em PDF, enquanto a ajuda de `Nova conta` aparece apenas dentro do próprio fluxo de cadastro.
 
 ---
 
@@ -119,15 +150,15 @@ O comportamento é:
 - **KPIs principais**
   - total do período
   - valor total dividido
-  - maiores gastos por pagador
+  - maiores pagadores do período
 - **Acerto entre pagadores**
 - **Maior categoria / maior conta do recorte**
-- **Quantidade de lançamentos**
+- **Quantidade de contas pagas**
 - **Evolução por conta**
 - **Top 5 contas + Outros**
 - **Ranking de gastos**
 - **Pagadores**
-- **Contas nos últimos 12 meses**
+- **Ciclo anual**
 - **Categorias ao longo do tempo**
 
 ### Interação entre blocos
@@ -137,9 +168,11 @@ Os blocos principais do dashboard conversam entre si por foco temporário:
 - `Top 5`
 - `Ranking`
 - `Evolução por conta`
-- `Contas nos últimos 12 meses`
+- `Ciclo anual`
 
 Ao selecionar uma conta em um desses blocos, os demais sincronizam o destaque dessa mesma conta, sem alterar os filtros reais do topo.
+
+No dashboard atual, o bloco `Ciclo anual` mostra, para cada conta, o intervalo do mesmo mês do ano anterior até o mês final do período filtrado. O subtítulo do card explicita esse intervalo dinamicamente.
 
 ### Regras de UX do dashboard
 
@@ -147,6 +180,19 @@ Ao selecionar uma conta em um desses blocos, os demais sincronizam o destaque de
 - o dashboard não substitui os relatórios formais
 - o botão de `Pendências` não aparece na visão BI
 - o usuário pode voltar para `#/mes` a qualquer momento
+
+### Navegação no topo
+
+O header trabalha em duas camadas:
+
+- linha 1: marca do produto (`Controle de Contas`)
+- linha 2: navegação principal à esquerda e ações contextuais à direita
+
+Na prática, isso reforça a leitura de que:
+
+- `Controle` e `Dashboard` são áreas da aplicação
+- `Relatórios` e `Configurações` são ações modais
+- `Nova conta` é uma ação própria da visão de controle
 
 ---
 
@@ -176,11 +222,12 @@ Ao selecionar uma conta em um desses blocos, os demais sincronizam o destaque de
 │  └─ components/
 │     ├─ App.jsx                      # Componente raiz; sessão, header e logout
 │     ├─ LoginGate.jsx                # Login/cadastro
+│     ├─ SelectPopoverField.jsx       # Campo seletor customizado no padrão visual do dashboard
 │     ├─ PostLoginMock.jsx            # Shell pós-login e fluxo principal do controle
 │     ├─ ContaCard.jsx                # Card individual de lançamento
 │     ├─ EditPopup.jsx                # Modal de criação/edição
 │     ├─ SettingsModal.jsx            # Perfil e preferências
-│     ├─ ReportsModal.jsx             # Relatórios formais e entrada para o dashboard
+│     ├─ ReportsModal.jsx             # Relatórios formais e filtros auxiliares de leitura
 │     └─ StyleTag.jsx                 # CSS global e temas
 ```
 
@@ -242,6 +289,8 @@ O `data-adapter.js` organiza esses dados para a UI, lidando com:
 - links
 - estrutura consumida pelos cards e pelos relatórios
 
+Tanto o controle mensal quanto o dashboard BI consomem o mesmo pipeline de dados por usuário autenticado. Em outras palavras: a leitura do dashboard respeita o mesmo `user_id` das consultas do restante da aplicação.
+
 ---
 
 ## 🗃️ Banco de Dados
@@ -299,6 +348,8 @@ O dashboard respeita o tema ativo da aplicação.
 ## 📑 Relatórios e PDFs
 
 O app possui dois relatórios formais principais:
+
+A home do modal de relatórios foi simplificada para priorizar os dois relatórios formais. O dashboard BI segue disponível por navegação própria no topo da aplicação.
 
 ### Relatório mensal
 
@@ -372,6 +423,13 @@ O roteamento é hash-based:
 
 O router fica em `src/router.js` e chama handlers expostos pela própria app via `window.AppRoutes`.
 
+Na interface, o padrão atual é:
+
+- `Controle` e `Dashboard` como navegação persistente
+- `Relatórios` e `Configurações` como ações contextuais
+- `Nova conta` como ação exclusiva da visão de controle
+- ícones `i` como ajuda contextual pontual, sem substituir a navegação principal
+
 ---
 
 ## 💾 PWA, Cache e Atualização
@@ -426,10 +484,11 @@ Se a PWA instalada estiver presa numa versão antiga, limpar os dados do site/ap
 
 | Arquivo | Papel |
 |--------|-------|
-| `App.jsx` | sessão, header, logout e orquestração do topo |
+| `App.jsx` | sessão, header, logout e orquestração da navegação principal |
 | `LoginGate.jsx` | login e cadastro |
-| `PostLoginMock.jsx` | fluxo principal do controle, pendências, modais e navegação interna |
-| `ReportsModal.jsx` | relatórios formais e entrada para o dashboard |
+| `SelectPopoverField.jsx` | seletor customizado em estilo dashboard para testes e transição do legado |
+| `PostLoginMock.jsx` | fluxo principal do controle, pendências, modais e composição do topo |
+| `ReportsModal.jsx` | relatórios formais e filtros auxiliares dentro do modal |
 | `DashboardView.jsx` | dashboard BI |
 | `SettingsModal.jsx` | tema e preferências |
 | `EditPopup.jsx` | criação/edição/exclusão |

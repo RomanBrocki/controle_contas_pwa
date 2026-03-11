@@ -86,6 +86,10 @@ function dashboardPairLabel(pair, showYear = false) {
   return showYear ? `${monthLabel}/${String(pair.year).slice(-2)}` : monthLabel;
 }
 
+function dashboardPairLabelLong(pair) {
+  return `${dashboardMonthNamePT(pair.month, true)}/${pair.year}`;
+}
+
 function dashboardSortPairs(pairs) {
   return [...pairs].sort((left, right) => {
     if (left.year !== right.year) return left.year - right.year;
@@ -390,7 +394,7 @@ function DashboardInfoTooltip({ content, testId }) {
         style={{ borderColor: 'var(--border)', background: 'var(--chip)', color: 'var(--text)' }}
         onClick={() => setOpen((prev) => !prev)}
         data-dash-tooltip-button={testId}
-        aria-label="Mais informacoes"
+        aria-label="Mais informações"
         aria-expanded={open}
       >
         i
@@ -582,7 +586,29 @@ function DashboardToolbarMockField(props) {
             <div className="text-[11px] uppercase tracking-[0.16em] opacity-60">{props.label}</div>
             <div className="mt-1 font-medium truncate">{props.value}</div>
           </div>
-          <div className="text-base opacity-60" aria-hidden="true">{props.open ? '^' : 'v'}</div>
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-full border transition-colors"
+            style={{
+              borderColor: props.open
+                ? 'color-mix(in srgb, var(--primary) 45%, var(--border))'
+                : 'var(--border)',
+              background: props.open
+                ? 'color-mix(in srgb, var(--primary) 12%, var(--surface))'
+                : 'color-mix(in srgb, var(--surface) 92%, black 8%)',
+              color: props.open ? 'var(--primary)' : 'var(--muted)'
+            }}
+            aria-hidden="true"
+          >
+            <svg
+              viewBox="0 0 20 20"
+              className={`h-4 w-4 transition-transform duration-200 ${props.open ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            >
+              <path d="M5.5 7.5L10 12l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
         </div>
       </button>
 
@@ -624,7 +650,7 @@ function DashboardFilterToolbarMock(props) {
   const monthsSummary = dashboardSelectionSummary(props.filters.months, props.monthOptions, 'Todos');
   const accountsSummary = dashboardSelectionSummary(props.filters.accounts, props.accountOptions, 'Todas');
   const payersSummary = dashboardSelectionSummary(props.filters.payers, props.payerOptions, 'Todos');
-  const dividedSummary = dashboardSelectionSummary(props.filters.divided, props.dividedOptions, 'Sim e Nao');
+  const dividedSummary = dashboardSelectionSummary(props.filters.divided, props.dividedOptions, 'Sim e Não');
 
   return (
     <section
@@ -641,7 +667,7 @@ function DashboardFilterToolbarMock(props) {
             </div>
           </div>
           <DashboardInfoTooltip
-            content="Filtros compactos do dashboard. As opcoes se ajustam localmente no rascunho, mas cards e graficos so sao recalculados quando voce clicar em Atualizar dashboard."
+            content="Filtros compactos do dashboard. As opções se ajustam localmente no rascunho, mas cards e gráficos só são recalculados quando você clicar em Atualizar dashboard."
             testId="toolbar-mock"
           />
         </div>
@@ -652,7 +678,7 @@ function DashboardFilterToolbarMock(props) {
             onClick={props.onReset}
             data-dash-action="reset-filters"
           >
-            Restaurar padrao
+            Restaurar padrão
           </button>
           {openId ? (
             <button
@@ -661,7 +687,7 @@ function DashboardFilterToolbarMock(props) {
               onClick={() => setOpenId('')}
               data-dash-action="close-filters"
             >
-              Fechar paineis
+              Fechar painéis
             </button>
           ) : null}
           <button
@@ -681,7 +707,7 @@ function DashboardFilterToolbarMock(props) {
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_repeat(3,minmax(0,1fr))]">
         <DashboardToolbarMockField
-          label="Periodo"
+          label="Período"
           value={`${monthsSummary} | ${yearsSummary}`}
           open={openId === 'period'}
           onToggle={() => setOpenId((prev) => prev === 'period' ? '' : 'period')}
@@ -723,7 +749,7 @@ function DashboardFilterToolbarMock(props) {
         >
           <DashboardFilterChecklist
               label="Contas"
-              helperText="Contas disponiveis para o periodo selecionado."
+              helperText="Contas disponíveis para o período filtrado."
               selection={props.filters.accounts}
               onChange={(accounts) => props.onChange((prev) => ({ ...prev, accounts }))}
               options={props.accountOptions}
@@ -742,7 +768,7 @@ function DashboardFilterToolbarMock(props) {
         >
           <DashboardFilterChecklist
               label="Pagadores"
-              helperText="Pagadores disponiveis para o recorte atual."
+              helperText="Pagadores disponíveis no período filtrado."
               selection={props.filters.payers}
               onChange={(payers) => props.onChange((prev) => ({ ...prev, payers }))}
               options={props.payerOptions}
@@ -754,7 +780,7 @@ function DashboardFilterToolbarMock(props) {
         </DashboardToolbarMockField>
 
         <DashboardToolbarMockField
-          label="Divisao"
+          label="Divisão"
           value={dividedSummary}
           open={openId === 'divided'}
           onToggle={() => setOpenId((prev) => prev === 'divided' ? '' : 'divided')}
@@ -763,11 +789,11 @@ function DashboardFilterToolbarMock(props) {
         >
           <DashboardFilterChecklist
             label="Divididas"
-            helperText="Sim, Nao ou ambas."
+            helperText="Sim, Não ou ambas."
             selection={props.filters.divided}
             onChange={(divided) => props.onChange((prev) => ({ ...prev, divided }))}
             options={props.dividedOptions}
-            allLabel="Sim e Nao"
+            allLabel="Sim e Não"
             searchable={false}
             columns={2}
             testId="mock-divided"
@@ -776,21 +802,21 @@ function DashboardFilterToolbarMock(props) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="badge">Recorte aplicado no dashboard</div>
+        <div className="badge">Filtro do período aplicado</div>
         <div className="badge" data-dash-filter-summary="years">Anos: {props.appliedYearsSummary}</div>
         <div className="badge" data-dash-filter-summary="months">Meses: {props.appliedMonthsSummary}</div>
         <div className="badge" data-dash-filter-summary="accounts">Contas: {props.appliedAccountsSummary}</div>
         <div className="badge" data-dash-filter-summary="payers">Pagadores: {props.appliedPayersSummary}</div>
         <div className="badge" data-dash-filter-summary="divided">Divididas: {props.appliedDividedSummary}</div>
-        <div className="badge" data-dash-count="rows">Lancamentos: {props.appliedRowCount}</div>
-        {props.previewLoading ? <div className="badge">Atualizando opcoes...</div> : null}
+        <div className="badge" data-dash-count="rows">Contas pagas: {props.appliedRowCount}</div>
+        {props.previewLoading ? <div className="badge">Atualizando opções...</div> : null}
         {props.loading ? <div className="badge">Atualizando dashboard...</div> : null}
-        {props.hasPendingChanges ? <div className="badge">Alteracoes pendentes</div> : null}
+        {props.hasPendingChanges ? <div className="badge">Alterações pendentes</div> : null}
       </div>
 
       {props.hasPendingChanges ? (
         <div className="text-sm opacity-70" data-dash-pending-message="true">
-          O rascunho acima ja foi ajustado. O dashboard abaixo continua no recorte aplicado ate voce clicar em Atualizar dashboard.
+          O rascunho acima já foi ajustado. O dashboard abaixo continua no filtro de período aplicado até você clicar em Atualizar dashboard.
         </div>
       ) : null}
     </section>
@@ -840,7 +866,7 @@ function DashboardSparkline(props) {
   const selectedPoint = points.find((point) => point.key === selectedPointKey) || points[points.length - 1] || null;
 
   if (!points.length) {
-    return <div className="text-sm opacity-70">Sem dados suficientes para o grafico.</div>;
+    return <div className="text-sm opacity-70">Sem dados suficientes para o gráfico.</div>;
   }
 
   return (
@@ -848,12 +874,12 @@ function DashboardSparkline(props) {
       <div className="flex flex-wrap gap-2">
         <div className="badge flex items-center gap-2">
           <span className="h-2 w-2 rounded-full" style={{ background: 'var(--primary)' }} />
-          {props.primaryLabel || 'Ultimos 12 meses'}
+          {props.primaryLabel || 'Últimos 12 meses'}
         </div>
         {comparePoints.length ? (
           <div className="badge flex items-center gap-2">
             <span className="w-5 border-t-2 border-dashed" style={{ borderColor: 'var(--muted)' }} />
-            {props.compareLabel || 'Mesmo periodo no ano anterior'}
+            {props.compareLabel || 'Mesmo período no ano anterior'}
           </div>
         ) : null}
         {selectedPoint ? (
@@ -2305,8 +2331,8 @@ function DashboardView(props) {
 
     (async () => {
       try {
-        const rollingPairsLoaded = dashboardRollingPairs(lastAppliedPair.year, lastAppliedPair.month, 12);
-        const rollingComparePairsLoaded = dashboardRollingPairs(lastAppliedPair.year - 1, lastAppliedPair.month, 12);
+        const rollingPairsLoaded = dashboardRollingPairs(lastAppliedPair.year, lastAppliedPair.month, 13);
+        const rollingComparePairsLoaded = dashboardRollingPairs(lastAppliedPair.year - 1, lastAppliedPair.month, 13);
         const [rollingRowsLoaded, rollingCompareRowsLoaded] = await Promise.all([
           dashboardFetchRowsForPairs(rollingPairsLoaded),
           dashboardFetchRowsForPairs(rollingComparePairsLoaded)
@@ -2315,7 +2341,7 @@ function DashboardView(props) {
         setRollingRows(rollingRowsLoaded);
         setRollingCompareRows(rollingCompareRowsLoaded);
       } catch (timelineError) {
-        console.warn('[dashboard] erro ao carregar linha de 12 meses', timelineError);
+        console.warn('[dashboard] erro ao carregar ciclo anual', timelineError);
         if (alive) {
           setRollingRows([]);
           setRollingCompareRows([]);
@@ -2393,9 +2419,11 @@ function DashboardView(props) {
   const filteredCompareRows = React.useMemo(() => dashboardFilterRows(compareRows, normalizedAppliedFilters), [compareRows, normalizedAppliedFilters]);
   const filteredPreviousMonthRows = React.useMemo(() => dashboardFilterRows(previousMonthRows, normalizedAppliedFilters), [previousMonthRows, normalizedAppliedFilters]);
   const rollingPairs = React.useMemo(
-    () => dashboardRollingPairs(lastAppliedPair.year, lastAppliedPair.month, 12),
+    () => dashboardRollingPairs(lastAppliedPair.year, lastAppliedPair.month, 13),
     [lastAppliedPair]
   );
+  const annualCycleStartPair = rollingPairs[0] || lastAppliedPair;
+  const annualCycleSubtitle = `De ${dashboardPairLabelLong(annualCycleStartPair)} a ${dashboardPairLabelLong(lastAppliedPair)}`;
   const filteredRollingRows = React.useMemo(
     () => dashboardFilterRows(rollingRows, normalizedAppliedFilters),
     [rollingRows, normalizedAppliedFilters]
@@ -2409,14 +2437,14 @@ function DashboardView(props) {
   const monthsSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.months, appliedMonthOptions, 'Todos'), [normalizedAppliedFilters.months, appliedMonthOptions]);
   const accountsSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.accounts, appliedContasDisponiveis, 'Todas'), [normalizedAppliedFilters.accounts, appliedContasDisponiveis]);
   const payersSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.payers, appliedPagadoresDisponiveis, 'Todos'), [normalizedAppliedFilters.payers, appliedPagadoresDisponiveis]);
-  const dividedSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.divided, dividedOptions, 'Sim e Nao'), [normalizedAppliedFilters.divided, dividedOptions]);
+  const dividedSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.divided, dividedOptions, 'Sim e Não'), [normalizedAppliedFilters.divided, dividedOptions]);
   const emptyFilterLabels = React.useMemo(() => (
     [
       { label: 'ano', summary: yearsSummary },
-      { label: 'mes', summary: monthsSummary },
+      { label: 'mês', summary: monthsSummary },
       { label: 'conta', summary: accountsSummary },
       { label: 'pagador', summary: payersSummary },
-      { label: 'divisao', summary: dividedSummary }
+      { label: 'divisão', summary: dividedSummary }
     ]
       .filter((item) => item.summary === 'Nenhum')
       .map((item) => item.label)
@@ -2563,46 +2591,46 @@ function DashboardView(props) {
   const cardsPrincipais = [
     {
       key: 'total',
-      label: appliedSelectedPairs.length > 1 ? 'Total do periodo' : 'Total do mes',
+      label: appliedSelectedPairs.length > 1 ? 'Total do período' : 'Total do mês',
       value: dashboardBrl(totalPeriodo),
-      detail: `${filteredRows.length} lancamentos neste recorte.`,
-      tooltip: 'Soma de todos os lancamentos retornados pelos filtros aplicados ao dashboard.'
+      detail: `${filteredRows.length} contas pagas neste período filtrado.`,
+      tooltip: 'Soma de todos os valores do período filtrado no dashboard.'
     },
     {
       key: 'split',
       label: 'Valor total dividido',
       value: dashboardBrl(totalDividido),
-      detail: `${splitPct}% do total do periodo.`,
-      tooltip: 'Somatorio das contas marcadas como divididas dentro do recorte aplicado.'
+      detail: `${splitPct}% do total do período.`,
+      tooltip: 'Soma das contas marcadas como divididas dentro do período filtrado.'
     },
     {
       key: 'payer-1',
       label: primeiraPessoa ? `Pago por ${primeiraPessoa.name}` : 'Pago por',
       value: dashboardBrl(primeiraPessoa ? primeiraPessoa.total : 0),
-      detail: primeiraPessoa ? 'Maior gasto do periodo.' : 'Aguardando dados.',
-      tooltip: 'Pessoa com maior desembolso no recorte filtrado.'
+      detail: primeiraPessoa ? 'Maior pagador do período.' : 'Aguardando dados.',
+      tooltip: 'Maior pagador no período filtrado.'
     },
     {
       key: 'payer-2',
-      label: segundaPessoa ? `Pago por ${segundaPessoa.name}` : 'Qtde de lancamentos',
+      label: segundaPessoa ? `Pago por ${segundaPessoa.name}` : 'Qtd. de contas pagas',
       value: segundaPessoa ? dashboardBrl(segundaPessoa.total) : String(filteredRows.length),
-      detail: segundaPessoa ? 'Segundo maior gasto do periodo.' : 'Movimentos no recorte atual.',
+      detail: segundaPessoa ? 'Segundo maior pagador do período.' : 'Contas pagas no período filtrado.',
       tooltip: segundaPessoa
-        ? 'Pessoa com o segundo maior desembolso no recorte filtrado.'
-        : 'Quantidade de linhas retornadas apos aplicar os filtros.'
+        ? 'Segundo maior pagador no período filtrado.'
+        : 'Quantidade de contas pagas visíveis após aplicar os filtros.'
     }
   ];
 
   const filterTabs = [
-    { id: 'period', label: 'Periodo' },
+    { id: 'period', label: 'Período' },
     { id: 'accounts', label: 'Contas' },
-    { id: 'meta', label: 'Pagador e divisao' }
+    { id: 'meta', label: 'Pagador e divisão' }
   ];
   const renderLegacyFilterPanel = false;
   const singleMonthMode = appliedSelectedPairs.length <= 1;
   const previousMonthLabel = `${dashboardMonthNamePT(previousMonthPair.month)} ${previousMonthPair.year}`;
   const previousYearLabel = `${dashboardMonthNamePT(lastAppliedPair.month)} ${lastAppliedPair.year - 1}`;
-  const emptyStateMessage = `Selecione ao menos uma opcao em ${emptyFilterLabels.join(', ')} e clique em Atualizar dashboard.`;
+  const emptyStateMessage = `Selecione ao menos uma opção em ${emptyFilterLabels.join(', ')} e clique em Atualizar dashboard.`;
 
   function applyDraftFilters() {
     setAppliedFilters(normalizedDraftFilters);
@@ -2812,21 +2840,21 @@ function DashboardView(props) {
               label="Acerto entre pagadores"
               value={settlement.headline}
               detail={settlement.detail}
-              tooltip="Estimativa simples de acerto considerando apenas as contas divididas do recorte."
+              tooltip="Estimativa simples de acerto considerando apenas as contas divididas do período filtrado."
               testId="settlement"
             />
             <DashboardMetricCard
               label="Maior categoria"
               value={topCategoria ? topCategoria.name : 'Sem dados'}
-              detail={topCategoria && totalPeriodo > 0 ? `${Math.round((topCategoria.total / totalPeriodo) * 100)}% do total do periodo.` : 'Aguardando movimentacao'}
-              tooltip="Categoria com maior valor somado depois da aplicacao de todos os filtros."
+              detail={topCategoria && totalPeriodo > 0 ? `${Math.round((topCategoria.total / totalPeriodo) * 100)}% do total do período.` : 'Aguardando movimentação'}
+              tooltip="Categoria com maior valor somado depois da aplicação de todos os filtros."
               testId="top-category"
             />
             <DashboardMetricCard
-              label="Qtde de lancamentos"
+              label="Qtd. de contas pagas"
               value={String(filteredRows.length)}
-              detail={filteredRows.length ? 'Itens filtrados no recorte atual.' : 'Nenhum lancamento neste recorte.'}
-              tooltip="Quantidade de linhas efetivamente visiveis apos a aplicacao do filtro."
+              detail={filteredRows.length ? 'Contas pagas no período filtrado.' : 'Nenhuma conta paga neste período.'}
+              tooltip="Quantidade de contas pagas visíveis após a aplicação do filtro."
               testId="count"
             />
           </div>
@@ -2834,8 +2862,8 @@ function DashboardView(props) {
           {singleMonthMode ? (
             <DashboardSection
               title="Comparativo por conta"
-              subtitle="Mes atual contra mes anterior e mesmo mes do ano anterior."
-              tooltip="Mostra as contas do mes atual em blocos de tres, ordenadas pelo maior valor do mes selecionado."
+              subtitle="Mês atual contra mês anterior e mesmo mês do ano anterior."
+              tooltip="Mostra as contas do mês atual em blocos de três, ordenadas pelo maior valor do mês selecionado."
               testId="trend-single"
             >
               {singleMonthPageCount > 1 ? (
@@ -2874,8 +2902,9 @@ function DashboardView(props) {
             </DashboardSection>
           ) : (
             <DashboardSection
-              title="Evolucao por conta"
-              tooltip="Janela movel dos ultimos 12 meses ate o fim do recorte. A linha cheia mostra a conta selecionada e o tracejado mostra a mesma janela do ano anterior."
+              title="Evolução por conta"
+              subtitle={annualCycleSubtitle}
+              tooltip="Mostra o ciclo anual da conta selecionada, do mesmo mês do ano anterior até o mês final do período filtrado. A linha cheia representa o ciclo atual e o tracejado mostra o ciclo anual anterior."
               testId="trend-period"
             >
               <div className="space-y-3">
@@ -2904,7 +2933,7 @@ function DashboardView(props) {
                     }}
                     data-dash-action="trend-next"
                     disabled={!trendAccounts.length}
-                    aria-label="Proxima conta"
+                    aria-label="Próxima conta"
                   >
                     &gt;
                   </button>
@@ -2916,16 +2945,16 @@ function DashboardView(props) {
               <DashboardSparkline
                 points={trendSeries}
                 comparePoints={trendCompareSeries}
-                primaryLabel="Ultimos 12 meses"
-                compareLabel="Meses equivalentes do ano anterior"
-                ariaLabel={`Grafico de evolucao para ${focusedTrendAccount || 'conta selecionada'}`}
+                primaryLabel="Ciclo anual atual"
+                compareLabel="Ciclo anual anterior"
+                ariaLabel={`Gráfico de evolução para ${focusedTrendAccount || 'conta selecionada'}`}
               />
             </DashboardSection>
           )}
           <div className="grid gap-4 xl:grid-cols-2">
             <DashboardSection
               title="Top 5 contas"
-              tooltip="Top 5 contas dentre as selecionadas. Clique na legenda para destacar e abrir a fatia correspondente na rosca."
+              tooltip="Top 5 contas do período filtrado. Clique na legenda para destacar e abrir a fatia correspondente na rosca."
               testId="composition"
             >
               <DashboardDonut
@@ -2940,7 +2969,7 @@ function DashboardView(props) {
 
             <DashboardSection
               title="Ranking de gastos"
-              tooltip="Mostra todas as contas do recorte aplicado. Quando houver mais de um mes, voce pode alternar entre total acumulado e media por mes."
+              tooltip="Mostra todas as contas do período filtrado. Quando houver mais de um mês, você pode alternar entre total acumulado e média por mês."
               testId="ranking"
               actions={[
                 appliedSelectedPairs.length > 1 ? (
@@ -2959,7 +2988,7 @@ function DashboardView(props) {
                       onClick={() => setRankingMode('average')}
                       data-dash-ranking-mode="average"
                     >
-                      Media/mes
+                      Média/mês
                     </button>
                   </div>
                 ) : null,
@@ -3001,7 +3030,7 @@ function DashboardView(props) {
           <div className="grid gap-4 xl:grid-cols-2">
             <DashboardSection
               title="Pagadores"
-              tooltip="Resume quanto cada pagador desembolsou, quanto do recorte esta em contas divididas e qual acerto estimado ainda resta."
+              tooltip="Mostra o maior pagador, os demais pagadores e o peso das contas divididas no período filtrado."
               testId="payers"
             >
               <DashboardPayersPanel
@@ -3014,9 +3043,9 @@ function DashboardView(props) {
             </DashboardSection>
 
             <DashboardSection
-              title="Contas nos ultimos 12 meses"
-              subtitle="Barras por mes com linha de tendencia, sempre ancoradas no mes final do recorte."
-              tooltip="Mostra os ultimos 12 meses ate o fechamento do filtro aplicado. Clique numa barra para ver o valor daquele mes e use as setas para navegar de tres em tres contas."
+              title="Ciclo anual"
+              subtitle={annualCycleSubtitle}
+              tooltip="Mostra, para cada conta, o ciclo anual do mesmo mês do ano anterior até o mês final do período filtrado. Clique numa barra para ver o valor daquele mês e use as setas para navegar de três em três contas."
               testId="category-trends"
             >
               {timelinePageCount > 1 ? (
