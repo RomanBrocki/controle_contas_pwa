@@ -44,6 +44,7 @@ Com esse modelo, o sistema consegue:
 - **Ajuda contextual na home e no modal de Nova conta**
 - **Navegação dedicada entre Controle e Dashboard**
 - **Dashboard BI em rota própria** (`#/dashboard`)
+- **Gráfico de Pareto** com curva acumulada e foco cruzado no dashboard
 - **Funcionamento offline básico** com Service Worker
 - **Instalação como PWA**
 
@@ -154,6 +155,7 @@ O comportamento é:
 - **Acerto entre pagadores**
 - **Maior categoria / maior conta do recorte**
 - **Quantidade de contas pagas**
+- **Pareto das contas**
 - **Evolução por conta**
 - **Top 5 contas + Outros**
 - **Ranking de gastos**
@@ -165,6 +167,7 @@ O comportamento é:
 
 Os blocos principais do dashboard conversam entre si por foco temporário:
 
+- `Pareto`
 - `Top 5`
 - `Ranking`
 - `Evolução por conta`
@@ -172,7 +175,11 @@ Os blocos principais do dashboard conversam entre si por foco temporário:
 
 Ao selecionar uma conta em um desses blocos, os demais sincronizam o destaque dessa mesma conta, sem alterar os filtros reais do topo.
 
+No modo de mês único, esse foco compartilhado também reposiciona automaticamente a paginação do comparativo por conta para levar o usuário até o bloco onde a conta selecionada aparece.
+
 No dashboard atual, o bloco `Ciclo anual` mostra, para cada conta, o intervalo do mesmo mês do ano anterior até o mês final do período filtrado. O subtítulo do card explicita esse intervalo dinamicamente.
+
+O bloco `Pareto das contas` ordena as categorias do maior para o menor valor do período filtrado, desenha a curva acumulada e reaproveita o mesmo foco cruzado do restante do dashboard. Quando há até 10 categorias, os rótulos do eixo X ficam retos em até duas linhas; acima disso, passam para 45 graus para preservar a leitura.
 
 ### Regras de UX do dashboard
 
@@ -452,6 +459,7 @@ Arquivos principais:
 O `sw.js` atual:
 
 - usa `CACHE_NAME` versionado
+- versiona também o registro do `service worker` e o `manifest`
 - chama `skipWaiting()` no install
 - chama `clients.claim()` no activate
 - usa atualização automática via registro do `index.html`
@@ -465,6 +473,7 @@ O `manifest.json` hoje inclui:
 - `start_url`
 - `scope`
 - `display: "standalone"`
+- atalhos para `Controle`, `Dashboard` e `Relatórios`
 - ícones padrão
 - ícones `maskable`
 

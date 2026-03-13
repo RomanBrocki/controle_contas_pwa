@@ -273,6 +273,71 @@ function dashboardBuildTopFiveSegments(items) {
   };
 }
 
+function dashboardBuildParetoItems(items) {
+  const normalized = (items || [])
+    .map((item) => ({
+      name: item.name || 'Sem categoria',
+      total: Number(item.total || 0)
+    }))
+    .filter((item) => item.total > 0);
+
+  const total = normalized.reduce((sum, item) => sum + item.total, 0);
+  let runningTotal = 0;
+
+  return normalized.map((item) => {
+    runningTotal += item.total;
+    const sharePct = total > 0 ? (item.total / total) * 100 : 0;
+    const cumulativePct = total > 0 ? (runningTotal / total) * 100 : 0;
+
+    return {
+      ...item,
+      sharePct,
+      cumulativePct
+    };
+  });
+}
+
+function dashboardSplitLabel(label, maxCharsPerLine = 12, maxLines = 2) {
+  const cleaned = String(label || '').trim();
+  if (!cleaned) return [''];
+
+  const safeLimit = Math.max(4, Number(maxCharsPerLine || 12));
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = '';
+
+  words.forEach((word) => {
+    const normalizedWord = word.length > safeLimit
+      ? `${word.slice(0, safeLimit - 1)}…`
+      : word;
+
+    if (!current) {
+      current = normalizedWord;
+      return;
+    }
+
+    const candidate = `${current} ${normalizedWord}`;
+    if (candidate.length <= safeLimit) {
+      current = candidate;
+      return;
+    }
+
+    lines.push(current);
+    current = normalizedWord;
+  });
+
+  if (current) lines.push(current);
+  if (lines.length <= maxLines) return lines;
+
+  const visible = lines.slice(0, maxLines);
+  const lastIndex = visible.length - 1;
+  const lastLine = visible[lastIndex];
+  visible[lastIndex] = lastLine.endsWith('…')
+    ? lastLine
+    : `${lastLine.slice(0, Math.max(safeLimit - 1, 1))}…`;
+  return visible;
+}
+
 function dashboardBuildAccountComparison(currentRows, previousRows, previousYearRows, limit) {
   const currentMap = dashboardGroupTotalsMap(currentRows, 'nome');
   const previousMap = dashboardGroupTotalsMap(previousRows, 'nome');
@@ -864,6 +929,7 @@ function DashboardSparkline(props) {
   }, [points, selectedPointKey]);
 
   const selectedPoint = points.find((point) => point.key === selectedPointKey) || points[points.length - 1] || null;
+  const averageValue = Number(props.averageValue || 0);
 
   if (!points.length) {
     return <div className="text-sm opacity-70">Sem dados suficientes para o gráfico.</div>;
@@ -880,6 +946,12 @@ function DashboardSparkline(props) {
           <div className="badge flex items-center gap-2">
             <span className="w-5 border-t-2 border-dashed" style={{ borderColor: 'var(--muted)' }} />
             {props.compareLabel || 'Mesmo período no ano anterior'}
+          </div>
+        ) : null}
+        {averageValue > 0 ? (
+          <div className="badge flex items-center gap-2" data-dash-average-badge="true">
+            <span className="h-2 w-2 rounded-full" style={{ background: 'var(--accent)' }} />
+            {(props.averageLabel || 'Média')}: {dashboardBrl(averageValue)}
           </div>
         ) : null}
         {selectedPoint ? (
@@ -1219,6 +1291,192 @@ function DashboardDonut(props) {
         ) : (
           <div className="text-sm opacity-70">Sem categorias para compor o periodo.</div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function DashboardParetoChart(props) {
+  const items = props.items || [];
+  const useRotatedLabels = items.length > 10;
+  const width = Math.max(860, (items.length * 44) + 120);
+  const height = useRotatedLabels ? 420 : 388;
+  const padLeft = 52;
+  const padRight = 56;
+  const padTop = 30;
+  const padBottom = useRotatedLabels ? 154 : 96;
+  const innerWidth = width - padLeft - padRight;
+  const innerHeight = height - padTop - padBottom;
+  const slotWidth = innerWidth / Math.max(items.length, 1);
+  const barWidth = Math.max(10, Math.min(30, slotWidth - 10));
+  const maxValue = Math.max(1, ...items.map((item) => Number(item.total || 0)));
+  const total = items.reduce((sum, item) => sum + Number(item.total || 0), 0);
+  const selectedItem = items.find((item) => item.name === props.selectedName) || null;
+  const detailItem = selectedItem || items[0] || null;
+  const eightyIndex = items.findIndex((item) => item.cumulativePct >= 80);
+  const labelFontSize = useRotatedLabels
+    ? (slotWidth < 34 ? 9 : 10)
+    : (slotWidth < 52 ? 10 : 11);
+  const labelCharLimit = slotWidth < 34 ? 12 : slotWidth < 48 ? 16 : 20;
+  const labelCharsPerLine = slotWidth < 70 ? 10 : slotWidth < 96 ? 12 : 14;
+  const labelAnchorY = padTop + innerHeight + (useRotatedLabels ? 78 : 26);
+
+  if (!items.length) {
+    return <div className="text-sm opacity-70">Sem categorias suficientes para compor o Pareto.</div>;
+  }
+
+  const cumulativeLinePoints = items.map((item, index) => {
+    const x = padLeft + (slotWidth * index) + (slotWidth / 2);
+    const y = padTop + innerHeight - ((item.cumulativePct / 100) * innerHeight);
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <div className="badge flex items-center gap-2">
+          <span className="h-3 w-3 rounded-sm" style={{ background: 'linear-gradient(180deg, var(--primary), color-mix(in srgb, var(--primary) 65%, white 35%))' }} />
+          Valor por categoria
+        </div>
+        <div className="badge flex items-center gap-2">
+          <span className="w-5 border-t-2" style={{ borderColor: 'var(--accent)' }} />
+          Curva acumulada
+        </div>
+        {eightyIndex >= 0 ? (
+          <div className="badge" data-dash-pareto-eighty="true">
+            80% do gasto em {eightyIndex + 1} {eightyIndex === 0 ? 'categoria' : 'categorias'}
+          </div>
+        ) : null}
+        {detailItem ? (
+          <div className="badge" data-dash-pareto-selected="true">
+            Em foco: {detailItem.name} · {dashboardBrl(detailItem.total)} · {Math.round(detailItem.sharePct)}% do período
+          </div>
+        ) : null}
+      </div>
+
+      <div className="w-full overflow-hidden pb-2">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="w-full rounded-2xl"
+          style={{ height: `${height}px` }}
+          role="img"
+          aria-label={props.ariaLabel || 'Gráfico de Pareto do período filtrado'}
+        >
+          <title>{props.ariaLabel || 'Gráfico de Pareto do período filtrado'}</title>
+
+          {[0, 0.25, 0.5, 0.75, 1].map((step) => {
+            const y = padTop + innerHeight - (innerHeight * step);
+            return (
+              <line
+                key={`grid-${step}`}
+                x1={padLeft}
+                x2={width - padRight}
+                y1={y}
+                y2={y}
+                stroke="var(--border)"
+                strokeWidth="1"
+                opacity={step === 0 ? '1' : '0.7'}
+              />
+            );
+          })}
+
+          <polyline
+            fill="none"
+            stroke="var(--accent)"
+            strokeWidth="3.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            points={cumulativeLinePoints}
+          >
+            <title>Curva acumulada do período filtrado.</title>
+          </polyline>
+
+          {items.map((item, index) => {
+            const value = Number(item.total || 0);
+            const barHeight = Math.max((value / maxValue) * innerHeight, 6);
+            const x = padLeft + (slotWidth * index) + ((slotWidth - barWidth) / 2);
+            const y = padTop + innerHeight - barHeight;
+            const pointX = padLeft + (slotWidth * index) + (slotWidth / 2);
+            const pointY = padTop + innerHeight - ((item.cumulativePct / 100) * innerHeight);
+            const selected = props.selectedName === item.name;
+            const labelText = item.name.length > labelCharLimit
+              ? `${item.name.slice(0, labelCharLimit - 1)}…`
+              : item.name;
+            const labelLines = dashboardSplitLabel(item.name, labelCharsPerLine, 2);
+
+            return (
+              <g key={item.name}>
+                <rect
+                  x={x}
+                  y={y}
+                  width={barWidth}
+                  height={barHeight}
+                  rx="6"
+                  fill={selected ? 'var(--primary)' : 'color-mix(in srgb, var(--primary) 55%, var(--surface))'}
+                  stroke={selected ? 'white' : 'none'}
+                  strokeWidth={selected ? '1.5' : '0'}
+                  style={{ cursor: 'pointer', filter: selected ? 'drop-shadow(0 0 10px rgba(34,211,238,.25))' : 'none' }}
+                  onClick={() => props.onSelect && props.onSelect(item.name)}
+                  data-dash-pareto-bar={item.name}
+                >
+                  <title>{`${item.name}: ${dashboardBrl(item.total)} (${Math.round(item.sharePct)}% do período)`}</title>
+                </rect>
+                <circle
+                  cx={pointX}
+                  cy={pointY}
+                  r={selected ? '5.5' : '4'}
+                  fill="var(--accent)"
+                  stroke={selected ? 'white' : 'none'}
+                  strokeWidth={selected ? '1.5' : '0'}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => props.onSelect && props.onSelect(item.name)}
+                  data-dash-pareto-point={item.name}
+                >
+                  <title>{`${item.name}: acumulado de ${Math.round(item.cumulativePct)}%`}</title>
+                </circle>
+                {useRotatedLabels ? (
+                  <text
+                    x={pointX}
+                    y={labelAnchorY}
+                    textAnchor="end"
+                    fill={selected ? 'var(--text)' : 'var(--muted)'}
+                    fontSize={labelFontSize}
+                    transform={`rotate(-45 ${pointX} ${labelAnchorY})`}
+                  >
+                    {labelText}
+                  </text>
+                ) : (
+                  <text
+                    x={pointX}
+                    y={labelAnchorY}
+                    textAnchor="middle"
+                    fill={selected ? 'var(--text)' : 'var(--muted)'}
+                    fontSize={labelFontSize}
+                  >
+                    {labelLines.map((line, lineIndex) => (
+                      <tspan key={`${item.name}-line-${lineIndex}`} x={pointX} dy={lineIndex === 0 ? '0' : '12'}>
+                        {line}
+                      </tspan>
+                    ))}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+
+          <text x={padLeft - 8} y={padTop + 10} textAnchor="end" fill="var(--muted)" fontSize="11">
+            {dashboardBrl(maxValue)}
+          </text>
+          <text x={padLeft - 8} y={padTop + innerHeight + 4} textAnchor="end" fill="var(--muted)" fontSize="11">
+            R$ 0
+          </text>
+          <text x={width - padRight + 10} y={padTop + 10} textAnchor="start" fill="var(--muted)" fontSize="11">
+            100%
+          </text>
+          <text x={width - padRight + 10} y={padTop + innerHeight + 4} textAnchor="start" fill="var(--muted)" fontSize="11">
+            0%
+          </text>
+        </svg>
       </div>
     </div>
   );
@@ -2479,6 +2737,10 @@ function DashboardView(props) {
       }))
       .sort((left, right) => right.total - left.total)
   ), [rankingCategorias, rankingMode, monthsCount]);
+  const paretoItems = React.useMemo(
+    () => dashboardBuildParetoItems(rankingCategorias),
+    [rankingCategorias]
+  );
 
   const trendAccounts = React.useMemo(() => {
     if (rankingCategorias.length) return rankingCategorias.map((item) => item.name);
@@ -2516,6 +2778,10 @@ function DashboardView(props) {
         label: dashboardPairLabel(rollingPairs[index], true)
       }))
   ), [filteredRollingCompareRows, rollingPairs, focusedTrendAccount]);
+  const trendAverageValue = React.useMemo(() => {
+    if (!trendSeries.length) return 0;
+    return trendSeries.reduce((sum, point) => sum + Number(point.value || 0), 0) / trendSeries.length;
+  }, [trendSeries]);
   const categoriasTimeline = React.useMemo(() => (
     dashboardCategorySeries(filteredRollingRows, rollingPairs, 999).map((group) => ({
       ...group,
@@ -2573,6 +2839,12 @@ function DashboardView(props) {
       setTrendAccountIndex(trendIndex);
     }
 
+    const singleMonthIndex = singleMonthComparison.findIndex((item) => item.name === selectedCategory);
+    if (singleMonthIndex >= 0) {
+      const nextSingleMonthPage = Math.floor(singleMonthIndex / 3);
+      if (nextSingleMonthPage !== singleMonthPage) setSingleMonthPage(nextSingleMonthPage);
+    }
+
     const rankingIndex = rankingItems.findIndex((item) => item.name === selectedCategory);
     if (rankingIndex >= 0) {
       const nextRankingPage = Math.floor(rankingIndex / 5);
@@ -2584,7 +2856,7 @@ function DashboardView(props) {
       const nextTimelinePage = Math.floor(timelineIndex / 3);
       if (nextTimelinePage !== timelinePage) setTimelinePage(nextTimelinePage);
     }
-  }, [selectedCategory, trendAccounts, trendAccountIndex, rankingItems, rankingPage, categoriasTimeline, timelinePage]);
+  }, [selectedCategory, trendAccounts, trendAccountIndex, singleMonthComparison, singleMonthPage, rankingItems, rankingPage, categoriasTimeline, timelinePage]);
 
   const primeiraPessoa = rankingPagadores[0] || null;
   const segundaPessoa = rankingPagadores[1] || null;
@@ -2859,6 +3131,22 @@ function DashboardView(props) {
             />
           </div>
 
+          <DashboardSection
+            title="Pareto das contas"
+            subtitle={singleMonthMode
+              ? 'Categorias do mês filtrado em ordem de impacto.'
+              : 'Categorias agregadas do período filtrado com curva acumulada.'}
+            tooltip="Ordena as categorias do maior para o menor valor e mostra como o acumulado do período se forma. Clique em uma barra para destacar a mesma categoria nos demais gráficos."
+            testId="pareto"
+          >
+            <DashboardParetoChart
+              items={paretoItems}
+              onSelect={focusDashboardAccount}
+              selectedName={focusedCategory}
+              ariaLabel="Gráfico de Pareto das contas do período filtrado"
+            />
+          </DashboardSection>
+
           {singleMonthMode ? (
             <DashboardSection
               title="Comparativo por conta"
@@ -2904,7 +3192,7 @@ function DashboardView(props) {
             <DashboardSection
               title="Evolução por conta"
               subtitle={annualCycleSubtitle}
-              tooltip="Mostra o ciclo anual da conta selecionada, do mesmo mês do ano anterior até o mês final do período filtrado. A linha cheia representa o ciclo atual e o tracejado mostra o ciclo anual anterior."
+              tooltip="Mostra o ciclo anual da conta selecionada, do mesmo mês do ano anterior até o mês final do período filtrado. A média do ciclo atual aparece como referência no topo do gráfico."
               testId="trend-period"
             >
               <div className="space-y-3">
@@ -2944,9 +3232,9 @@ function DashboardView(props) {
               </div>
               <DashboardSparkline
                 points={trendSeries}
-                comparePoints={trendCompareSeries}
                 primaryLabel="Ciclo anual atual"
-                compareLabel="Ciclo anual anterior"
+                averageValue={trendAverageValue}
+                averageLabel="Média do ciclo atual"
                 ariaLabel={`Gráfico de evolução para ${focusedTrendAccount || 'conta selecionada'}`}
               />
             </DashboardSection>
