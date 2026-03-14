@@ -17,7 +17,22 @@ function StyleTag() {
   --primary: #2dd4bf; --primary-600: #14b8a6; --accent: #f472b6; --danger: #ef4444;
   --border: #1b2a2f; --chip: #0f1a1e; --glow: 0 0 18px rgba(45,212,191,.22);
 }
+.theme-titanium {
+  --bg: #0b1116; --surface: #151c23; --text: #edf3f7; --muted: #9aaab6;
+  --primary: #7dd3fc; --primary-600: #38bdf8; --accent: #d8dee9; --danger: #ef4444;
+  --border: #25303a; --chip: #111920; --glow: 0 0 20px rgba(125,211,252,.20), 0 0 4px rgba(216,222,233,.18);
+}
+.theme-bronze {
+  --bg: #120f0d; --surface: #1b1613; --text: #f2ece7; --muted: #b6a396;
+  --primary: #d6a46a; --primary-600: #c08457; --accent: #f59e72; --danger: #ef4444;
+  --border: #342922; --chip: #17110e; --glow: 0 0 18px rgba(214,164,106,.20), 0 0 4px rgba(245,158,114,.16);
+}
 /* Light metálico — foco em contraste e superfícies prateadas */
+.theme-alloy {
+  --bg: #dde3e8; --surface: #edf1f4; --text: #13202b; --muted: #5f6d79;
+  --primary: #70879a; --primary-600: #56697b; --accent: #8a9bab; --danger: #dc2626;
+  --border: #c6d0d7; --chip: #e5eaee; --glow: 0 0 16px rgba(112,135,154,.18);
+}
 .theme-light {
   --bg: #edf1f5; /* steel 50 */
   --surface: #ffffff; /* metal plate */
@@ -71,7 +86,8 @@ body, #root { background: var(--bg); color: var(--text); }
   background: rgba(20,25,35,.9);
   backdrop-filter: blur(8px);
 }
-.theme-light .modal.glass {
+.theme-light .modal.glass,
+.theme-alloy .modal.glass {
   background: rgba(255,255,255,.95);
 }
 
@@ -119,6 +135,8 @@ body, #root { background: var(--bg); color: var(--text); }
 /* Ajustes de campo no tema claro para contraste adequado */
 .theme-light input.input, .theme-light select.select { background: #ffffff; color: #0b1220; border-color: #d7e0ea; }
 .theme-light .modal { background: #fff !important; color:#0b1220; }
+.theme-alloy input.input, .theme-alloy select.select { background: #f8fafb; color: #13202b; border-color: #c6d0d7; }
+.theme-alloy .modal { background: #edf1f4 !important; color:#13202b; }
 
 /* Brand */
 .brand { font-size: 2.125rem; font-weight: 800; letter-spacing:.5px; background: linear-gradient(90deg, var(--primary), var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 24px rgba(34,211,238,.25); }
@@ -211,10 +229,25 @@ body.theme-light .modal.solid {
   background-color: #ffffff !important;
 }
 
+body.theme-alloy .modal.solid {
+  background-color: #edf1f4 !important;
+  box-shadow: 0 0 24px rgba(112,135,154,.16);
+}
+
 /* Tema synth: leve brilho ciano */
 body.theme-synth .modal.solid {
   background-color: #101a1f !important;
   box-shadow: 0 0 24px rgba(45,212,191,.25);
+}
+
+body.theme-titanium .modal.solid {
+  background-color: #151c23 !important;
+  box-shadow: 0 0 24px rgba(125,211,252,.22);
+}
+
+body.theme-bronze .modal.solid {
+  background-color: #1b1613 !important;
+  box-shadow: 0 0 24px rgba(214,164,106,.22);
 }
 
 /* Tema gunmetal: fundo uniforme, mais contraste */

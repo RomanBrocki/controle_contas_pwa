@@ -1,12 +1,23 @@
 function SettingsModal({ onClose, initial, contasDisponiveis, onSave }) {
+  const themeCatalog = window.ThemeCatalog;
+  const defaultTheme = themeCatalog?.DEFAULT_THEME || 'gunmetal';
+  const normalizeTheme = themeCatalog?.normalizeTheme || ((value) => value || defaultTheme);
+  const themeOptions = themeCatalog?.THEMES || [
+    { id: 'gunmetal', label: 'Gunmetal Neon' },
+    { id: 'synth', label: 'Synthwave Teal' },
+    { id: 'titanium', label: 'Titanio Azul' },
+    { id: 'bronze', label: 'Cobre Industrial' },
+    { id: 'alloy', label: 'Aco Neblina' },
+    { id: 'light', label: 'Claro Metalico' }
+  ];
   const [email, setEmail] = React.useState(initial?.email || '');
-  const [theme, setTheme] = React.useState(initial?.theme || 'gunmetal');
+  const [theme, setTheme] = React.useState(normalizeTheme(initial?.theme));
   const [chartSel, setChartSel] = React.useState(new Set(initial?.chart_accounts || []));
   const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
     setEmail(initial?.email || '');
-    setTheme(initial?.theme || 'gunmetal');
+    setTheme(normalizeTheme(initial?.theme));
     setChartSel(new Set(initial?.chart_accounts || []));
   }, [initial]);
 
@@ -42,9 +53,9 @@ function SettingsModal({ onClose, initial, contasDisponiveis, onSave }) {
             <div>
               <label className="text-sm opacity-80">Tema</label>
               <select className="w-full select" value={theme} onChange={(e) => setTheme(e.target.value)}>
-                <option value="gunmetal">Gunmetal Neon</option>
-                <option value="synth">Synthwave Teal</option>
-                <option value="light">Claro Metalico</option>
+                {themeOptions.map((option) => (
+                  <option key={option.id} value={option.id}>{option.label}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -85,7 +96,7 @@ function SettingsModal({ onClose, initial, contasDisponiveis, onSave }) {
                 setSaving(true);
                 const savedProfile = await onSave?.({
                   email,
-                  theme,
+                  theme: normalizeTheme(theme),
                   chart_accounts: Array.from(chartSel)
                 });
                 if (!savedProfile) throw new Error('Erro ao salvar perfil');

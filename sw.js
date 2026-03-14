@@ -1,6 +1,6 @@
 // sw.js - service worker do Controle de Contas PWA
 
-const APP_VERSION = "2026-03-14-5";
+const APP_VERSION = "2026-03-14-9";
 const CACHE_NAME = `contas-pwa-${APP_VERSION}`;
 
 const URLS_TO_CACHE = [
@@ -9,6 +9,7 @@ const URLS_TO_CACHE = [
   `./manifest.json?v=${APP_VERSION}`,
   "./src/app-shell/runtime.js",
   "./src/shared/date-utils.js",
+  "./src/shared/theme-catalog.js",
   "./src/post-login/helpers.js",
   "./src/post-login/runtime.js",
   "./src/post-login/data.js",

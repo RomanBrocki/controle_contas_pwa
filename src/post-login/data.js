@@ -8,6 +8,7 @@
     accountIdentityKey,
     buildContaDraft
   } = globalObject.PostLoginHelpers;
+  const normalizeTheme = globalObject.ThemeCatalog?.normalizeTheme || ((value) => value || 'gunmetal');
 
   async function loadAvailablePeriods() {
     const years = await globalObject.SupabaseQueries.listYears();
@@ -23,30 +24,40 @@
   }
 
   async function loadProfile(defaultTheme) {
+    const fallbackTheme = normalizeTheme(defaultTheme);
     try {
       const profile = await globalObject.SupabaseQueries.getProfile();
-      if (profile) return profile;
+      if (profile) {
+        return {
+          ...profile,
+          theme: normalizeTheme(profile.theme || fallbackTheme)
+        };
+      }
     } catch (error) {
       console.warn('[perfil] erro ao carregar:', error);
     }
 
     return {
       email: '',
-      theme: defaultTheme,
+      theme: fallbackTheme,
       payers_default: [],
       chart_accounts: []
     };
   }
 
   async function saveProfile(profileDraft) {
-    const ok = await globalObject.SupabaseQueries.upsertProfile(profileDraft);
+    const sanitizedProfile = {
+      ...profileDraft,
+      theme: normalizeTheme(profileDraft.theme)
+    };
+    const ok = await globalObject.SupabaseQueries.upsertProfile(sanitizedProfile);
     if (!ok) throw new Error('Falha ao salvar perfil');
 
     const savedProfile = {
-      email: profileDraft.email ?? '',
-      theme: profileDraft.theme ?? 'gunmetal',
-      chart_accounts: Array.isArray(profileDraft.chart_accounts)
-        ? profileDraft.chart_accounts.slice(0, 7)
+      email: sanitizedProfile.email ?? '',
+      theme: sanitizedProfile.theme,
+      chart_accounts: Array.isArray(sanitizedProfile.chart_accounts)
+        ? sanitizedProfile.chart_accounts.slice(0, 7)
         : [],
     };
 

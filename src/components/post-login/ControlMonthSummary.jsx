@@ -1,7 +1,6 @@
 function buildControlMonthOptions(monthsByYear, selectedYear, selectedMonth) {
-  const dbMonths = monthsByYear[selectedYear] || [];
   const fallbackMonths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
-  const monthValues = dbMonths.length ? [...dbMonths] : [...fallbackMonths];
+  const monthValues = [...fallbackMonths];
 
   if (!monthValues.includes(selectedMonth)) {
     monthValues.push(selectedMonth);

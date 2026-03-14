@@ -31,7 +31,11 @@
     ).trim();
 
     if (cssValue) return cssValue;
-    return document.body.classList.contains('theme-light') ? '#0b1220' : '#e5e7eb';
+    const currentTheme = globalObject.ThemeCatalog?.detectThemeFromClassList?.(document.body.classList) || 'gunmetal';
+    const isLight = globalObject.ThemeCatalog?.isLightTheme
+      ? globalObject.ThemeCatalog.isLightTheme(currentTheme)
+      : document.body.classList.contains('theme-light');
+    return isLight ? '#0b1220' : '#e5e7eb';
   }
 
   function createOffscreenHost(options = {}) {

@@ -1,6 +1,7 @@
 (function attachAppShellRuntime(globalObject) {
   let cachedAuthSnapshot = globalObject.MOCK_AUTH || null;
   let cachedProfileSnapshot = globalObject.AppState?.profile || null;
+  const normalizeTheme = globalObject.ThemeCatalog?.normalizeTheme || ((value) => value || 'gunmetal');
 
   function resolveSectionFromHash(hashValue) {
     return hashValue && String(hashValue).startsWith('#/dashboard')
@@ -46,7 +47,9 @@
   }
 
   function commitProfileSnapshot(profile) {
-    cachedProfileSnapshot = profile || null;
+    cachedProfileSnapshot = profile
+      ? { ...profile, theme: normalizeTheme(profile.theme) }
+      : null;
     globalObject.AppState = globalObject.AppState || {};
     globalObject.AppState.profile = cachedProfileSnapshot;
     return cachedProfileSnapshot;

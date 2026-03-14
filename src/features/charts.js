@@ -35,7 +35,10 @@ export function setupChartDefaults() {
 }
 // === Helpers de cor para o APP (não afeta PDF) ===
 function __isLightTheme() {
-  return document.body.classList.contains('theme-light');
+  const currentTheme = window.ThemeCatalog?.detectThemeFromClassList?.(document.body.classList) || 'gunmetal';
+  return window.ThemeCatalog?.isLightTheme
+    ? window.ThemeCatalog.isLightTheme(currentTheme)
+    : document.body.classList.contains('theme-light');
 }
 function __uiTextColor() {
   // No app: claro = #0b1220, escuro = #e5e7eb
@@ -46,7 +49,7 @@ function __appText() {
   // tenta CSS var do body; senão, fallback por tema
   const v = (getComputedStyle(document.body).getPropertyValue('--chart-label-text') || '').trim();
   if (v) return v;
-  return document.body.classList.contains('theme-light') ? '#0b1220' : '#e5e7eb';
+  return __isLightTheme() ? '#0b1220' : '#e5e7eb';
 }
 
 // === Paleta "PDF-friendly" ===

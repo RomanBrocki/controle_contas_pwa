@@ -41,6 +41,7 @@ Contratos atuais em `window`:
 - `window.MOCK_AUTH`
 - `window.AppShellRuntime`
 - `window.AppDateUtils`
+- `window.ThemeCatalog`
 - `window.PostLoginHelpers`
 - `window.PostLoginRuntime`
 - `window.PostLoginData`
@@ -75,6 +76,7 @@ Arquivos:
 - `src/supabase/client.js`
 - `src/supabase/queries.js`
 - `src/data-adapter.js`
+- `src/shared/theme-catalog.js`
 - `src/post-login/data.js`
 - `src/reports/helpers.js`
 - `src/reports/dom.js`

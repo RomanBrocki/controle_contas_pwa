@@ -40,12 +40,13 @@ function MonthPickerBlockBase(props) {
           </SelectPopoverField>
         </div>
         <div className="cell" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-          {legacyMonthLabel ? <label htmlFor={`${idPrefix}-mes`}>Mês</label> : null}
+          {legacyMonthLabel ? <label htmlFor={`${idPrefix}-mes`}>{'M\u00eas'}</label> : null}
           <SelectPopoverField
             id={`${idPrefix}-mes`}
-            label={legacyMonthLabel ? undefined : 'Mês'}
+            label={legacyMonthLabel ? undefined : 'M\u00eas'}
             value={month}
             onChange={(event) => setMonth(Number(event.target.value))}
+            panelWidth="min(280px, calc(100vw - 2rem))"
           >
             {monthOptions(year)}
           </SelectPopoverField>

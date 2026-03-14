@@ -1,5 +1,7 @@
 (function attachPostLoginController(globalObject) {
   const React = globalObject.React;
+  const defaultTheme = globalObject.ThemeCatalog?.DEFAULT_THEME || 'gunmetal';
+  const normalizeTheme = globalObject.ThemeCatalog?.normalizeTheme || ((value) => value || defaultTheme);
 
   const {
     accountIdentityKey: postLoginAccountIdentityKey,
@@ -36,7 +38,7 @@
   }
 
   function usePostLoginController() {
-    const [theme, setTheme] = React.useState('gunmetal');
+    const [theme, setTheme] = React.useState(defaultTheme);
     const [currentView, setCurrentView] = React.useState(() => (
       postLoginResolveViewFromHash(globalObject.location.hash)
     ));
@@ -121,7 +123,7 @@
           setYears(bootstrap.years);
           setMonthsByYear(bootstrap.monthsByYear);
           setProfile(bootstrap.profile);
-          if (bootstrap.theme) setTheme(bootstrap.theme);
+          if (bootstrap.theme) setTheme(normalizeTheme(bootstrap.theme));
         } catch (error) {
           console.error('[ui] Erro ao carregar shell pos-login', error);
         }
@@ -356,7 +358,7 @@
 
     function handleSettingsSaved(nextProfile) {
       setProfile(nextProfile);
-      if (nextProfile?.theme) setTheme(nextProfile.theme);
+      if (nextProfile?.theme) setTheme(normalizeTheme(nextProfile.theme));
     }
 
     async function handleSettingsSaveRequest(profileDraft) {

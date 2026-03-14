@@ -1,4 +1,5 @@
 function PostLoginMock() {
+  const themeClassFactory = window.ThemeCatalog?.getThemeClass || ((value) => `theme-${value || 'gunmetal'}`);
   const {
     theme,
     currentView,
@@ -48,7 +49,7 @@ function PostLoginMock() {
   } = window.PostLoginController.usePostLoginController();
 
   return (
-    <div className={`theme-${theme} min-h-screen relative p-4 md:p-6`}>
+    <div className={`${themeClassFactory(theme)} min-h-screen relative p-4 md:p-6`}>
       <div className="mx-auto w-full max-w-5xl">
         <PostLoginHeader
           currentView={currentView}

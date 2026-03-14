@@ -241,7 +241,8 @@ Na prática, isso reforça a leitura de que:
 │  │  ├─ workflows.js
 │  │  └─ README.md
 │  ├─ shared/
-│  │  └─ date-utils.js
+│  │  ├─ date-utils.js
+│  │  └─ theme-catalog.js
 │  ├─ dashboard/
 │  │  ├─ DashboardView.jsx
 │  │  ├─ helpers.js
@@ -499,6 +500,9 @@ Temas disponíveis:
 
 - **Gunmetal Neon**
 - **Synthwave Teal**
+- **Titanio Azul**
+- **Cobre Industrial**
+- **Aco Neblina**
 - **Claro Metálico**
 
 O dashboard respeita o tema ativo da aplicação.
