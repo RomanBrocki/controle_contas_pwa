@@ -27,8 +27,9 @@ export async function getActiveUid() {
     console.warn('[Supabase] getActiveUid(): sessão real indisponível', e);
   }
 
-  if (window.MOCK_AUTH && window.MOCK_AUTH.user_id) {
-    return window.MOCK_AUTH.user_id;
+  const runtimeUid = window.AppShellRuntime?.getAuthSnapshot?.()?.user_id;
+  if (runtimeUid) {
+    return runtimeUid;
   }
 
   return CURRENT_UID;
@@ -36,7 +37,11 @@ export async function getActiveUid() {
 
 // versão síncrona usada pelo código legado
 export function uid() {
-  return (window.MOCK_AUTH && window.MOCK_AUTH.user_id) || CURRENT_UID;
+  return (
+    window.AppShellRuntime?.getAuthSnapshot?.()?.user_id
+    || window.SupabaseClient?.__lastAuthUid
+    || CURRENT_UID
+  );
 }
 
 console.log('[Supabase] Client inicializado:', SUPABASE_URL);

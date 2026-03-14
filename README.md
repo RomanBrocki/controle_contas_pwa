@@ -1,6 +1,6 @@
 # 💸 Controle de Contas — PWA
 
-**Controle de Contas** é uma aplicação **Progressive Web App (PWA)** feita em **React UMD + Tailwind + Supabase**, voltada para controle financeiro mensal, relatórios formais em PDF e análise visual via dashboard BI.
+**Controle de Contas** é uma aplicação **Progressive Web App (PWA)** feita em **React UMD + Tailwind + Supabase**, voltada para controle financeiro mensal, relatórios formais em PDF e leitura analítica via dashboard BI.
 
 O projeto roda **100% client-side**, sem build tool e sem backend próprio. A ideia central é manter tudo simples para operar em **Supabase free + GitHub Pages**, preservando o fluxo principal do app e acrescentando novas camadas de valor sem quebrar o legado.
 
@@ -44,7 +44,7 @@ Com esse modelo, o sistema consegue:
 - **Ajuda contextual na home e no modal de Nova conta**
 - **Navegação dedicada entre Controle e Dashboard**
 - **Dashboard BI em rota própria** (`#/dashboard`)
-- **Gráfico de Pareto** com curva acumulada e foco cruzado no dashboard
+- **Gráfico de Pareto** com curva acumulada e foco cruzado
 - **Funcionamento offline básico** com Service Worker
 - **Instalação como PWA**
 
@@ -58,7 +58,7 @@ Fluxo principal do app:
 
 - login
 - seleção de ano e mês
-- visualização dos cards/lançamentos do mês
+- visualização dos cards e lançamentos do mês
 - criação ou edição das contas
 - acompanhamento do total do mês
 
@@ -113,7 +113,7 @@ Para reforçar essa leitura sem transformar a interface em manual, a home també
 
 - um `i` em **Navegação**, explicando a diferença entre `Controle` e `Dashboard`
 - um `i` em **Ações**, explicando `Nova conta`, `Relatórios` e `Configurações`
-- um `i` no topo do modal de **Nova conta**, detalhando campos obrigatórios, opcionais e o uso de links de boleto/comprovante como URLs de referência
+- um `i` no topo do modal de **Nova conta**, detalhando campos obrigatórios, opcionais e o uso de links de boleto e comprovante como URLs de referência
 
 Na prática, `Relatórios` segue sendo a entrada para a geração dos relatórios formais em PDF, enquanto a ajuda de `Nova conta` aparece apenas dentro do próprio fluxo de cadastro.
 
@@ -122,6 +122,10 @@ Na prática, `Relatórios` segue sendo a entrada para a geração dos relatório
 ## 📊 Dashboard BI
 
 A camada de BI fica isolada em `src/dashboard/` e foi pensada para não misturar regra analítica nova com o fluxo legado do controle e dos relatórios formais.
+
+Para manter referência técnica sem poluir a tela ativa, implementações anteriores do dashboard ficam congeladas em `src/dashboard/legacy/`.
+
+Na implementação ativa, sincronias de foco, paginação e normalização dos filtros ficam concentradas em `src/dashboard/orchestration.js`.
 
 ### Objetivo do dashboard
 
@@ -177,9 +181,7 @@ Ao selecionar uma conta em um desses blocos, os demais sincronizam o destaque de
 
 No modo de mês único, esse foco compartilhado também reposiciona automaticamente a paginação do comparativo por conta para levar o usuário até o bloco onde a conta selecionada aparece.
 
-No dashboard atual, o bloco `Ciclo anual` mostra, para cada conta, o intervalo do mesmo mês do ano anterior até o mês final do período filtrado. O subtítulo do card explicita esse intervalo dinamicamente.
-
-O bloco `Pareto das contas` ordena as categorias do maior para o menor valor do período filtrado, desenha a curva acumulada e reaproveita o mesmo foco cruzado do restante do dashboard. Quando há até 10 categorias, os rótulos do eixo X ficam retos em até duas linhas; acima disso, passam para 45 graus para preservar a leitura.
+No bloco `Ciclo anual`, a ordenação das contas respeita o peso delas no período filtrado. O histórico do ciclo entra para contextualizar essas mesmas contas, sem antecipar categorias que não aparecem no recorte principal.
 
 ### Regras de UX do dashboard
 
@@ -206,37 +208,108 @@ Na prática, isso reforça a leitura de que:
 ## 🧱 Estrutura de Pastas
 
 ```text
-├─ index.html                         # Entrada da aplicação; carrega React UMD, Babel, Tailwind e os JSX
-├─ manifest.json                      # Manifest do PWA
-├─ sw.js                              # Service Worker e política de atualização/cache
+├─ index.html
+├─ manifest.json
+├─ sw.js
+├─ docs/
+│  ├─ architecture-map.md
+│  ├─ professionalization-roadmap.md
+│  └─ regression-checklist.md
 ├─ icons/
-│  ├─ icon-192.png                    # Ícone padrão 192x192
-│  ├─ icon-512.png                    # Ícone padrão 512x512
-│  ├─ icon-192-launcher.png           # Ícone maskable/launcher 192x192
-│  └─ icon-512-launcher.png           # Ícone maskable/launcher 512x512
+│  ├─ icon-192.png
+│  ├─ icon-512.png
+│  ├─ icon-192-launcher.png
+│  └─ icon-512-launcher.png
 ├─ src/
-│  ├─ data-adapter.js                 # Adapta dados do banco para o formato usado pela UI
-│  ├─ router.js                       # Router hash-based
+│  ├─ data-adapter.js
+│  ├─ router.js
+│  ├─ app-shell/
+│  │  ├─ runtime.js
+│  │  └─ README.md
+│  ├─ post-login/
+│  │  ├─ controller.js
+│  │  ├─ data.js
+│  │  ├─ helpers.js
+│  │  ├─ runtime.js
+│  │  ├─ workflows.js
+│  │  └─ README.md
+│  ├─ reports/
+│  │  ├─ dom.js
+│  │  ├─ helpers.js
+│  │  ├─ pdf-builders.js
+│  │  ├─ renderers.js
+│  │  ├─ workflows.js
+│  │  └─ README.md
+│  ├─ shared/
+│  │  └─ date-utils.js
 │  ├─ dashboard/
-│  │  ├─ DashboardView.jsx            # Tela principal do dashboard BI
-│  │  └─ README.md                    # Guia técnico da camada de BI
+│  │  ├─ DashboardView.jsx
+│  │  ├─ helpers.js
+│  │  ├─ orchestration.js
+│  │  ├─ README.md
+│  │  ├─ components/
+│  │  │  ├─ DashboardCompositionCharts.jsx
+│  │  │  ├─ DashboardFilters.jsx
+│  │  │  ├─ DashboardInfoTooltip.jsx
+│  │  │  ├─ DashboardRankingPanels.jsx
+│  │  │  ├─ DashboardShell.jsx
+│  │  │  ├─ DashboardTrendCharts.jsx
+│  │  │  └─ README.md
+│  │  └─ legacy/
+│  │     ├─ DashboardViewLegacy.jsx
+│  │     └─ README.md
 │  ├─ features/
-│  │  ├─ charts.js                    # Renderização e helpers de gráficos
-│  │  └─ pdf.js                       # Helpers de exportação de PDF
+│  │  ├─ charts.js
+│  │  └─ pdf.js
 │  ├─ supabase/
-│  │  ├─ client.js                    # Inicialização do Supabase
-│  │  └─ queries.js                   # CRUD, perfil e consultas por mês/período
+│  │  ├─ client.js
+│  │  └─ queries.js
 │  └─ components/
-│     ├─ App.jsx                      # Componente raiz; sessão, header e logout
-│     ├─ LoginGate.jsx                # Login/cadastro
-│     ├─ SelectPopoverField.jsx       # Campo seletor customizado no padrão visual do dashboard
-│     ├─ PostLoginMock.jsx            # Shell pós-login e fluxo principal do controle
-│     ├─ ContaCard.jsx                # Card individual de lançamento
-│     ├─ EditPopup.jsx                # Modal de criação/edição
-│     ├─ SettingsModal.jsx            # Perfil e preferências
-│     ├─ ReportsModal.jsx             # Relatórios formais e filtros auxiliares de leitura
-│     └─ StyleTag.jsx                 # CSS global e temas
+│     ├─ App.jsx
+│     ├─ ContaCard.jsx
+│     ├─ EditPopup.jsx
+│     ├─ LoginGate.jsx
+│     ├─ PostLoginMock.jsx
+│     ├─ ReportsModal.jsx
+│     ├─ SelectPopoverField.jsx
+│     ├─ SettingsModal.jsx
+│     ├─ StyleTag.jsx
+│     ├─ app-shell/
+│     │  ├─ AppChrome.jsx
+│     │  └─ README.md
+│     ├─ post-login/
+│     │  ├─ ControlMonthSummary.jsx
+│     │  ├─ MonthlyAccountsPanel.jsx
+│     │  ├─ PendingAccountsOverlay.jsx
+│     │  ├─ PostLoginHeader.jsx
+│     │  ├─ PostLoginToast.jsx
+│     │  ├─ SelfChatModal.jsx
+│     │  └─ README.md
+│     ├─ reports/
+│     │  ├─ ReportsPanels.jsx
+│     │  └─ README.md
+│     └─ shared/
+│        ├─ InfoTooltip.jsx
+│        ├─ MonthPickerBlocks.jsx
+│        └─ README.md
 ```
+
+### Leitura rápida da estrutura
+
+- `docs/`
+  - mapa técnico, roadmap e checklist final de regressão
+- `src/app-shell/`
+  - runtime pequeno da shell autenticada
+- `src/post-login/`
+  - helpers, workflows e controller do fluxo principal
+- `src/reports/`
+  - dominio compartilhado da area de relatorios, preview, render local e builders de PDF
+- `src/shared/`
+  - utilitários globais pequenos
+- `src/dashboard/`
+  - camada oficial do BI
+- `src/components/`
+  - interface principal e componentes de apresentação
 
 ---
 
@@ -248,7 +321,24 @@ Este repositório não usa bundler. O app mistura:
 - **módulos ES com `type="module"`**
 - **objetos globais em `window`**
 
-Alguns contratos importantes:
+### Bootstrap
+
+Arquivos centrais:
+
+- `index.html`
+- `manifest.json`
+- `sw.js`
+
+Cuidados importantes:
+
+- a ordem de carga dos scripts em `index.html` importa
+- qualquer arquivo novo usado em runtime precisa entrar no `index.html`
+- qualquer arquivo novo carregado pela app precisa entrar em `sw.js`
+- alterações no PWA exigem revisar `APP_VERSION`, query strings e cache
+
+### Contratos globais do runtime
+
+Contratos importantes em `window`:
 
 - `window.SupabaseClient`
 - `window.SupabaseQueries`
@@ -256,12 +346,74 @@ Alguns contratos importantes:
 - `window.DataAdapter`
 - `window.AppRoutes`
 - `window.MOCK_AUTH`
+- `window.AppShellRuntime`
+- `window.AppDateUtils`
+- `window.PostLoginHelpers`
+- `window.PostLoginRuntime`
+- `window.PostLoginData`
+- `window.PostLoginWorkflows`
+- `window.PostLoginController`
+- `window.ReportsHelpers`
+- `window.ReportsDom`
+- `window.ReportsRenderers`
+- `window.ReportsPdfBuilders`
+- `window.ReportsWorkflows`
+- `window.DashboardHelpers`
+- `window.DashboardOrchestration`
 
-Isso significa que:
+Isso significa que a ordem de carga no HTML funciona como cola de integração entre a parte Babel e os módulos ES.
 
-- a ordem de carga dos scripts em `index.html` importa
-- mudanças em arquivos novos precisam ser refletidas no `sw.js`
-- refatorações grandes no legado são naturalmente mais arriscadas
+Na branch profissional, o caminho ativo da UI já consome as camadas novas de runtime, dados e workflows. Os globais legados continuam existindo como espelho de compatibilidade do ambiente híbrido, mas deixaram de ser lidos diretamente pelos componentes principais.
+
+### Shell da aplicação
+
+Arquivos centrais:
+
+- `src/app-shell/runtime.js`
+- `src/components/App.jsx`
+- `src/components/LoginGate.jsx`
+- `src/components/app-shell/AppChrome.jsx`
+- `src/components/PostLoginMock.jsx`
+- `src/post-login/helpers.js`
+- `src/post-login/runtime.js`
+- `src/post-login/data.js`
+- `src/post-login/workflows.js`
+- `src/post-login/controller.js`
+
+Responsabilidades:
+
+- espelhar a sessão do Supabase no runtime legado
+- resolver o hash atual da área principal
+- carregar o profile global do usuário
+- renderizar o chrome autenticado
+- centralizar rotas, eventos globais e toasts do fluxo pós-login
+- centralizar composições assíncronas da shell do controle
+- orquestrar o fluxo principal do controle
+
+### Fluxos especializados
+
+Arquivos centrais:
+
+- `src/components/ReportsModal.jsx`
+- `src/components/reports/ReportsPanels.jsx`
+- `src/reports/helpers.js`
+- `src/reports/dom.js`
+- `src/reports/renderers.js`
+- `src/reports/pdf-builders.js`
+- `src/reports/workflows.js`
+- `src/dashboard/DashboardView.jsx`
+- `src/dashboard/components/*.jsx`
+- `src/dashboard/helpers.js`
+- `src/dashboard/orchestration.js`
+- `docs/regression-checklist.md`
+
+Responsabilidades:
+
+- relatórios formais
+- exportação de PDF
+- leitura analítica do dashboard
+- sincronias e paginação do BI
+- checklist final de regressão para consolidação
 
 ---
 
@@ -269,9 +421,10 @@ Isso significa que:
 
 1. `LoginGate.jsx` usa `supabase.auth.signInWithPassword()` para autenticação.
 2. Em cadastro, usa `signUp()`.
-3. O app espelha o usuário autenticado em `window.MOCK_AUTH` por compatibilidade com o legado.
-4. O profile do usuário é carregado depois do login.
-5. Após autenticar, o fluxo padrão de entrada vai para `#/mes`.
+3. O app mantém a sessão em `window.AppShellRuntime` e espelha o usuário autenticado em `window.MOCK_AUTH` apenas por compatibilidade com o legado.
+4. `window.AppShellRuntime` preserva `window.SupabaseClient.__lastAuthUid`.
+5. O profile do usuário é carregado depois do login.
+6. Após autenticar, o fluxo padrão de entrada vai para `#/mes`.
 
 ---
 
@@ -296,7 +449,7 @@ O `data-adapter.js` organiza esses dados para a UI, lidando com:
 - links
 - estrutura consumida pelos cards e pelos relatórios
 
-Tanto o controle mensal quanto o dashboard BI consomem o mesmo pipeline de dados por usuário autenticado. Em outras palavras: a leitura do dashboard respeita o mesmo `user_id` das consultas do restante da aplicação.
+Tanto o controle mensal quanto o dashboard BI consomem o mesmo pipeline de dados por usuário autenticado.
 
 ---
 
@@ -333,7 +486,7 @@ create table public.profile (
 - `nome_da_conta`: tipo da conta, como Escola, Luz, Empregada, Cartão etc.
 - `instancia`: detalhamento adicional, como parcela, aluno, unidade, semanal, diária etc.
 - `quem_pagou`: pagador responsável naquele lançamento
-- `dividida`: informa se entra na lógica de balanço/acerto entre pagadores
+- `dividida`: informa se entra na lógica de balanço entre pagadores
 - `link_boleto` e `link_comprovante`: preservam rastreabilidade do pagamento
 
 ---
@@ -356,7 +509,10 @@ O dashboard respeita o tema ativo da aplicação.
 
 O app possui dois relatórios formais principais:
 
-A home do modal de relatórios foi simplificada para priorizar os dois relatórios formais. O dashboard BI segue disponível por navegação própria no topo da aplicação.
+- **Relatório mensal**
+- **Relatório por período**
+
+A home do modal de relatórios foi simplificada para priorizar esses dois relatórios formais. O dashboard BI segue disponível por navegação própria no topo da aplicação.
 
 ### Relatório mensal
 
@@ -406,14 +562,14 @@ Ele:
 
 - não usa IA real
 - não envia nada para backend
-- responde localmente com frases fixas/aleatórias
+- responde localmente com frases fixas e aleatórias
 - serve como easter egg do projeto
 
 Gatilho:
 
 - topo do app, na área pós-login
 
-Lógica:
+Lógica central:
 
 - `App.jsx`
 - `PostLoginMock.jsx`
@@ -428,7 +584,7 @@ O roteamento é hash-based:
 - `#/relatorios` → abre o modal de relatórios
 - `#/dashboard` → dashboard BI
 
-O router fica em `src/router.js` e chama handlers expostos pela própria app via `window.AppRoutes`.
+O router fica em `src/router.js` e chama o runtime da shell pós-login. `window.AppRoutes` permanece apenas como espelho de compatibilidade.
 
 Na interface, o padrão atual é:
 
@@ -458,24 +614,12 @@ Arquivos principais:
 
 O `sw.js` atual:
 
-- usa `CACHE_NAME` versionado
-- versiona também o registro do `service worker` e o `manifest`
+- usa `APP_VERSION` versionado
+- versiona também o registro do service worker e o manifest
 - chama `skipWaiting()` no install
 - chama `clients.claim()` no activate
 - usa atualização automática via registro do `index.html`
 - revalida arquivos same-origin em rede quando possível
-
-### Manifest
-
-O `manifest.json` hoje inclui:
-
-- `id`
-- `start_url`
-- `scope`
-- `display: "standalone"`
-- atalhos para `Controle`, `Dashboard` e `Relatórios`
-- ícones padrão
-- ícones `maskable`
 
 ### Observação prática
 
@@ -485,58 +629,11 @@ Depois de publicar uma nova versão:
 2. aguarde o service worker novo assumir
 3. faça um hard refresh na primeira validação, se necessário
 
-Se a PWA instalada estiver presa numa versão antiga, limpar os dados do site/app resolve.
-
----
-
-## 🧠 Componentes Principais
-
-| Arquivo | Papel |
-|--------|-------|
-| `App.jsx` | sessão, header, logout e orquestração da navegação principal |
-| `LoginGate.jsx` | login e cadastro |
-| `SelectPopoverField.jsx` | seletor customizado em estilo dashboard para testes e transição do legado |
-| `PostLoginMock.jsx` | fluxo principal do controle, pendências, modais e composição do topo |
-| `ReportsModal.jsx` | relatórios formais e filtros auxiliares dentro do modal |
-| `DashboardView.jsx` | dashboard BI |
-| `SettingsModal.jsx` | tema e preferências |
-| `EditPopup.jsx` | criação/edição/exclusão |
-| `ContaCard.jsx` | exibição do lançamento |
-| `StyleTag.jsx` | CSS global, temas e ajustes visuais |
-
----
-
-## 🧰 Stack Técnica
-
-| Área | Tecnologia |
-|------|------------|
-| Frontend | React 18 UMD |
-| UI | Tailwind via CDN |
-| Banco/Auth | Supabase |
-| Charts | Chart.js |
-| PDF | jsPDF |
-| Roteamento | hash router próprio |
-| PWA | Manifest + Service Worker |
-| Build | nenhum; Babel transpila JSX no navegador |
-| Deploy | GitHub Pages |
-
----
-
-## 🔒 Segurança e Escopo
-
-Cada usuário só deve acessar seus próprios registros.
-
-Premissas:
-
-- `user_id` obrigatório nas operações
-- RLS habilitado no Supabase
-- políticas por usuário no banco
+Se a PWA instalada estiver presa numa versão antiga, limpar os dados do site ou do app resolve.
 
 ---
 
 ## 🧪 Execução Local
-
-Para validar UI básica, dá para abrir localmente.
 
 Para validar corretamente:
 
@@ -550,13 +647,13 @@ o ideal é servir por HTTP estático.
 Exemplo:
 
 ```powershell
-python -m http.server 4173
+py -m http.server 5500
 ```
 
 Depois abra:
 
 ```text
-http://localhost:4173/
+http://localhost:5500/
 ```
 
 ---
@@ -564,7 +661,7 @@ http://localhost:4173/
 ## 🚀 Deploy em GitHub Pages
 
 1. publique o repositório
-2. aponte o GitHub Pages para a branch/pasta correta
+2. aponte o GitHub Pages para a branch ou pasta correta
 3. confirme `start_url` e `scope` no `manifest.json`
 4. publique
 5. abra o app online para permitir atualização do service worker
@@ -582,9 +679,17 @@ https://<usuario>.github.io/controle_contas_pwa/
 - o projeto mistura JSX Babel e módulos ES
 - globais em `window` fazem parte da arquitetura atual
 - mudanças novas devem ser preferencialmente aditivas
-- `PostLoginMock.jsx` e `ReportsModal.jsx` concentram muito comportamento legado
+- `ReportsModal.jsx` ainda concentra parte importante do legado de relatorios
+- `PostLoginMock.jsx` ja atua mais como shell de composicao, apoiado por `src/post-login/controller.js`
+- a shell principal agora tambem usa `src/post-login/controller.js` para estados e efeitos da tela autenticada
+- a area de relatorios agora tambem usa `src/reports/` para DOM auxiliar, renderers locais e workflows
+- a area de relatorios agora tambem usa `src/reports/pdf-builders.js` para a montagem formal dos PDFs mensal e por periodo
+- a shell autenticada agora também usa `src/app-shell/` e `src/components/app-shell/`
+- o caminho ativo da UI nao depende mais diretamente de `window.MOCK_AUTH`, `window.AppRoutes`, `window.SupabaseQueries`, `window.AppState` ou `window.PDFHelpers`
 - o dashboard deve continuar isolado em `src/dashboard/`
 - se adicionar arquivos carregados pela app, atualize `index.html` e `sw.js`
+- os mapas técnicos complementares estão em `docs/architecture-map.md` e `docs/professionalization-roadmap.md`
+- o checklist de regressão para consolidação da branch está em `docs/regression-checklist.md`
 
 ---
 

@@ -14,15 +14,13 @@
 import { supabase, CURRENT_UID } from './client.js';
 
 function uid() {
-  // 1) se o LoginGate já preencheu, usa ele
-  if (window.MOCK_AUTH && window.MOCK_AUTH.user_id) {
-    return window.MOCK_AUTH.user_id;
+  const runtimeUid = window.AppShellRuntime?.getAuthSnapshot?.()?.user_id;
+  if (runtimeUid) {
+    return runtimeUid;
   }
-  // 2) se o client já descobriu uma sessão e pendurou no window, usa
   if (window.SupabaseClient && window.SupabaseClient.__lastAuthUid) {
     return window.SupabaseClient.__lastAuthUid;
   }
-  // 3) senão, sem UID → devolve null
   return null;
 }
 

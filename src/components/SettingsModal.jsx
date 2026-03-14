@@ -1,7 +1,8 @@
-function SettingsModal({ onClose, initial, contasDisponiveis, onSaved }) {
+function SettingsModal({ onClose, initial, contasDisponiveis, onSave }) {
   const [email, setEmail] = React.useState(initial?.email || '');
   const [theme, setTheme] = React.useState(initial?.theme || 'gunmetal');
   const [chartSel, setChartSel] = React.useState(new Set(initial?.chart_accounts || []));
+  const [saving, setSaving] = React.useState(false);
 
   React.useEffect(() => {
     setEmail(initial?.email || '');
@@ -78,18 +79,26 @@ function SettingsModal({ onClose, initial, contasDisponiveis, onSaved }) {
           <button className="btn ghost" onClick={onClose}>Cancelar</button>
           <button
             className="btn primary"
+            disabled={saving}
             onClick={async () => {
-              const ok = await window.SupabaseQueries.upsertProfile({
-                email,
-                theme,
-                chart_accounts: Array.from(chartSel)
-              });
-              if (!ok) return alert('Erro ao salvar perfil');
-              onSaved({ email, theme, chart_accounts: Array.from(chartSel) });
-              onClose();
+              try {
+                setSaving(true);
+                const savedProfile = await onSave?.({
+                  email,
+                  theme,
+                  chart_accounts: Array.from(chartSel)
+                });
+                if (!savedProfile) throw new Error('Erro ao salvar perfil');
+                onClose();
+              } catch (error) {
+                console.error('[settings] erro ao salvar perfil', error);
+                alert('Erro ao salvar perfil');
+              } finally {
+                setSaving(false);
+              }
             }}
           >
-            Salvar
+            {saving ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
       </div>

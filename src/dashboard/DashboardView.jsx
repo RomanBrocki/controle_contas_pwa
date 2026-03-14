@@ -1,2344 +1,40 @@
-function dashboardMonthNamePT(month, shortLabel = false) {
-  const label = new Date(2026, Number(month) - 1, 1).toLocaleString('pt-BR', {
-    month: shortLabel ? 'short' : 'long'
-  }).replace('.', '');
-  return label.replace(/^./, (char) => char.toUpperCase());
-}
-
-function dashboardBrl(value) {
-  return Number(value || 0).toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL'
-  });
-}
-
-function dashboardIsoToBR(iso) {
-  if (!iso) return '';
-  const parts = String(iso).split('-');
-  if (parts.length !== 3) return iso;
-  return `${parts[2]}/${parts[1]}/${parts[0]}`;
-}
-
-function dashboardNormalizeRow(row) {
-  return {
-    id: row.id,
-    ano: Number(row.ano || 0),
-    mes: Number(row.mes || 0),
-    nome: row.nome_da_conta || 'Sem categoria',
-    instancia: row.instancia || '',
-    valor: Number(row.valor || 0),
-    data: row.data_de_pagamento || '',
-    quem: row.quem_pagou || 'Sem pagador',
-    dividida: !!row.dividida,
-    boleto: row.link_boleto || '',
-    comprovante: row.link_comprovante || ''
-  };
-}
-
-function dashboardSum(rows) {
-  return (rows || []).reduce((total, row) => total + Number(row.valor || 0), 0);
-}
-
-function dashboardGroupAndSort(rows, fieldName) {
-  const groups = {};
-  (rows || []).forEach((row) => {
-    const key = row[fieldName] || 'Nao informado';
-    groups[key] = (groups[key] || 0) + Number(row.valor || 0);
-  });
-
-  return Object.keys(groups)
-    .map((key) => ({ name: key, total: groups[key] }))
-    .sort((left, right) => right.total - left.total);
-}
-
-function dashboardGroupTotalsMap(rows, fieldName) {
-  const map = new Map();
-  (rows || []).forEach((row) => {
-    const key = row[fieldName] || 'Nao informado';
-    map.set(key, (map.get(key) || 0) + Number(row.valor || 0));
-  });
-  return map;
-}
-
-function dashboardFilterRows(rows, filters) {
-  return (rows || []).filter((row) => {
-    if (filters.accounts?.length && !filters.accounts.includes(row.nome)) return false;
-    if (filters.payers?.length && !filters.payers.includes(row.quem)) return false;
-    if (filters.divided?.length) {
-      const dividedValue = row.dividida ? 'yes' : 'no';
-      if (!filters.divided.includes(dividedValue)) return false;
-    }
-    return true;
-  });
-}
-
-function dashboardPrevYearMonth(year, month) {
-  if (month > 1) return { year, month: month - 1 };
-  return { year: year - 1, month: 12 };
-}
-
-function dashboardPairKey(pair) {
-  return `${pair.year}-${String(pair.month).padStart(2, '0')}`;
-}
-
-function dashboardPairLabel(pair, showYear = false) {
-  const monthLabel = dashboardMonthNamePT(pair.month, true);
-  return showYear ? `${monthLabel}/${String(pair.year).slice(-2)}` : monthLabel;
-}
-
-function dashboardPairLabelLong(pair) {
-  return `${dashboardMonthNamePT(pair.month, true)}/${pair.year}`;
-}
-
-function dashboardSortPairs(pairs) {
-  return [...pairs].sort((left, right) => {
-    if (left.year !== right.year) return left.year - right.year;
-    return left.month - right.month;
-  });
-}
-
-function dashboardBuildPairs(years, months, monthsByYear) {
-  const pairs = [];
-  if (!Array.isArray(years) || !years.length) return pairs;
-  if (!Array.isArray(months) || !months.length) return pairs;
-
-  (years || []).forEach((year) => {
-    const availableMonths = Array.isArray(monthsByYear?.[year]) && monthsByYear[year].length
-      ? new Set(monthsByYear[year].map(Number))
-      : null;
-
-    (months || []).forEach((month) => {
-      const numericMonth = Number(month);
-      if (availableMonths && !availableMonths.has(numericMonth)) return;
-      pairs.push({ year: Number(year), month: numericMonth });
-    });
-  });
-
-  return pairs;
-}
-
-function dashboardResolveSelection(selection, options) {
-  if (!options.length) return [];
-  if (selection == null) return options.map((option) => option.value);
-  return options
-    .filter((option) => (selection || []).includes(option.value))
-    .map((option) => option.value);
-}
-
-function dashboardSelectionSummary(selection, options, allLabel) {
-  if (!options.length) return allLabel;
-  const resolved = dashboardResolveSelection(selection, options);
-  if (selection == null || resolved.length === options.length) return allLabel;
-  if (!resolved.length) return 'Nenhum';
-
-  const labelByValue = new Map(options.map((option) => [option.value, option.label]));
-  const labels = resolved.map((value) => labelByValue.get(value) || String(value));
-
-  if (labels.length <= 2) return labels.join(', ');
-  return `${labels.length} selecionados`;
-}
-
-function dashboardNormalizeSelection(selection, options) {
-  if (!options.length) return [];
-  if (selection == null) return null;
-
-  const optionSet = new Set(options.map((option) => option.value));
-  const ordered = (selection || []).filter((value) => optionSet.has(value));
-
-  if (ordered.length === options.length) return null;
-  if (!ordered.length) return [];
-  return options.filter((option) => ordered.includes(option.value)).map((option) => option.value);
-}
-
-function dashboardFiltersKey(filters, optionsByField) {
-  return JSON.stringify({
-    years: dashboardNormalizeSelection(filters?.years == null ? null : filters.years, optionsByField?.years || []),
-    months: dashboardNormalizeSelection(filters?.months == null ? null : filters.months, optionsByField?.months || []),
-    accounts: dashboardNormalizeSelection(filters?.accounts == null ? null : filters.accounts, optionsByField?.accounts || []),
-    payers: dashboardNormalizeSelection(filters?.payers == null ? null : filters.payers, optionsByField?.payers || []),
-    divided: dashboardNormalizeSelection(filters?.divided == null ? null : filters.divided, optionsByField?.divided || [])
-  });
-}
-
-function dashboardToggleSelection(selection, value, options, emptyBehavior = 'deselect-from-all') {
-  if (!options.length) return [];
-
-  const resolved = dashboardResolveSelection(selection, options);
-  const next = new Set(resolved);
-
-  if (next.has(value)) next.delete(value);
-  else next.add(value);
-
-  const ordered = options.filter((option) => next.has(option.value)).map((option) => option.value);
-  if (ordered.length === options.length) return null;
-  if (!ordered.length) return [];
-  return ordered;
-}
-
-function dashboardRollingPairs(endYear, endMonth, count) {
-  const pairs = [];
-  let cursorYear = Number(endYear);
-  let cursorMonth = Number(endMonth);
-
-  for (let index = 0; index < (count || 12); index += 1) {
-    pairs.unshift({ year: cursorYear, month: cursorMonth });
-    if (cursorMonth === 1) {
-      cursorMonth = 12;
-      cursorYear -= 1;
-    } else {
-      cursorMonth -= 1;
-    }
-  }
-
-  return pairs;
-}
-
-async function dashboardFetchRowsForPairs(pairs) {
-  const uniquePairs = dashboardSortPairs(
-    Array.from(new Map((pairs || []).map((pair) => [dashboardPairKey(pair), pair])).values())
-  );
-
-  if (!uniquePairs.length) return [];
-
-  const lists = await Promise.all(uniquePairs.map(async (pair) => {
-    const raw = await window.SupabaseQueries.listMes(pair.year, pair.month);
-    return (raw || []).map(dashboardNormalizeRow);
-  }));
-
-  return lists.flat();
-}
-
-function dashboardMonthOptionsForYears(monthsByYear, selectedYears) {
-  const monthValues = new Set();
-  const yearsToRead = selectedYears && selectedYears.length
-    ? selectedYears
-    : Object.keys(monthsByYear || {}).map(Number);
-
-  yearsToRead.forEach((year) => {
-    const months = monthsByYear?.[year];
-    if (Array.isArray(months) && months.length) {
-      months.forEach((month) => monthValues.add(Number(month)));
-    }
-  });
-
-  if (!monthValues.size) {
-    for (let month = 1; month <= 12; month += 1) {
-      monthValues.add(month);
-    }
-  }
-
-  return Array.from(monthValues)
-    .sort((left, right) => left - right)
-    .map((month) => ({ value: month, label: dashboardMonthNamePT(month) }));
-}
-
-function dashboardMakeSeries(rows, pairs, groupName) {
-  return (pairs || []).map((pair) => {
-    const monthRows = (rows || []).filter((row) => {
-      if (row.ano !== pair.year || row.mes !== pair.month) return false;
-      if (groupName && row.nome !== groupName) return false;
-      return true;
-    });
-
-    return {
-      key: dashboardPairKey(pair),
-      label: dashboardMonthNamePT(pair.month, true),
-      value: dashboardSum(monthRows)
-    };
-  });
-}
-
-function dashboardCategorySeries(rows, pairs, limit) {
-  const categories = dashboardGroupAndSort(rows, 'nome')
-    .slice(0, limit || 3)
-    .map((item) => item.name);
-
-  return categories.map((name) => ({
-    name,
-    points: dashboardMakeSeries(rows, pairs, name)
-  }));
-}
-
-function dashboardBuildTopFiveSegments(items) {
-  const sorted = items || [];
-  const topFive = sorted.slice(0, 5);
-  const othersTotal = sorted.slice(5).reduce((total, item) => total + Number(item.total || 0), 0);
-  const segments = othersTotal > 0
-    ? [...topFive, { name: 'Outros', total: othersTotal }]
-    : topFive;
-
-  return {
-    segments,
-    topFiveTotal: topFive.reduce((total, item) => total + Number(item.total || 0), 0)
-  };
-}
-
-function dashboardBuildParetoItems(items) {
-  const normalized = (items || [])
-    .map((item) => ({
-      name: item.name || 'Sem categoria',
-      total: Number(item.total || 0)
-    }))
-    .filter((item) => item.total > 0);
-
-  const total = normalized.reduce((sum, item) => sum + item.total, 0);
-  let runningTotal = 0;
-
-  return normalized.map((item) => {
-    runningTotal += item.total;
-    const sharePct = total > 0 ? (item.total / total) * 100 : 0;
-    const cumulativePct = total > 0 ? (runningTotal / total) * 100 : 0;
-
-    return {
-      ...item,
-      sharePct,
-      cumulativePct
-    };
-  });
-}
-
-function dashboardSplitLabel(label, maxCharsPerLine = 12, maxLines = 2) {
-  const cleaned = String(label || '').trim();
-  if (!cleaned) return [''];
-
-  const safeLimit = Math.max(4, Number(maxCharsPerLine || 12));
-  const words = cleaned.split(/\s+/).filter(Boolean);
-  const lines = [];
-  let current = '';
-
-  words.forEach((word) => {
-    const normalizedWord = word.length > safeLimit
-      ? `${word.slice(0, safeLimit - 1)}…`
-      : word;
-
-    if (!current) {
-      current = normalizedWord;
-      return;
-    }
-
-    const candidate = `${current} ${normalizedWord}`;
-    if (candidate.length <= safeLimit) {
-      current = candidate;
-      return;
-    }
-
-    lines.push(current);
-    current = normalizedWord;
-  });
-
-  if (current) lines.push(current);
-  if (lines.length <= maxLines) return lines;
-
-  const visible = lines.slice(0, maxLines);
-  const lastIndex = visible.length - 1;
-  const lastLine = visible[lastIndex];
-  visible[lastIndex] = lastLine.endsWith('…')
-    ? lastLine
-    : `${lastLine.slice(0, Math.max(safeLimit - 1, 1))}…`;
-  return visible;
-}
-
-function dashboardBuildAccountComparison(currentRows, previousRows, previousYearRows, limit) {
-  const currentMap = dashboardGroupTotalsMap(currentRows, 'nome');
-  const previousMap = dashboardGroupTotalsMap(previousRows, 'nome');
-  const previousYearMap = dashboardGroupTotalsMap(previousYearRows, 'nome');
-  const names = Array.from(new Set([
-    ...Array.from(currentMap.keys()),
-    ...Array.from(previousMap.keys()),
-    ...Array.from(previousYearMap.keys())
-  ]));
-
-  return names
-    .map((name) => ({
-      name,
-      current: currentMap.get(name) || 0,
-      previous: previousMap.get(name) || 0,
-      previousYear: previousYearMap.get(name) || 0,
-      total: (currentMap.get(name) || 0) + (previousMap.get(name) || 0) + (previousYearMap.get(name) || 0)
-    }))
-    .sort((left, right) => {
-      if (right.current !== left.current) return right.current - left.current;
-      return right.total - left.total;
-    })
-    .slice(0, typeof limit === 'number' ? limit : names.length);
-}
-
-function dashboardComputeSettlement(rows) {
-  const dividedRows = (rows || []).filter((row) => row.dividida);
-  const payers = Array.from(new Set((rows || []).map((row) => row.quem).filter(Boolean)));
-
-  if (dividedRows.length === 0 || payers.length < 2) {
-    return {
-      headline: 'Sem acerto pendente',
-      detail: 'Nao ha base suficiente nas contas divididas deste recorte.'
-    };
-  }
-
-  const paidByPayer = {};
-  payers.forEach((payer) => { paidByPayer[payer] = 0; });
-  dividedRows.forEach((row) => {
-    paidByPayer[row.quem] = (paidByPayer[row.quem] || 0) + Number(row.valor || 0);
-  });
-
-  const totalDivided = dashboardSum(dividedRows);
-  const fairShare = totalDivided / payers.length;
-  const balances = payers
-    .map((payer) => ({ payer, delta: Number((paidByPayer[payer] - fairShare).toFixed(2)) }))
-    .sort((left, right) => left.delta - right.delta);
-
-  const debtor = balances[0];
-  const creditor = balances[balances.length - 1];
-  const amount = Math.min(Math.abs(debtor.delta), Math.abs(creditor.delta));
-
-  if (amount <= 0.01) {
-    return {
-      headline: 'Acerto equilibrado',
-      detail: 'Os pagadores estao praticamente compensados neste recorte.'
-    };
-  }
-
-  if (balances.length === 2) {
-    return {
-      headline: `${debtor.payer} deve ${dashboardBrl(amount)}`,
-      detail: `para ${creditor.payer} nas contas divididas.`
-    };
-  }
-
-  return {
-    headline: `${debtor.payer} deve ${dashboardBrl(amount)}`,
-    detail: `maior repasse estimado para ${creditor.payer}.`
-  };
-}
-
-function dashboardBuildCategoryFocus(rows, categoryName, totalPeriodo) {
-  if (!categoryName) return null;
-
-  const categoryRows = (rows || []).filter((row) => row.nome === categoryName);
-  if (!categoryRows.length) return null;
-
-  const total = dashboardSum(categoryRows);
-  const topPayer = dashboardGroupAndSort(categoryRows, 'quem')[0] || null;
-  const topInstance = dashboardGroupAndSort(
-    categoryRows.map((row) => ({ ...row, instancia: row.instancia || row.nome })),
-    'instancia'
-  )[0] || null;
-  const dividedTotal = dashboardSum(categoryRows.filter((row) => row.dividida));
-
-  return {
-    name: categoryName,
-    total,
-    share: totalPeriodo > 0 ? Math.round((total / totalPeriodo) * 100) : 0,
-    count: categoryRows.length,
-    topPayer,
-    topInstance,
-    dividedShare: total > 0 ? Math.round((dividedTotal / total) * 100) : 0
-  };
-}
-
-function DashboardInfoTooltip({ content, testId }) {
-  const [open, setOpen] = React.useState(false);
-  const ref = React.useRef(null);
-
-  React.useEffect(() => {
-    if (!open) return undefined;
-
-    function handlePointerDown(event) {
-      if (!ref.current || ref.current.contains(event.target)) return;
-      setOpen(false);
-    }
-
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, [open]);
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        className="h-7 w-7 rounded-full border text-xs font-semibold"
-        style={{ borderColor: 'var(--border)', background: 'var(--chip)', color: 'var(--text)' }}
-        onClick={() => setOpen((prev) => !prev)}
-        data-dash-tooltip-button={testId}
-        aria-label="Mais informações"
-        aria-expanded={open}
-      >
-        i
-      </button>
-      {open ? (
-        <div
-          className="absolute right-0 top-full z-40 mt-2 w-72 rounded-2xl border p-3 text-sm"
-          style={{
-            borderColor: 'var(--border)',
-            background: 'color-mix(in srgb, var(--surface) 96%, black 4%)',
-            boxShadow: '0 10px 30px rgba(0,0,0,.32)'
-          }}
-          data-dash-tooltip={testId}
-        >
-          {content}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function DashboardFilterChecklist(props) {
-  const [query, setQuery] = React.useState('');
-  const resolvedSelection = React.useMemo(
-    () => dashboardResolveSelection(props.selection, props.options || []),
-    [props.selection, props.options]
-  );
-  const selectedSet = React.useMemo(() => new Set(resolvedSelection), [resolvedSelection]);
-  const normalizedQuery = query.trim().toLowerCase();
-  const visibleOptions = React.useMemo(() => {
-    if (!normalizedQuery) return props.options || [];
-    return (props.options || []).filter((option) => option.label.toLowerCase().includes(normalizedQuery));
-  }, [props.options, normalizedQuery]);
-  const totalCount = (props.options || []).length;
-  const allSelected = props.selection == null || resolvedSelection.length === totalCount;
-  const columnClass = props.columns === 2
-    ? 'grid gap-2 md:grid-cols-2'
-    : props.columns === 3
-      ? 'grid gap-2 sm:grid-cols-2 xl:grid-cols-3'
-      : 'space-y-2';
-
-  function toggleValue(value) {
-    props.onChange(
-      dashboardToggleSelection(
-        props.selection,
-        value,
-        props.options || [],
-        props.emptyBehavior || 'deselect-from-all'
-      )
-    );
-  }
-
-  const searchThreshold = typeof props.searchThreshold === 'number' ? props.searchThreshold : 10;
-  const shouldShowSearch = props.searchable !== false && totalCount > searchThreshold;
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-xs uppercase tracking-[0.16em] opacity-60">{props.label}</div>
-          {props.helperText ? <div className="text-sm opacity-70 mt-1">{props.helperText}</div> : null}
-        </div>
-        {props.tooltip ? <DashboardInfoTooltip content={props.tooltip} testId={`filter-${props.testId}`} /> : null}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="badge" data-dash-filter-status={props.testId}>
-          {dashboardSelectionSummary(props.selection, props.options || [], props.allLabel)}
-        </div>
-        <button
-          type="button"
-          className="btn ghost"
-          onClick={() => props.onChange(allSelected ? [] : null)}
-          data-dash-filter-all={props.testId}
-        >
-          {allSelected ? 'Limpar seleção' : 'Selecionar todos'}
-        </button>
-        <div className="text-xs opacity-60" data-dash-filter-active={props.testId}>
-          {resolvedSelection.length} de {totalCount || 0} ativos
-        </div>
-      </div>
-
-      {shouldShowSearch ? (
-        <input
-          type="text"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={props.searchPlaceholder || `Buscar ${props.label.toLowerCase()}`}
-          className="select w-full"
-          data-dash-filter-search={props.testId}
-        />
-      ) : null}
-
-      <div className={columnClass} style={props.maxHeight ? { maxHeight: props.maxHeight, overflow: 'auto', paddingRight: 4 } : undefined}>
-        {visibleOptions.map((option) => {
-          const checked = selectedSet.has(option.value);
-          return (
-            <label
-              key={option.value}
-              className={`flex items-start gap-3 rounded-2xl border px-3 py-2 cursor-pointer transition-colors ${checked ? 'shadow-sm' : ''}`}
-              style={{
-                borderColor: checked ? 'color-mix(in srgb, var(--primary) 55%, var(--border))' : 'var(--border)',
-                background: checked
-                  ? 'color-mix(in srgb, var(--primary) 16%, var(--surface))'
-                  : 'color-mix(in srgb, var(--surface) 88%, black 12%)'
-              }}
-              data-dash-filter-option={`${props.testId}:${option.value}`}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => toggleValue(option.value)}
-              />
-              <span className="text-sm leading-5 flex-1">{option.label}</span>
-            </label>
-          );
-        })}
-
-        {!visibleOptions.length ? (
-          <div className="text-sm opacity-70" data-dash-filter-empty={props.testId}>
-            Nenhuma opcao encontrada.
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function DashboardMetricCard(props) {
-  return (
-    <div
-      className="card flex flex-col gap-2 min-h-[132px]"
-      style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, white 6%), var(--surface))' }}
-      data-dash-card={props.testId}
-      title={props.tooltip || props.detail || `${props.label}: ${props.value}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="text-sm uppercase tracking-[0.16em] opacity-60">{props.label}</div>
-        {props.tooltip ? <DashboardInfoTooltip content={props.tooltip} testId={`card-${props.testId}`} /> : null}
-      </div>
-      <div className="text-2xl md:text-3xl font-semibold" style={{ textShadow: 'var(--glow)' }}>{props.value}</div>
-      {props.detail ? <div className="text-sm opacity-70">{props.detail}</div> : null}
-    </div>
-  );
-}
-
-function DashboardSection(props) {
-  return (
-    <section
-      className="card space-y-4"
-      style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--surface) 95%, white 5%), var(--surface))' }}
-      data-dash-section={props.testId}
-    >
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-start gap-3">
-          <div>
-            <h3 className="text-lg font-semibold">{props.title}</h3>
-            {props.subtitle ? <div className="text-sm opacity-70">{props.subtitle}</div> : null}
-          </div>
-          {props.tooltip ? <DashboardInfoTooltip content={props.tooltip} testId={`section-${props.testId}`} /> : null}
-        </div>
-        {props.actions ? <div className="flex flex-wrap gap-2">{props.actions}</div> : null}
-      </div>
-      {props.children}
-    </section>
-  );
-}
-
-function DashboardToolbarMockField(props) {
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        className="w-full rounded-2xl border px-4 py-3 text-left transition-all"
-        style={{
-          borderColor: props.open
-            ? 'color-mix(in srgb, var(--primary) 55%, var(--border))'
-            : 'var(--border)',
-          background: props.open
-            ? 'color-mix(in srgb, var(--primary) 10%, var(--surface))'
-            : 'color-mix(in srgb, var(--surface) 88%, black 12%)'
-        }}
-        onClick={props.onToggle}
-        data-dash-mock-filter={props.testId}
-        aria-expanded={props.open}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[11px] uppercase tracking-[0.16em] opacity-60">{props.label}</div>
-            <div className="mt-1 font-medium truncate">{props.value}</div>
-          </div>
-          <div
-            className="flex h-9 w-9 items-center justify-center rounded-full border transition-colors"
-            style={{
-              borderColor: props.open
-                ? 'color-mix(in srgb, var(--primary) 45%, var(--border))'
-                : 'var(--border)',
-              background: props.open
-                ? 'color-mix(in srgb, var(--primary) 12%, var(--surface))'
-                : 'color-mix(in srgb, var(--surface) 92%, black 8%)',
-              color: props.open ? 'var(--primary)' : 'var(--muted)'
-            }}
-            aria-hidden="true"
-          >
-            <svg
-              viewBox="0 0 20 20"
-              className={`h-4 w-4 transition-transform duration-200 ${props.open ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-            >
-              <path d="M5.5 7.5L10 12l4.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
-        </div>
-      </button>
-
-      {props.open ? (
-        <div
-          className="absolute left-0 top-full z-50 mt-2 rounded-2xl border p-4"
-          style={{
-            borderColor: 'var(--border)',
-            background: 'color-mix(in srgb, var(--surface) 97%, black 3%)',
-            boxShadow: '0 16px 48px rgba(0,0,0,.38)',
-            width: props.width || 'min(calc(100vw - 2rem), 360px)'
-          }}
-          data-dash-mock-panel={props.testId}
-        >
-          {props.children}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function DashboardFilterToolbarMock(props) {
-  const rootRef = React.useRef(null);
-  const [openId, setOpenId] = React.useState('');
-
-  React.useEffect(() => {
-    if (!openId) return undefined;
-
-    function handlePointerDown(event) {
-      if (!rootRef.current || rootRef.current.contains(event.target)) return;
-      setOpenId('');
-    }
-
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, [openId]);
-
-  const yearsSummary = dashboardSelectionSummary(props.filters.years, props.yearOptions, 'Todos');
-  const monthsSummary = dashboardSelectionSummary(props.filters.months, props.monthOptions, 'Todos');
-  const accountsSummary = dashboardSelectionSummary(props.filters.accounts, props.accountOptions, 'Todas');
-  const payersSummary = dashboardSelectionSummary(props.filters.payers, props.payerOptions, 'Todos');
-  const dividedSummary = dashboardSelectionSummary(props.filters.divided, props.dividedOptions, 'Sim e Não');
-
-  return (
-    <section
-      ref={rootRef}
-      className="card space-y-4"
-      style={{ background: 'linear-gradient(180deg, color-mix(in srgb, var(--surface) 95%, white 5%), var(--surface))' }}
-      data-dash-section="toolbar-mock"
-    >
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="space-y-1">
-            <div className="brand" style={{ fontSize: '1.65rem', lineHeight: 1.05 }}>
-              Dashboard
-            </div>
-          </div>
-          <DashboardInfoTooltip
-            content="Filtros compactos do dashboard. As opções se ajustam localmente no rascunho, mas cards e gráficos só são recalculados quando você clicar em Atualizar dashboard."
-            testId="toolbar-mock"
-          />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={props.onReset}
-            data-dash-action="reset-filters"
-          >
-            Restaurar padrão
-          </button>
-          {openId ? (
-            <button
-              type="button"
-              className="btn ghost"
-              onClick={() => setOpenId('')}
-              data-dash-action="close-filters"
-            >
-              Fechar painéis
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => {
-              setOpenId('');
-              if (props.onApply) props.onApply();
-            }}
-            data-dash-action="apply-filters"
-            disabled={!props.hasPendingChanges || props.previewLoading}
-          >
-            Atualizar dashboard
-          </button>
-        </div>
-      </div>
-
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_repeat(3,minmax(0,1fr))]">
-        <DashboardToolbarMockField
-          label="Período"
-          value={`${monthsSummary} | ${yearsSummary}`}
-          open={openId === 'period'}
-          onToggle={() => setOpenId((prev) => prev === 'period' ? '' : 'period')}
-          testId="period"
-          width="min(calc(100vw - 2rem), 720px)"
-        >
-          <div className="grid gap-4 lg:grid-cols-2">
-            <DashboardFilterChecklist
-              label="Anos"
-              helperText="Selecione um ou mais anos."
-              selection={props.filters.years}
-              onChange={(years) => props.onChange((prev) => ({ ...prev, years }))}
-              options={props.yearOptions}
-              allLabel="Todos"
-              searchable={false}
-              columns={2}
-              testId="mock-years"
-            />
-            <DashboardFilterChecklist
-              label="Meses"
-              helperText="Selecione um ou mais meses."
-              selection={props.filters.months}
-              onChange={(months) => props.onChange((prev) => ({ ...prev, months }))}
-              options={props.monthOptions}
-              allLabel="Todos"
-              searchable={false}
-              columns={3}
-              testId="mock-months"
-            />
-          </div>
-        </DashboardToolbarMockField>
-
-        <DashboardToolbarMockField
-          label="Contas"
-          value={accountsSummary}
-          open={openId === 'accounts'}
-          onToggle={() => setOpenId((prev) => prev === 'accounts' ? '' : 'accounts')}
-          testId="accounts"
-        >
-          <DashboardFilterChecklist
-              label="Contas"
-              helperText="Contas disponíveis para o período filtrado."
-              selection={props.filters.accounts}
-              onChange={(accounts) => props.onChange((prev) => ({ ...prev, accounts }))}
-              options={props.accountOptions}
-            allLabel="Todas"
-            maxHeight={280}
-            testId="mock-accounts"
-          />
-        </DashboardToolbarMockField>
-
-        <DashboardToolbarMockField
-          label="Pagadores"
-          value={payersSummary}
-          open={openId === 'payers'}
-          onToggle={() => setOpenId((prev) => prev === 'payers' ? '' : 'payers')}
-          testId="payers"
-        >
-          <DashboardFilterChecklist
-              label="Pagadores"
-              helperText="Pagadores disponíveis no período filtrado."
-              selection={props.filters.payers}
-              onChange={(payers) => props.onChange((prev) => ({ ...prev, payers }))}
-              options={props.payerOptions}
-            allLabel="Todos"
-            maxHeight={280}
-            searchable={props.payerOptions.length > 10}
-            testId="mock-payers"
-          />
-        </DashboardToolbarMockField>
-
-        <DashboardToolbarMockField
-          label="Divisão"
-          value={dividedSummary}
-          open={openId === 'divided'}
-          onToggle={() => setOpenId((prev) => prev === 'divided' ? '' : 'divided')}
-          testId="divided"
-          width="min(calc(100vw - 2rem), 340px)"
-        >
-          <DashboardFilterChecklist
-            label="Divididas"
-            helperText="Sim, Não ou ambas."
-            selection={props.filters.divided}
-            onChange={(divided) => props.onChange((prev) => ({ ...prev, divided }))}
-            options={props.dividedOptions}
-            allLabel="Sim e Não"
-            searchable={false}
-            columns={2}
-            testId="mock-divided"
-          />
-        </DashboardToolbarMockField>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="badge">Filtro do período aplicado</div>
-        <div className="badge" data-dash-filter-summary="years">Anos: {props.appliedYearsSummary}</div>
-        <div className="badge" data-dash-filter-summary="months">Meses: {props.appliedMonthsSummary}</div>
-        <div className="badge" data-dash-filter-summary="accounts">Contas: {props.appliedAccountsSummary}</div>
-        <div className="badge" data-dash-filter-summary="payers">Pagadores: {props.appliedPayersSummary}</div>
-        <div className="badge" data-dash-filter-summary="divided">Divididas: {props.appliedDividedSummary}</div>
-        <div className="badge" data-dash-count="rows">Contas pagas: {props.appliedRowCount}</div>
-        {props.previewLoading ? <div className="badge">Atualizando opções...</div> : null}
-        {props.loading ? <div className="badge">Atualizando dashboard...</div> : null}
-        {props.hasPendingChanges ? <div className="badge">Alterações pendentes</div> : null}
-      </div>
-
-      {props.hasPendingChanges ? (
-        <div className="text-sm opacity-70" data-dash-pending-message="true">
-          O rascunho acima já foi ajustado. O dashboard abaixo continua no filtro de período aplicado até você clicar em Atualizar dashboard.
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-function DashboardSparkline(props) {
-  const points = props.points || [];
-  const comparePoints = props.comparePoints || [];
-  const width = 760;
-  const height = 240;
-  const padX = 26;
-  const padTop = 18;
-  const padBottom = 38;
-  const maxValue = Math.max(1, ...points.map((point) => point.value), ...comparePoints.map((point) => point.value));
-  const innerWidth = width - (padX * 2);
-  const innerHeight = height - padTop - padBottom;
-  const [selectedPointKey, setSelectedPointKey] = React.useState(points[points.length - 1]?.key || '');
-
-  function pointPath(series) {
-    return series.map((point, index) => {
-      const x = padX + ((innerWidth / Math.max(series.length - 1, 1)) * index);
-      const y = padTop + innerHeight - ((Number(point.value || 0) / maxValue) * innerHeight);
-      return `${x},${y}`;
-    }).join(' ');
-  }
-
-  function areaPath(series) {
-    if (!series.length) return '';
-    const line = pointPath(series);
-    const firstX = padX;
-    const lastX = padX + ((innerWidth / Math.max(series.length - 1, 1)) * (series.length - 1));
-    const baseY = padTop + innerHeight;
-    return `M${firstX},${baseY} L${line.replace(/ /g, ' L')} L${lastX},${baseY} Z`;
-  }
-
-  React.useEffect(() => {
-    if (!points.length) {
-      setSelectedPointKey('');
-      return;
-    }
-    if (!points.some((point) => point.key === selectedPointKey)) {
-      setSelectedPointKey(points[points.length - 1].key);
-    }
-  }, [points, selectedPointKey]);
-
-  const selectedPoint = points.find((point) => point.key === selectedPointKey) || points[points.length - 1] || null;
-  const averageValue = Number(props.averageValue || 0);
-
-  if (!points.length) {
-    return <div className="text-sm opacity-70">Sem dados suficientes para o gráfico.</div>;
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        <div className="badge flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full" style={{ background: 'var(--primary)' }} />
-          {props.primaryLabel || 'Últimos 12 meses'}
-        </div>
-        {comparePoints.length ? (
-          <div className="badge flex items-center gap-2">
-            <span className="w-5 border-t-2 border-dashed" style={{ borderColor: 'var(--muted)' }} />
-            {props.compareLabel || 'Mesmo período no ano anterior'}
-          </div>
-        ) : null}
-        {averageValue > 0 ? (
-          <div className="badge flex items-center gap-2" data-dash-average-badge="true">
-            <span className="h-2 w-2 rounded-full" style={{ background: 'var(--accent)' }} />
-            {(props.averageLabel || 'Média')}: {dashboardBrl(averageValue)}
-          </div>
-        ) : null}
-        {selectedPoint ? (
-          <div className="badge" data-dash-point-selected="true">
-            Destaque: {selectedPoint.label} · {dashboardBrl(selectedPoint.value)}
-          </div>
-        ) : null}
-      </div>
-
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full rounded-2xl" role="img" aria-label={props.ariaLabel || 'Grafico de evolucao'}>
-        <title>{props.ariaLabel || 'Grafico de evolucao'}</title>
-        <defs>
-          <linearGradient id="dashboard-gradient-main" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.38" />
-            <stop offset="100%" stopColor="var(--primary)" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-
-        {[0.25, 0.5, 0.75, 1].map((step) => {
-          const y = padTop + innerHeight - (innerHeight * step);
-          return (
-            <line
-              key={step}
-              x1={padX}
-              x2={width - padX}
-              y1={y}
-              y2={y}
-              stroke="var(--border)"
-              strokeWidth="1"
-              opacity="0.7"
-            />
-          );
-        })}
-
-        <path d={areaPath(points)} fill="url(#dashboard-gradient-main)">
-          <title>Serie principal do recorte filtrado.</title>
-        </path>
-        {comparePoints.length ? (
-          <polyline
-            fill="none"
-            stroke="var(--muted)"
-            strokeDasharray="8 7"
-            strokeWidth="3"
-            points={pointPath(comparePoints)}
-            opacity="0.8"
-          >
-            <title>Mesmo recorte no ano anterior.</title>
-          </polyline>
-        ) : null}
-        <polyline
-          fill="none"
-          stroke="var(--primary)"
-          strokeWidth="4"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          points={pointPath(points)}
-        >
-          <title>Serie principal do recorte filtrado.</title>
-        </polyline>
-
-        {points.map((point, index) => {
-          const x = padX + ((innerWidth / Math.max(points.length - 1, 1)) * index);
-          const y = padTop + innerHeight - ((Number(point.value || 0) / maxValue) * innerHeight);
-          const selected = point.key === selectedPoint?.key;
-          return (
-            <g key={point.key || index}>
-              {selected ? (
-                <circle cx={x} cy={y} r="9" fill="rgba(34, 211, 238, 0.18)" />
-              ) : null}
-              <circle
-                cx={x}
-                cy={y}
-                r={selected ? '6.5' : '4.5'}
-                fill="var(--primary)"
-                stroke={selected ? 'white' : 'none'}
-                strokeWidth={selected ? '2' : '0'}
-                style={{ cursor: 'pointer' }}
-                data-dash-point={point.label}
-                onClick={() => setSelectedPointKey(point.key)}
-              >
-                <title>{`${point.label}: ${dashboardBrl(point.value)}`}</title>
-              </circle>
-            </g>
-          );
-        })}
-
-        {points.map((point, index) => {
-          const x = padX + ((innerWidth / Math.max(points.length - 1, 1)) * index);
-          return (
-            <text
-              key={`${point.key || index}-label`}
-              x={x}
-              y={height - 10}
-              textAnchor="middle"
-              fill="var(--muted)"
-              fontSize="13"
-            >
-              {point.label}
-            </text>
-          );
-        })}
-      </svg>
-
-      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-        {points.map((point) => (
-          <button
-            key={point.key}
-            type="button"
-            className="badge justify-between flex text-left"
-            style={{
-              minHeight: 36,
-              borderColor: point.key === selectedPoint?.key
-                ? 'color-mix(in srgb, var(--primary) 55%, var(--border))'
-                : 'var(--border)',
-              background: point.key === selectedPoint?.key
-                ? 'color-mix(in srgb, var(--primary) 10%, var(--surface))'
-                : undefined
-            }}
-            title={`${point.label}: ${dashboardBrl(point.value)}`}
-            data-dash-point-summary={point.label}
-            onClick={() => setSelectedPointKey(point.key)}
-          >
-            {point.label}: {dashboardBrl(point.value)}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DashboardComparisonBars(props) {
-  const items = props.items || [];
-  const series = [
-    { key: 'current', label: props.currentLabel, color: 'var(--primary)' },
-    { key: 'previous', label: props.previousLabel, color: 'var(--accent)' },
-    { key: 'previousYear', label: props.previousYearLabel, color: 'var(--muted)' }
-  ];
-
-  if (!items.length) {
-    return <div className="text-sm opacity-70">Nao ha contas suficientes para comparar o mes atual com as referencias.</div>;
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {series.map((item) => (
-          <div key={item.key} className="badge flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full" style={{ background: item.color }} />
-            {item.label}
-          </div>
-        ))}
-      </div>
-
-      <div className="space-y-4">
-        {items.map((item) => (
-          <button
-            key={item.name}
-            type="button"
-            className="w-full text-left card"
-            onClick={() => props.onSelect && props.onSelect(item.name)}
-            data-dash-account-comparison={item.name}
-            style={{
-              padding: 14,
-              borderColor: props.selectedName === item.name
-                ? 'color-mix(in srgb, var(--primary) 55%, var(--border))'
-                : 'var(--border)',
-              background: props.selectedName === item.name
-                ? 'color-mix(in srgb, var(--primary) 10%, var(--surface))'
-                : undefined
-            }}
-            title={`${item.name}: ${dashboardBrl(item.current)} no periodo atual.`}
-          >
-            {(() => {
-              const itemMaxValue = Math.max(
-                1,
-                Number(item.current || 0),
-                Number(item.previous || 0),
-                Number(item.previousYear || 0)
-              );
-
-              return (
-                <>
-            <div className="flex items-center justify-between gap-3 mb-3">
-                  <div className="min-w-0">
-                    <span className="font-semibold block">{item.name}</span>
-                    <span className="text-[11px] opacity-60">Escala da conta | pico {dashboardBrl(itemMaxValue)}</span>
-                  </div>
-                  <span className="text-xs opacity-70">{props.selectedName === item.name ? 'conta destacada' : 'toque para destacar'}</span>
-            </div>
-
-            <div className="space-y-2">
-              {series.map((seriesItem) => {
-                const value = Number(item[seriesItem.key] || 0);
-                const width = value > 0 ? Math.max((value / itemMaxValue) * 100, 3) : 0;
-                return (
-                  <div key={seriesItem.key} className="flex items-center gap-3">
-                    <div className="w-28 text-xs opacity-70 shrink-0">{seriesItem.label}</div>
-                    <div className="flex-1 h-3 rounded-full" style={{ background: 'var(--chip)' }}>
-                      <div
-                        className="h-3 rounded-full"
-                        style={{
-                          width: `${width}%`,
-                          background: seriesItem.color
-                        }}
-                      />
-                    </div>
-                    <div className="text-xs w-24 text-right shrink-0">{dashboardBrl(value)}</div>
-                  </div>
-                );
-              })}
-            </div>
-                </>
-              );
-            })()}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DashboardDonut(props) {
-  const segments = props.segments || [];
-  const total = Math.max(props.total || 0, 0);
-  const chartTotal = Math.max(segments.reduce((sum, segment) => sum + Number(segment.total || 0), 0), total, 0);
-  const topValue = Math.max(props.topValue || 0, 0);
-  const palette = ['#22d3ee', '#ff38a1', '#10b981', '#f59e0b', '#8b5cf6', '#f97316', '#94a3b8'];
-
-  function polarToCartesian(cx, cy, radius, angleInDegrees) {
-    const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0;
-    return {
-      x: cx + (radius * Math.cos(angleInRadians)),
-      y: cy + (radius * Math.sin(angleInRadians))
-    };
-  }
-
-  function buildArcPath(startAngle, endAngle, outerRadius, innerRadius) {
-    const startOuter = polarToCartesian(120, 120, outerRadius, endAngle);
-    const endOuter = polarToCartesian(120, 120, outerRadius, startAngle);
-    const startInner = polarToCartesian(120, 120, innerRadius, endAngle);
-    const endInner = polarToCartesian(120, 120, innerRadius, startAngle);
-    const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
-
-    return [
-      `M ${startOuter.x} ${startOuter.y}`,
-      `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 0 ${endOuter.x} ${endOuter.y}`,
-      `L ${endInner.x} ${endInner.y}`,
-      `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 1 ${startInner.x} ${startInner.y}`,
-      'Z'
-    ].join(' ');
-  }
-
-  return (
-    <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)] items-start">
-      <div className="mx-auto flex flex-col items-center gap-3">
-        <div className="text-center text-sm opacity-70" data-dash-donut-total="true">
-          Total geral: {dashboardBrl(total)}
-        </div>
-        <div className="relative h-[244px] w-[244px]">
-          <svg
-            viewBox="0 0 240 240"
-            className="w-full h-full"
-            role="img"
-            aria-label={`Composicao do recorte. Total ${dashboardBrl(total)}.`}
-          >
-            {segments.length ? (() => {
-              let runningAngle = 0;
-              return segments.map((segment, index) => {
-                const sweep = chartTotal > 0 ? ((segment.total / chartTotal) * 360) : 0;
-                const startAngle = runningAngle;
-                const endAngle = runningAngle + sweep;
-                runningAngle = endAngle;
-                const midAngle = startAngle + (sweep / 2);
-                const selected = props.selectedName === segment.name;
-                const offset = selected ? 10 : 0;
-                const transform = selected
-                  ? `translate(${Math.cos(((midAngle - 90) * Math.PI) / 180) * offset} ${Math.sin(((midAngle - 90) * Math.PI) / 180) * offset})`
-                  : undefined;
-
-                return (
-                  <path
-                    key={segment.name}
-                    d={buildArcPath(startAngle, endAngle, 100, 56)}
-                    fill={palette[index % palette.length]}
-                    transform={transform}
-                    style={{ cursor: 'pointer', filter: selected ? 'drop-shadow(0 0 12px rgba(255,255,255,.2))' : 'none' }}
-                    onClick={() => props.onSelect && props.onSelect(segment.name)}
-                    data-dash-segment={segment.name}
-                  >
-                    <title>{`${segment.name}: ${dashboardBrl(segment.total)}`}</title>
-                  </path>
-                );
-              });
-            })() : (
-              <circle cx="120" cy="120" r="100" fill="#334155" />
-            )}
-
-            <circle cx="120" cy="120" r="54" fill="var(--bg)" stroke="var(--border)" />
-          </svg>
-
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-10 pointer-events-none">
-            <div className="text-[10px] uppercase tracking-[0.18em] opacity-60">Top 5 contas</div>
-            <div className="text-base font-semibold leading-tight">{dashboardBrl(topValue || chartTotal)}</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {segments.length ? (
-          <div className="grid gap-2 grid-cols-1">
-            {segments.map((segment, index) => {
-              const pct = chartTotal > 0 ? Math.round((segment.total / chartTotal) * 100) : 0;
-              return (
-                <button
-                  key={segment.name}
-                  type="button"
-                  className="w-full text-left rounded-2xl border px-3 py-2 flex items-center gap-3"
-                  onClick={() => props.onSelect && props.onSelect(segment.name)}
-                  style={{
-                    borderColor: props.selectedName === segment.name
-                      ? 'color-mix(in srgb, var(--primary) 55%, var(--border))'
-                      : 'var(--border)',
-                    background: props.selectedName === segment.name
-                      ? 'color-mix(in srgb, var(--primary) 10%, var(--surface))'
-                      : 'color-mix(in srgb, var(--surface) 88%, black 12%)'
-                  }}
-                  title={`${segment.name}: ${dashboardBrl(segment.total)} (${pct}% do recorte)`}
-                  data-dash-segment={segment.name}
-                >
-                  <span className="h-3 w-3 rounded-full shrink-0" style={{ background: palette[index % palette.length] }} />
-                  <span className={`flex-1 text-sm ${props.selectedName === segment.name ? 'font-semibold' : 'font-medium'}`}>{segment.name}</span>
-                  <span className="text-xs opacity-70 shrink-0">{pct}%</span>
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-sm opacity-70">Sem categorias para compor o periodo.</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function DashboardParetoChart(props) {
-  const items = props.items || [];
-  const useRotatedLabels = items.length > 10;
-  const width = Math.max(860, (items.length * 44) + 120);
-  const height = useRotatedLabels ? 420 : 388;
-  const padLeft = 52;
-  const padRight = 56;
-  const padTop = 30;
-  const padBottom = useRotatedLabels ? 154 : 96;
-  const innerWidth = width - padLeft - padRight;
-  const innerHeight = height - padTop - padBottom;
-  const slotWidth = innerWidth / Math.max(items.length, 1);
-  const barWidth = Math.max(10, Math.min(30, slotWidth - 10));
-  const maxValue = Math.max(1, ...items.map((item) => Number(item.total || 0)));
-  const total = items.reduce((sum, item) => sum + Number(item.total || 0), 0);
-  const selectedItem = items.find((item) => item.name === props.selectedName) || null;
-  const detailItem = selectedItem || items[0] || null;
-  const eightyIndex = items.findIndex((item) => item.cumulativePct >= 80);
-  const labelFontSize = useRotatedLabels
-    ? (slotWidth < 34 ? 9 : 10)
-    : (slotWidth < 52 ? 10 : 11);
-  const labelCharLimit = slotWidth < 34 ? 12 : slotWidth < 48 ? 16 : 20;
-  const labelCharsPerLine = slotWidth < 70 ? 10 : slotWidth < 96 ? 12 : 14;
-  const labelAnchorY = padTop + innerHeight + (useRotatedLabels ? 78 : 26);
-
-  if (!items.length) {
-    return <div className="text-sm opacity-70">Sem categorias suficientes para compor o Pareto.</div>;
-  }
-
-  const cumulativeLinePoints = items.map((item, index) => {
-    const x = padLeft + (slotWidth * index) + (slotWidth / 2);
-    const y = padTop + innerHeight - ((item.cumulativePct / 100) * innerHeight);
-    return `${x},${y}`;
-  }).join(' ');
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        <div className="badge flex items-center gap-2">
-          <span className="h-3 w-3 rounded-sm" style={{ background: 'linear-gradient(180deg, var(--primary), color-mix(in srgb, var(--primary) 65%, white 35%))' }} />
-          Valor por categoria
-        </div>
-        <div className="badge flex items-center gap-2">
-          <span className="w-5 border-t-2" style={{ borderColor: 'var(--accent)' }} />
-          Curva acumulada
-        </div>
-        {eightyIndex >= 0 ? (
-          <div className="badge" data-dash-pareto-eighty="true">
-            80% do gasto em {eightyIndex + 1} {eightyIndex === 0 ? 'categoria' : 'categorias'}
-          </div>
-        ) : null}
-        {detailItem ? (
-          <div className="badge" data-dash-pareto-selected="true">
-            Em foco: {detailItem.name} · {dashboardBrl(detailItem.total)} · {Math.round(detailItem.sharePct)}% do período
-          </div>
-        ) : null}
-      </div>
-
-      <div className="w-full overflow-hidden pb-2">
-        <svg
-          viewBox={`0 0 ${width} ${height}`}
-          className="w-full rounded-2xl"
-          style={{ height: `${height}px` }}
-          role="img"
-          aria-label={props.ariaLabel || 'Gráfico de Pareto do período filtrado'}
-        >
-          <title>{props.ariaLabel || 'Gráfico de Pareto do período filtrado'}</title>
-
-          {[0, 0.25, 0.5, 0.75, 1].map((step) => {
-            const y = padTop + innerHeight - (innerHeight * step);
-            return (
-              <line
-                key={`grid-${step}`}
-                x1={padLeft}
-                x2={width - padRight}
-                y1={y}
-                y2={y}
-                stroke="var(--border)"
-                strokeWidth="1"
-                opacity={step === 0 ? '1' : '0.7'}
-              />
-            );
-          })}
-
-          <polyline
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="3.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            points={cumulativeLinePoints}
-          >
-            <title>Curva acumulada do período filtrado.</title>
-          </polyline>
-
-          {items.map((item, index) => {
-            const value = Number(item.total || 0);
-            const barHeight = Math.max((value / maxValue) * innerHeight, 6);
-            const x = padLeft + (slotWidth * index) + ((slotWidth - barWidth) / 2);
-            const y = padTop + innerHeight - barHeight;
-            const pointX = padLeft + (slotWidth * index) + (slotWidth / 2);
-            const pointY = padTop + innerHeight - ((item.cumulativePct / 100) * innerHeight);
-            const selected = props.selectedName === item.name;
-            const labelText = item.name.length > labelCharLimit
-              ? `${item.name.slice(0, labelCharLimit - 1)}…`
-              : item.name;
-            const labelLines = dashboardSplitLabel(item.name, labelCharsPerLine, 2);
-
-            return (
-              <g key={item.name}>
-                <rect
-                  x={x}
-                  y={y}
-                  width={barWidth}
-                  height={barHeight}
-                  rx="6"
-                  fill={selected ? 'var(--primary)' : 'color-mix(in srgb, var(--primary) 55%, var(--surface))'}
-                  stroke={selected ? 'white' : 'none'}
-                  strokeWidth={selected ? '1.5' : '0'}
-                  style={{ cursor: 'pointer', filter: selected ? 'drop-shadow(0 0 10px rgba(34,211,238,.25))' : 'none' }}
-                  onClick={() => props.onSelect && props.onSelect(item.name)}
-                  data-dash-pareto-bar={item.name}
-                >
-                  <title>{`${item.name}: ${dashboardBrl(item.total)} (${Math.round(item.sharePct)}% do período)`}</title>
-                </rect>
-                <circle
-                  cx={pointX}
-                  cy={pointY}
-                  r={selected ? '5.5' : '4'}
-                  fill="var(--accent)"
-                  stroke={selected ? 'white' : 'none'}
-                  strokeWidth={selected ? '1.5' : '0'}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => props.onSelect && props.onSelect(item.name)}
-                  data-dash-pareto-point={item.name}
-                >
-                  <title>{`${item.name}: acumulado de ${Math.round(item.cumulativePct)}%`}</title>
-                </circle>
-                {useRotatedLabels ? (
-                  <text
-                    x={pointX}
-                    y={labelAnchorY}
-                    textAnchor="end"
-                    fill={selected ? 'var(--text)' : 'var(--muted)'}
-                    fontSize={labelFontSize}
-                    transform={`rotate(-45 ${pointX} ${labelAnchorY})`}
-                  >
-                    {labelText}
-                  </text>
-                ) : (
-                  <text
-                    x={pointX}
-                    y={labelAnchorY}
-                    textAnchor="middle"
-                    fill={selected ? 'var(--text)' : 'var(--muted)'}
-                    fontSize={labelFontSize}
-                  >
-                    {labelLines.map((line, lineIndex) => (
-                      <tspan key={`${item.name}-line-${lineIndex}`} x={pointX} dy={lineIndex === 0 ? '0' : '12'}>
-                        {line}
-                      </tspan>
-                    ))}
-                  </text>
-                )}
-              </g>
-            );
-          })}
-
-          <text x={padLeft - 8} y={padTop + 10} textAnchor="end" fill="var(--muted)" fontSize="11">
-            {dashboardBrl(maxValue)}
-          </text>
-          <text x={padLeft - 8} y={padTop + innerHeight + 4} textAnchor="end" fill="var(--muted)" fontSize="11">
-            R$ 0
-          </text>
-          <text x={width - padRight + 10} y={padTop + 10} textAnchor="start" fill="var(--muted)" fontSize="11">
-            100%
-          </text>
-          <text x={width - padRight + 10} y={padTop + innerHeight + 4} textAnchor="start" fill="var(--muted)" fontSize="11">
-            0%
-          </text>
-        </svg>
-      </div>
-    </div>
-  );
-}
-
-function DashboardBarList(props) {
-  const items = props.items || [];
-  const maxValue = Math.max(1, ...items.map((item) => item.total));
-
-  if (!items.length) {
-    return <div className="text-sm opacity-70">Nenhum item para ranquear neste recorte.</div>;
-  }
-
-  return (
-    <div className="space-y-3">
-      {items.map((item) => {
-        const width = Math.max((item.total / maxValue) * 100, 8);
-        return (
-          <button
-            key={item.name}
-            type="button"
-            className="w-full text-left rounded-2xl px-2 py-2 transition-colors"
-            onClick={() => props.onSelect && props.onSelect(item.name)}
-            title={item.rawTotal != null && item.rawTotal !== item.total
-              ? `${item.name}: ${dashboardBrl(item.total)} de media por mes (${dashboardBrl(item.rawTotal)} no total).`
-              : `${item.name}: ${dashboardBrl(item.total)}`}
-            data-dash-bar={item.name}
-            style={{
-              background: props.selectedName === item.name
-                ? 'color-mix(in srgb, var(--primary) 10%, transparent)'
-                : 'transparent'
-            }}
-          >
-            <div className="flex items-center justify-between gap-3 mb-1">
-              <span className="font-medium truncate">{item.name}</span>
-              <span className="text-sm opacity-70">{dashboardBrl(item.total)}</span>
-            </div>
-            <div className="h-3 rounded-full" style={{ background: 'var(--chip)' }}>
-              <div
-                className="h-3 rounded-full"
-                style={{
-                  width: `${width}%`,
-                  background: props.selectedName === item.name
-                    ? 'linear-gradient(90deg, var(--primary), color-mix(in srgb, var(--primary) 65%, white 35%))'
-                    : 'linear-gradient(90deg, var(--primary), var(--accent))'
-                }}
-              />
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function DashboardPayersPanel(props) {
-  const items = props.items || [];
-  const maxValue = Math.max(1, ...items.map((item) => item.total));
-
-  if (!items.length) {
-    return <div className="text-sm opacity-70">Sem pagadores suficientes neste recorte.</div>;
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="space-y-3">
-        {items.map((item) => {
-          const width = Math.max((item.total / maxValue) * 100, 8);
-          return (
-            <div key={item.name} className="space-y-2" data-dash-payer-row={item.name}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-medium">{item.name}</span>
-                <span className="text-sm opacity-70">{dashboardBrl(item.total)}</span>
-              </div>
-              <div className="h-3 rounded-full" style={{ background: 'var(--chip)' }}>
-                <div
-                  className="h-3 rounded-full"
-                  style={{
-                    width: `${width}%`,
-                    background: 'linear-gradient(90deg, var(--primary), var(--accent))'
-                  }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--surface) 88%, black 12%)' }}>
-          <div className="text-xs uppercase tracking-[0.16em] opacity-60">Divididas</div>
-          <div className="text-lg font-semibold">{dashboardBrl(props.dividedTotal)}</div>
-          <div className="text-sm opacity-70">{props.splitPct}% do total</div>
-        </div>
-        <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--surface) 88%, black 12%)' }}>
-          <div className="text-xs uppercase tracking-[0.16em] opacity-60">Nao divididas</div>
-          <div className="text-lg font-semibold">{dashboardBrl(props.nonDividedTotal)}</div>
-          <div className="text-sm opacity-70">{Math.max(100 - props.splitPct, 0)}% do total</div>
-        </div>
-        <div className="rounded-2xl border px-4 py-3 sm:col-span-2" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--surface) 88%, black 12%)' }} data-dash-payers-settlement="true">
-          <div className="text-xs uppercase tracking-[0.16em] opacity-60">Acerto entre pagadores</div>
-          <div className="text-lg font-semibold">{props.settlement.headline}</div>
-          <div className="text-sm opacity-70">{props.settlement.detail}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DashboardCategoryTrends(props) {
-  const series = props.series || [];
-  const targetPeakHeight = 60;
-  const [selectedPoints, setSelectedPoints] = React.useState({});
-
-  React.useEffect(() => {
-    setSelectedPoints((prev) => {
-      const next = { ...prev };
-      series.forEach((group) => {
-        const selectedKey = next[group.name];
-        if (!group.points.some((point) => point.key === selectedKey)) {
-          next[group.name] = group.points[group.points.length - 1]?.key || '';
-        }
-      });
-      return next;
-    });
-  }, [series]);
-
-  if (!series.length) {
-    return <div className="text-sm opacity-70">Sem categorias suficientes para comparar ao longo do tempo.</div>;
-  }
-
-  return (
-    <div className="space-y-3">
-      {series.map((group) => {
-        const groupMaxValue = Math.max(1, ...group.points.map((point) => Number(point.value || 0)));
-        const selectedPoint = group.points.find((point) => point.key === selectedPoints[group.name]) || group.points[group.points.length - 1] || null;
-        const points = group.points.map((point, index) => {
-          const x = 12 + ((index / Math.max(group.points.length - 1, 1)) * 216);
-          const y = 80 - ((point.value / groupMaxValue) * targetPeakHeight);
-          return `${x},${y}`;
-        }).join(' ');
-
-        return (
-          <div
-            key={group.name}
-            className="w-full text-left card"
-            title={`${group.name}: ${dashboardBrl(group.points.reduce((sum, point) => sum + point.value, 0))} no periodo selecionado.`}
-            data-dash-category-trend={group.name}
-            style={{
-              padding: 12,
-              borderColor: props.selectedName === group.name
-                ? 'color-mix(in srgb, var(--primary) 55%, var(--border))'
-                : 'var(--border)',
-              background: props.selectedName === group.name
-                ? 'color-mix(in srgb, var(--primary) 10%, var(--surface))'
-                : undefined
-            }}
-          >
-            <button
-              type="button"
-              className="w-full text-left"
-              onClick={() => props.onSelect && props.onSelect(group.name)}
-            >
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <div className="min-w-0">
-                  <span className="font-medium truncate block">{group.name}</span>
-                  <span className="text-[11px] opacity-60">Escala da conta · pico {dashboardBrl(groupMaxValue)}</span>
-                </div>
-                <span className="text-xs opacity-70">{dashboardBrl(group.points.reduce((sum, point) => sum + point.value, 0))}</span>
-              </div>
-            </button>
-            <svg viewBox="0 0 240 92" className="w-full h-[92px]">
-              <polyline fill="none" stroke="var(--border)" strokeWidth="1" points="12,80 228,80" />
-              {group.points.map((point, index) => {
-                const barWidth = 12;
-                const gap = 18;
-                const x = 12 + (index * gap);
-                const barHeight = point.value > 0 ? Math.max((point.value / groupMaxValue) * targetPeakHeight, 6) : 0;
-                const selected = point.key === selectedPoint?.key;
-                return (
-                  <g key={point.key || `${group.name}-${index}`}>
-                    <rect
-                      x={x}
-                      y={80 - barHeight}
-                      width={barWidth}
-                      height={barHeight}
-                      rx="4"
-                      fill={selected ? 'var(--primary)' : 'color-mix(in srgb, var(--primary) 45%, var(--surface))'}
-                      style={{ cursor: 'pointer' }}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (props.onSelect) props.onSelect(group.name);
-                        setSelectedPoints((prev) => ({ ...prev, [group.name]: point.key }));
-                      }}
-                      data-dash-category-point={`${group.name}:${point.label}`}
-                    >
-                      <title>{`${point.label}: ${dashboardBrl(point.value)}`}</title>
-                    </rect>
-                    {selected ? (
-                      <circle cx={x + (barWidth / 2)} cy={80 - barHeight} r="3.5" fill="white" />
-                    ) : null}
-                  </g>
-                );
-              })}
-              <polyline
-                fill="none"
-                stroke="var(--accent)"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                points={group.points.map((point, index) => {
-                  const x = 18 + (index * 18);
-                  const y = 80 - ((point.value / groupMaxValue) * targetPeakHeight);
-                  return `${x},${y}`;
-                }).join(' ')}
-              />
-            </svg>
-            {selectedPoint ? (
-              <div className="mt-3 badge" data-dash-category-selected={group.name}>
-                {selectedPoint.label}: {dashboardBrl(selectedPoint.value)}
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function DashboardViewLegacy(props) {
-  const monthsByYear = props.monthsByYear || {};
-  const baseYear = Number(props.currentYear || new Date().getFullYear());
-  const baseMonth = Number(props.currentMonth || (new Date().getMonth() + 1));
-  const yearOptions = React.useMemo(() => (
-    (props.years && props.years.length ? [...props.years] : [baseYear])
-      .sort((left, right) => right - left)
-      .map((year) => ({ value: Number(year), label: String(year) }))
-  ), [props.years, baseYear]);
-  const dividedOptions = React.useMemo(() => ([
-    { value: 'yes', label: 'Sim' },
-    { value: 'no', label: 'Nao' }
-  ]), []);
-  const defaultFilters = React.useMemo(() => ({
-    years: [baseYear],
-    months: [baseMonth],
-    accounts: null,
-    payers: null,
-    divided: null
-  }), [baseYear, baseMonth]);
-
-  const [filters, setFilters] = React.useState(defaultFilters);
-  const [rows, setRows] = React.useState([]);
-  const [compareRows, setCompareRows] = React.useState([]);
-  const [previousMonthRows, setPreviousMonthRows] = React.useState([]);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState('');
-  const [selectedCategory, setSelectedCategory] = React.useState('');
-  const [trendAccountIndex, setTrendAccountIndex] = React.useState(0);
-  const [activeFilterTab, setActiveFilterTab] = React.useState('period');
-  const [showFilters, setShowFilters] = React.useState(true);
-
-  function resetFilters() {
-    setFilters({
-      years: [...defaultFilters.years],
-      months: [...defaultFilters.months],
-      accounts: [],
-      payers: [],
-      divided: []
-    });
-  }
-
-  const selectedYears = React.useMemo(() => dashboardResolveSelection(filters.years, yearOptions), [filters.years, yearOptions]);
-  const monthOptions = React.useMemo(() => (
-    dashboardMonthOptionsForYears(monthsByYear, selectedYears)
-  ), [monthsByYear, selectedYears]);
-  const selectedMonths = React.useMemo(() => dashboardResolveSelection(filters.months, monthOptions), [filters.months, monthOptions]);
-  const selectedPairs = React.useMemo(() => (
-    dashboardSortPairs(dashboardBuildPairs(selectedYears, selectedMonths, monthsByYear))
-  ), [selectedYears, selectedMonths, monthsByYear]);
-  const comparePairs = React.useMemo(() => (
-    selectedPairs.map((pair) => ({ year: pair.year - 1, month: pair.month }))
-  ), [selectedPairs]);
-  const lastAppliedPair = selectedPairs[selectedPairs.length - 1] || { year: baseYear, month: baseMonth };
-  const previousMonthPair = React.useMemo(
-    () => dashboardPrevYearMonth(lastAppliedPair.year, lastAppliedPair.month),
-    [lastAppliedPair]
-  );
-  const showYearInLabels = React.useMemo(() => (
-    new Set(selectedPairs.map((pair) => pair.year)).size > 1
-  ), [selectedPairs]);
-
-  React.useEffect(() => {
-    setFilters((prev) => {
-      const nextYears = prev.years.filter((year) => yearOptions.some((option) => option.value === year));
-      const nextMonths = prev.months.filter((month) => monthOptions.some((option) => option.value === month));
-
-      if (nextYears.length === prev.years.length && nextMonths.length === prev.months.length) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        years: nextYears,
-        months: nextMonths
-      };
-    });
-  }, [yearOptions, monthOptions]);
-
-  React.useEffect(() => {
-    let alive = true;
-
-    async function fetchRowsForPairs(pairs) {
-      const uniquePairs = dashboardSortPairs(
-        Array.from(new Map((pairs || []).map((pair) => [dashboardPairKey(pair), pair])).values())
-      );
-
-      if (!uniquePairs.length) return [];
-
-      const lists = await Promise.all(uniquePairs.map(async (pair) => {
-        const raw = await window.SupabaseQueries.listMes(pair.year, pair.month);
-        return (raw || []).map(dashboardNormalizeRow);
-      }));
-
-      return lists.flat();
-    }
-
-    (async () => {
-      try {
-        setLoading(true);
-        setError('');
-        const [periodRowsLoaded, compareRowsLoaded, previousMonthRowsLoaded] = await Promise.all([
-          fetchRowsForPairs(selectedPairs),
-          fetchRowsForPairs(comparePairs),
-          fetchRowsForPairs([previousMonthPair])
-        ]);
-
-        if (!alive) return;
-        setRows(periodRowsLoaded);
-        setCompareRows(compareRowsLoaded);
-        setPreviousMonthRows(previousMonthRowsLoaded);
-      } catch (loadError) {
-        console.error('[dashboard] erro ao carregar recorte', loadError);
-        if (!alive) return;
-        setRows([]);
-        setCompareRows([]);
-        setPreviousMonthRows([]);
-        setError('Nao foi possivel carregar o dashboard agora.');
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [selectedPairs, comparePairs, previousMonthPair]);
-
-  const contasDisponiveis = React.useMemo(() => (
-    Array.from(new Set(rows.map((row) => row.nome)))
-      .sort((left, right) => left.localeCompare(right, 'pt-BR'))
-      .map((name) => ({ value: name, label: name }))
-  ), [rows]);
-
-  const rowsPorConta = React.useMemo(() => (
-    dashboardFilterRows(rows, {
-      accounts: filters.accounts,
-      payers: [],
-      divided: []
-    })
-  ), [rows, filters.accounts]);
-
-  const pagadoresDisponiveis = React.useMemo(() => (
-    Array.from(new Set(rowsPorConta.map((row) => row.quem)))
-      .sort((left, right) => left.localeCompare(right, 'pt-BR'))
-      .map((name) => ({ value: name, label: name }))
-  ), [rowsPorConta]);
-
-  React.useEffect(() => {
-    setFilters((prev) => {
-      const nextAccounts = prev.accounts.filter((account) => contasDisponiveis.some((option) => option.value === account));
-      const nextPayers = prev.payers.filter((payer) => pagadoresDisponiveis.some((option) => option.value === payer));
-      const nextDivided = prev.divided.filter((value) => dividedOptions.some((option) => option.value === value));
-
-      if (
-        nextAccounts.length === prev.accounts.length &&
-        nextPayers.length === prev.payers.length &&
-        nextDivided.length === prev.divided.length
-      ) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        accounts: nextAccounts,
-        payers: nextPayers,
-        divided: nextDivided
-      };
-    });
-  }, [contasDisponiveis, pagadoresDisponiveis, dividedOptions]);
-
-  const filteredRows = React.useMemo(() => dashboardFilterRows(rows, filters), [rows, filters]);
-  const filteredCompareRows = React.useMemo(() => dashboardFilterRows(compareRows, filters), [compareRows, filters]);
-  const filteredPreviousMonthRows = React.useMemo(() => dashboardFilterRows(previousMonthRows, filters), [previousMonthRows, filters]);
-  const totalPeriodo = React.useMemo(() => dashboardSum(filteredRows), [filteredRows]);
-  const totalDividido = React.useMemo(() => dashboardSum(filteredRows.filter((row) => row.dividida)), [filteredRows]);
-  const rankingCategorias = React.useMemo(() => dashboardGroupAndSort(filteredRows, 'nome'), [filteredRows]);
-  const rankingPagadores = React.useMemo(() => dashboardGroupAndSort(filteredRows, 'quem'), [filteredRows]);
-  const topCategoria = rankingCategorias[0] || null;
-  const categoriaDetalhe = selectedCategory || (topCategoria ? topCategoria.name : '');
-  const donutSegments = React.useMemo(() => {
-    if (!rankingCategorias.length) return [];
-    const top = rankingCategorias.slice(0, 4);
-    const otherTotal = rankingCategorias.slice(4).reduce((sum, item) => sum + item.total, 0);
-    if (otherTotal > 0) top.push({ name: 'Outros', total: otherTotal });
-    return top;
-  }, [rankingCategorias]);
-  const settlement = React.useMemo(() => dashboardComputeSettlement(filteredRows), [filteredRows]);
-  const splitPct = totalPeriodo > 0 ? Math.round((totalDividido / totalPeriodo) * 100) : 0;
-  const detalhesCategoria = React.useMemo(() => (
-    filteredRows
-      .filter((row) => !categoriaDetalhe || row.nome === categoriaDetalhe)
-      .sort((left, right) => Number(right.valor || 0) - Number(left.valor || 0))
-      .slice(0, 12)
-  ), [filteredRows, categoriaDetalhe]);
-
-  React.useEffect(() => {
-    if (!rankingCategorias.length) {
-      setSelectedCategory('');
-      return;
-    }
-
-    if (!selectedCategory || !rankingCategorias.some((item) => item.name === selectedCategory)) {
-      setSelectedCategory(rankingCategorias[0].name);
-    }
-  }, [rankingCategorias, selectedCategory]);
-
-  const trendAccounts = React.useMemo(() => {
-    if (rankingCategorias.length) return rankingCategorias.map((item) => item.name);
-    return filters.accounts.length
-      ? filters.accounts
-      : contasDisponiveis.map((option) => option.value);
-  }, [rankingCategorias, filters.accounts, contasDisponiveis]);
-
-  React.useEffect(() => {
-    if (!trendAccounts.length) {
-      setTrendAccountIndex(0);
-      return;
-    }
-    if (trendAccountIndex > trendAccounts.length - 1) {
-      setTrendAccountIndex(0);
-    }
-  }, [trendAccounts, trendAccountIndex]);
-
-  const focusedTrendAccount = trendAccounts[trendAccountIndex] || '';
-  const trendSeries = React.useMemo(() => (
-    dashboardMakeSeries(filteredRows, selectedPairs, focusedTrendAccount)
-      .map((point, index) => ({
-        ...point,
-        label: dashboardPairLabel(selectedPairs[index], showYearInLabels)
-      }))
-  ), [filteredRows, selectedPairs, focusedTrendAccount, showYearInLabels]);
-  const trendCompareSeries = React.useMemo(() => (
-    dashboardMakeSeries(filteredCompareRows, comparePairs, focusedTrendAccount)
-      .map((point, index) => ({
-        ...point,
-        label: dashboardPairLabel(selectedPairs[index], showYearInLabels)
-      }))
-  ), [filteredCompareRows, comparePairs, focusedTrendAccount, selectedPairs, showYearInLabels]);
-  const categoriasTimeline = React.useMemo(() => (
-    dashboardCategorySeries(filteredRows, selectedPairs, 3).map((group) => ({
-      ...group,
-      points: group.points.map((point, index) => ({
-        ...point,
-        label: dashboardPairLabel(selectedPairs[index], showYearInLabels)
-      }))
-    }))
-  ), [filteredRows, selectedPairs, showYearInLabels]);
-  const singleMonthComparison = React.useMemo(() => (
-    dashboardBuildAccountComparison(filteredRows, filteredPreviousMonthRows, filteredCompareRows, 6)
-  ), [filteredRows, filteredPreviousMonthRows, filteredCompareRows]);
-
-  const primeiraPessoa = rankingPagadores[0] || null;
-  const segundaPessoa = rankingPagadores[1] || null;
-  const cardsPrincipais = [
-    {
-      key: 'total',
-      label: selectedPairs.length > 1 ? 'Total do periodo' : 'Total do mes',
-      value: dashboardBrl(totalPeriodo),
-      detail: `${filteredRows.length} lancamentos neste recorte.`,
-      tooltip: 'Soma de todos os lancamentos retornados pelos filtros atuais.'
-    },
-    {
-      key: 'split',
-      label: 'Valor total dividido',
-      value: dashboardBrl(totalDividido),
-      detail: `${splitPct}% do total do periodo.`,
-      tooltip: 'Somatorio das contas marcadas como divididas dentro do recorte atual.'
-    },
-    {
-      key: 'payer-1',
-      label: primeiraPessoa ? `Pago por ${primeiraPessoa.name}` : 'Pago por',
-      value: dashboardBrl(primeiraPessoa ? primeiraPessoa.total : 0),
-      detail: primeiraPessoa ? 'Maior gasto do periodo.' : 'Aguardando dados.',
-      tooltip: 'Pessoa com maior desembolso no recorte filtrado.'
-    },
-    {
-      key: 'payer-2',
-      label: segundaPessoa ? `Pago por ${segundaPessoa.name}` : 'Qtde de lancamentos',
-      value: segundaPessoa ? dashboardBrl(segundaPessoa.total) : String(filteredRows.length),
-      detail: segundaPessoa ? 'Segundo maior gasto do periodo.' : 'Movimentos no recorte atual.',
-      tooltip: segundaPessoa
-        ? 'Pessoa com o segundo maior desembolso no recorte filtrado.'
-        : 'Quantidade de linhas retornadas apos aplicar os filtros.'
-    }
-  ];
-
-  const filterTabs = [
-    { id: 'period', label: 'Periodo' },
-    { id: 'accounts', label: 'Contas' },
-    { id: 'meta', label: 'Pagador e divisao' }
-  ];
-  const singleMonthMode = selectedPairs.length <= 1;
-  const previousMonthLabel = `${dashboardMonthNamePT(previousMonthPair.month)} ${previousMonthPair.year}`;
-  const previousYearLabel = `${dashboardMonthNamePT(lastAppliedPair.month)} ${lastAppliedPair.year - 1}`;
-
-  return (
-    <div className="space-y-6" data-dash-root="true">
-      <div className="card overflow-hidden">
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <div className="text-xs uppercase tracking-[0.24em] opacity-60">Guia</div>
-            <div className="brand" style={{ fontSize: '1.65rem', lineHeight: 1.05 }}>
-              Dashboard
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap gap-2">
-              {filterTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`btn ${activeFilterTab === tab.id ? 'primary' : 'ghost'}`}
-                  onClick={() => setActiveFilterTab(tab.id)}
-                  data-dash-filter-tab={tab.id}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="btn ghost lg:hidden"
-                type="button"
-                onClick={() => setShowFilters((prev) => !prev)}
-                data-dash-action="toggle-filters"
-              >
-                {showFilters ? 'Ocultar filtros' : 'Mostrar filtros'}
-              </button>
-              <button
-                className="btn ghost"
-                type="button"
-                onClick={resetFilters}
-                data-dash-action="reset-filters"
-              >
-                Restaurar padrao
-              </button>
-            </div>
-          </div>
-
-          <div className={showFilters ? 'block' : 'hidden lg:block'}>
-            {activeFilterTab === 'period' ? (
-              <div className="grid gap-5 xl:grid-cols-2">
-                <DashboardFilterChecklist
-                  label="Anos"
-                  helperText="Padrao: ano atual."
-                  selection={filters.years}
-                  onChange={(years) => setFilters((prev) => ({ ...prev, years }))}
-                  options={yearOptions}
-                  allLabel="Todos"
-                  columns={2}
-                  testId="years"
-                  tooltip="Escolha um ou mais anos disponiveis no banco para montar o recorte."
-                />
-                <DashboardFilterChecklist
-                  label="Meses"
-                  helperText="Padrao: mes atual."
-                  selection={filters.months}
-                  onChange={(months) => setFilters((prev) => ({ ...prev, months }))}
-                  options={monthOptions}
-                  allLabel="Todos"
-                  searchable={true}
-                  columns={3}
-                  testId="months"
-                  tooltip="Os meses exibidos acompanham os anos selecionados na aba de periodo."
-                />
-              </div>
-            ) : null}
-
-            {activeFilterTab === 'accounts' ? (
-              <DashboardFilterChecklist
-                label="Tipos de conta"
-                helperText="Categorias unicas encontradas no periodo selecionado."
-                selection={filters.accounts}
-                onChange={(accounts) => setFilters((prev) => ({ ...prev, accounts }))}
-                options={contasDisponiveis}
-                allLabel="Todas"
-                searchable={true}
-                maxHeight={300}
-                testId="accounts"
-                tooltip="A lista de contas depende apenas do periodo selecionado na primeira aba."
-              />
-            ) : null}
-
-            {activeFilterTab === 'meta' ? (
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-                <DashboardFilterChecklist
-                  label="Pagadores"
-                  helperText="Pagadores encontrados no recorte atual de periodo e contas."
-                  selection={filters.payers}
-                  onChange={(payers) => setFilters((prev) => ({ ...prev, payers }))}
-                  options={pagadoresDisponiveis}
-                  allLabel="Todos"
-                  searchable={true}
-                  maxHeight={300}
-                  testId="payers"
-                  tooltip="A lista de pagadores acompanha o periodo e as contas selecionadas."
-                />
-                <DashboardFilterChecklist
-                  label="Divididas"
-                  helperText="Marque Sim, Nao ou ambas."
-                  selection={filters.divided}
-                  onChange={(divided) => setFilters((prev) => ({ ...prev, divided }))}
-                  options={dividedOptions}
-                  allLabel="Sim e Nao"
-                  columns={2}
-                  showResolvedSelection={true}
-                  emptyBehavior="deselect-from-all"
-                  testId="divided"
-                  tooltip="Filtra apenas contas divididas, apenas nao divididas ou ambas."
-                />
-              </div>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="badge" data-dash-filter-summary="years">Anos: {dashboardSelectionSummary(filters.years, yearOptions, 'Todos')}</div>
-            <div className="badge" data-dash-filter-summary="months">Meses: {dashboardSelectionSummary(filters.months, monthOptions, 'Todos')}</div>
-            <div className="badge" data-dash-filter-summary="accounts">Contas: {dashboardSelectionSummary(filters.accounts, contasDisponiveis, 'Todas')}</div>
-            <div className="badge" data-dash-filter-summary="payers">Pagadores: {dashboardSelectionSummary(filters.payers, pagadoresDisponiveis, 'Todos')}</div>
-            <div className="badge" data-dash-filter-summary="divided">Divididas: {dashboardSelectionSummary(filters.divided, dividedOptions, 'Sim e Nao')}</div>
-            <div className="badge" data-dash-count="rows">Lancamentos: {filteredRows.length}</div>
-            {loading ? <div className="badge">Atualizando...</div> : null}
-          </div>
-        </div>
-      </div>
-
-      {error ? <div className="card border-red-500 text-red-200">{error}</div> : null}
-
-      {loading ? (
-        <div className="card text-center py-12">Atualizando dashboard...</div>
-      ) : hasEmptyAppliedFilters ? (
-        <div className="card text-center py-12 space-y-3" data-dash-empty-state="true">
-          <div className="text-lg font-semibold">Dashboard vazio</div>
-          <div className="text-sm opacity-70">{emptyStateMessage}</div>
-        </div>
-      ) : (
-        <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {cardsPrincipais.map((card) => (
-              <DashboardMetricCard
-                key={card.key}
-                label={card.label}
-                value={card.value}
-                detail={card.detail}
-                tooltip={card.tooltip}
-                testId={card.key}
-              />
-            ))}
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-3">
-            <DashboardMetricCard
-              label="Acerto entre pagadores"
-              value={settlement.headline}
-              detail={settlement.detail}
-              tooltip="Estimativa simples de acerto considerando apenas as contas divididas do recorte."
-              testId="settlement"
-            />
-            <DashboardMetricCard
-              label="Maior categoria"
-              value={topCategoria ? topCategoria.name : 'Sem dados'}
-              detail={topCategoria && totalPeriodo > 0 ? `${Math.round((topCategoria.total / totalPeriodo) * 100)}% do total do periodo.` : 'Aguardando movimentacao'}
-              tooltip="Categoria com maior valor somado depois da aplicacao de todos os filtros."
-              testId="top-category"
-            />
-            <DashboardMetricCard
-              label="Qtde de lancamentos"
-              value={String(filteredRows.length)}
-              detail={filteredRows.length ? 'Itens filtrados no recorte atual.' : 'Nenhum lancamento neste recorte.'}
-              tooltip="Quantidade de linhas efetivamente visiveis apos a aplicacao do filtro."
-              testId="count"
-            />
-          </div>
-
-          {singleMonthMode ? (
-            <DashboardSection
-              title="Comparativo por conta"
-              subtitle="Mes atual contra mes anterior e mesmo mes do ano anterior."
-              tooltip="Comparativo adaptado para leitura de um unico mes."
-              testId="trend-single"
-            >
-              <DashboardComparisonBars
-                items={singleMonthComparison}
-                currentLabel={`${dashboardMonthNamePT(lastAppliedPair.month)} ${lastAppliedPair.year}`}
-                previousLabel={previousMonthLabel}
-                previousYearLabel={previousYearLabel}
-                onSelect={setSelectedCategory}
-              />
-            </DashboardSection>
-          ) : (
-            <DashboardSection
-              title="Evolucao por conta"
-              subtitle="Passe pelas contas com as setas. O grafico acompanha o recorte de periodo."
-              tooltip="Quando ha mais de um mes selecionado, o dashboard destaca uma conta por vez para facilitar leitura em desktop e smartphone."
-              testId="trend-period"
-              actions={[
-                <button
-                  key="trend-prev"
-                  className="btn ghost"
-                  onClick={() => setTrendAccountIndex((prev) => (prev <= 0 ? Math.max(trendAccounts.length - 1, 0) : prev - 1))}
-                  data-dash-action="trend-prev"
-                  disabled={!trendAccounts.length}
-                >
-                  Conta anterior
-                </button>,
-                <div key="trend-account" className="badge" data-dash-trend-account="true">
-                  Conta: {focusedTrendAccount || 'Nenhuma'}
-                </div>,
-                <button
-                  key="trend-next"
-                  className="btn ghost"
-                  onClick={() => setTrendAccountIndex((prev) => (prev >= trendAccounts.length - 1 ? 0 : prev + 1))}
-                  data-dash-action="trend-next"
-                  disabled={!trendAccounts.length}
-                >
-                  Proxima conta
-                </button>
-              ]}
-            >
-              <DashboardSparkline
-                points={trendSeries}
-                comparePoints={trendCompareSeries}
-                ariaLabel={`Grafico de evolucao para ${focusedTrendAccount || 'conta selecionada'}`}
-              />
-            </DashboardSection>
-          )}
-
-          <div className="grid gap-4 xl:grid-cols-2">
-            <DashboardSection
-              title="Composicao do recorte"
-              subtitle="Top categorias e agrupamento do restante."
-              tooltip="Clique em uma categoria para fixar o detalhamento no bloco inferior."
-              testId="composition"
-            >
-              <DashboardDonut
-                segments={donutSegments}
-                total={totalPeriodo}
-                onSelect={setSelectedCategory}
-              />
-            </DashboardSection>
-
-            <DashboardSection
-              title="Ranking de gastos"
-              subtitle="Ordenado pelo valor total filtrado."
-              tooltip="Ranking usa o mesmo subconjunto de dados dos cards, da composicao e do detalhamento."
-              testId="ranking"
-            >
-              <DashboardBarList items={rankingCategorias.slice(0, 8)} onSelect={setSelectedCategory} />
-            </DashboardSection>
-          </div>
-
-          <div className={`grid gap-4 ${selectedPairs.length > 1 ? 'xl:grid-cols-2' : ''}`}>
-            <DashboardSection
-              title="Pagadores"
-              subtitle="Quem concentrou mais gasto no recorte atual."
-              tooltip="Mostra quem concentra mais desembolso e o peso das contas divididas."
-              testId="payers"
-            >
-              <DashboardBarList items={rankingPagadores} />
-              <div className="grid gap-2 md:grid-cols-2">
-                <div className="badge justify-center flex">Divididas: {splitPct}% do total</div>
-                <div className="badge justify-center flex">Nao divididas: {Math.max(100 - splitPct, 0)}%</div>
-              </div>
-            </DashboardSection>
-
-            {selectedPairs.length > 1 ? (
-              <DashboardSection
-                title="Categorias ao longo do tempo"
-                subtitle="Leitura rapida das categorias mais relevantes do periodo."
-                tooltip="Selecionar uma linha daqui atualiza o detalhamento logo abaixo."
-                testId="category-trends"
-              >
-                <DashboardCategoryTrends series={categoriasTimeline} onSelect={setSelectedCategory} />
-              </DashboardSection>
-            ) : null}
-          </div>
-
-          <DashboardSection
-            title="Detalhamento"
-            subtitle="A categoria selecionada sempre respeita os filtros do topo."
-            tooltip="Drill-down dos mesmos dados que alimentam cards e graficos."
-            testId="details"
-            actions={[
-              <div key="selected-category" className="badge" data-dash-selected-category="true">
-                Categoria selecionada: {categoriaDetalhe || 'Nenhuma'}
-              </div>
-            ]}
-          >
-            {detalhesCategoria.length ? (
-              <div className="space-y-3">
-                {detalhesCategoria.map((item) => (
-                  <div key={item.id} className="card flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between" style={{ padding: 14 }} data-dash-detail-row="true">
-                    <div>
-                      <div className="font-semibold">{item.instancia || item.nome}</div>
-                      <div className="text-sm opacity-70">{item.nome}{item.instancia ? ` - ${item.instancia}` : ''}</div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="badge">{dashboardBrl(item.valor)}</span>
-                      <span className="badge">{item.quem}</span>
-                      <span className="badge">{item.dividida ? 'Dividida' : 'Nao dividida'}</span>
-                      <span className="badge">{dashboardIsoToBR(item.data)}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {item.boleto ? <a className="btn ghost" href={item.boleto} target="_blank" rel="noreferrer">Ver boleto</a> : null}
-                      {item.comprovante ? <a className="btn ghost" href={item.comprovante} target="_blank" rel="noreferrer">Ver comprovante</a> : null}
-                      <button
-                        className="btn ghost"
-                        onClick={() => {
-                          if (props.onGoControlToMonth) props.onGoControlToMonth(item.ano, item.mes);
-                        }}
-                      >
-                        Abrir no controle
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm opacity-70">
-                Selecione uma categoria com dados para abrir os lancamentos deste dashboard.
-              </div>
-            )}
-          </DashboardSection>
-        </>
-      )}
-    </div>
-  );
-}
-
-// Override: dashboard v2 with draft/applied filters and visible category focus
+const {
+  monthNamePT: dashboardMonthNamePT,
+  brl: dashboardBrl,
+  sum: dashboardSum,
+  groupAndSort: dashboardGroupAndSort,
+  filterRows: dashboardFilterRows,
+  prevYearMonth: dashboardPrevYearMonth,
+  pairLabel: dashboardPairLabel,
+  pairLabelLong: dashboardPairLabelLong,
+  sortPairs: dashboardSortPairs,
+  buildPairs: dashboardBuildPairs,
+  resolveSelection: dashboardResolveSelection,
+  selectionSummary: dashboardSelectionSummary,
+  rollingPairs: dashboardRollingPairs,
+  fetchRowsForPairs: dashboardFetchRowsForPairs,
+  monthOptionsForYears: dashboardMonthOptionsForYears,
+  makeSeries: dashboardMakeSeries,
+  categorySeries: dashboardCategorySeries,
+  buildTopFiveSegments: dashboardBuildTopFiveSegments,
+  buildParetoItems: dashboardBuildParetoItems,
+  buildAccountComparison: dashboardBuildAccountComparison,
+  computeSettlement: dashboardComputeSettlement
+} = window.DashboardHelpers;
+const {
+  createDefaultFilters: dashboardCreateDefaultFilters,
+  normalizeFilters: dashboardNormalizeFilters,
+  filtersMatch: dashboardFiltersMatch,
+  buildEmptyFilterLabels: dashboardBuildEmptyFilterLabels,
+  clampPage: dashboardClampPage,
+  cyclePage: dashboardCyclePage,
+  cycleIndex: dashboardCycleIndex,
+  resolveFocusedAccount: dashboardResolveFocusedAccount,
+  buildLinkedFocusState: dashboardBuildLinkedFocusState
+} = window.DashboardOrchestration;
+
+// Tela ativa do dashboard BI.
+// A referencia anterior permanece congelada em src/dashboard/legacy/DashboardViewLegacy.jsx.
 function DashboardView(props) {
   const monthsByYear = props.monthsByYear || {};
   const baseYear = Number(props.currentYear || new Date().getFullYear());
@@ -2352,13 +48,10 @@ function DashboardView(props) {
     { value: 'yes', label: 'Sim' },
     { value: 'no', label: 'Nao' }
   ]), []);
-  const defaultFilters = React.useMemo(() => ({
-    years: [baseYear],
-    months: [baseMonth],
-    accounts: null,
-    payers: null,
-    divided: null
-  }), [baseYear, baseMonth]);
+  const defaultFilters = React.useMemo(
+    () => dashboardCreateDefaultFilters(baseYear, baseMonth),
+    [baseYear, baseMonth]
+  );
 
   const [draftFilters, setDraftFilters] = React.useState(defaultFilters);
   const [appliedFilters, setAppliedFilters] = React.useState(defaultFilters);
@@ -2367,7 +60,6 @@ function DashboardView(props) {
   const [compareRows, setCompareRows] = React.useState([]);
   const [previousMonthRows, setPreviousMonthRows] = React.useState([]);
   const [rollingRows, setRollingRows] = React.useState([]);
-  const [rollingCompareRows, setRollingCompareRows] = React.useState([]);
   const [previewLoading, setPreviewLoading] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -2377,17 +69,9 @@ function DashboardView(props) {
   const [timelinePage, setTimelinePage] = React.useState(0);
   const [rankingPage, setRankingPage] = React.useState(0);
   const [rankingMode, setRankingMode] = React.useState('total');
-  const [activeFilterTab, setActiveFilterTab] = React.useState('period');
-  const [showFilters, setShowFilters] = React.useState(true);
 
   function resetDraftFilters() {
-    setDraftFilters({
-      years: [...defaultFilters.years],
-      months: [...defaultFilters.months],
-      accounts: null,
-      payers: null,
-      divided: null
-    });
+    setDraftFilters(dashboardCreateDefaultFilters(baseYear, baseMonth));
   }
 
   const draftSelectedYears = React.useMemo(
@@ -2411,14 +95,16 @@ function DashboardView(props) {
     setDraftFilters((prev) => {
       const next = {
         ...prev,
-        years: dashboardNormalizeSelection(prev.years, yearOptions),
-        months: dashboardNormalizeSelection(prev.months, draftMonthOptions)
+        ...dashboardNormalizeFilters(prev, {
+          years: yearOptions,
+          months: draftMonthOptions,
+          accounts: [],
+          payers: [],
+          divided: []
+        })
       };
 
-      if (
-        dashboardFiltersKey(prev, { years: yearOptions, months: draftMonthOptions, accounts: [], payers: [], divided: [] })
-        === dashboardFiltersKey(next, { years: yearOptions, months: draftMonthOptions, accounts: [], payers: [], divided: [] })
-      ) {
+      if (dashboardFiltersMatch(prev, next, { years: yearOptions, months: draftMonthOptions, accounts: [], payers: [], divided: [] })) {
         return prev;
       }
 
@@ -2480,14 +166,10 @@ function DashboardView(props) {
     setDraftFilters((prev) => {
       const next = {
         ...prev,
-        years: dashboardNormalizeSelection(prev.years, draftFilterOptions.years),
-        months: dashboardNormalizeSelection(prev.months, draftFilterOptions.months),
-        accounts: dashboardNormalizeSelection(prev.accounts, draftFilterOptions.accounts),
-        payers: dashboardNormalizeSelection(prev.payers, draftFilterOptions.payers),
-        divided: dashboardNormalizeSelection(prev.divided, draftFilterOptions.divided)
+        ...dashboardNormalizeFilters(prev, draftFilterOptions)
       };
 
-      if (dashboardFiltersKey(prev, draftFilterOptions) === dashboardFiltersKey(next, draftFilterOptions)) {
+      if (dashboardFiltersMatch(prev, next, draftFilterOptions)) {
         return prev;
       }
 
@@ -2495,13 +177,10 @@ function DashboardView(props) {
     });
   }, [draftFilterOptions]);
 
-  const normalizedDraftFilters = React.useMemo(() => ({
-    years: dashboardNormalizeSelection(draftFilters.years, draftFilterOptions.years),
-    months: dashboardNormalizeSelection(draftFilters.months, draftFilterOptions.months),
-    accounts: dashboardNormalizeSelection(draftFilters.accounts, draftFilterOptions.accounts),
-    payers: dashboardNormalizeSelection(draftFilters.payers, draftFilterOptions.payers),
-    divided: dashboardNormalizeSelection(draftFilters.divided, draftFilterOptions.divided)
-  }), [draftFilters, draftFilterOptions]);
+  const normalizedDraftFilters = React.useMemo(
+    () => dashboardNormalizeFilters(draftFilters, draftFilterOptions),
+    [draftFilters, draftFilterOptions]
+  );
 
   const appliedSelectedYears = React.useMemo(
     () => dashboardResolveSelection(appliedFilters.years, yearOptions),
@@ -2535,14 +214,16 @@ function DashboardView(props) {
     setAppliedFilters((prev) => {
       const next = {
         ...prev,
-        years: dashboardNormalizeSelection(prev.years, yearOptions),
-        months: dashboardNormalizeSelection(prev.months, appliedMonthOptions)
+        ...dashboardNormalizeFilters(prev, {
+          years: yearOptions,
+          months: appliedMonthOptions,
+          accounts: [],
+          payers: [],
+          divided: []
+        })
       };
 
-      if (
-        dashboardFiltersKey(prev, { years: yearOptions, months: appliedMonthOptions, accounts: [], payers: [], divided: [] })
-        === dashboardFiltersKey(next, { years: yearOptions, months: appliedMonthOptions, accounts: [], payers: [], divided: [] })
-      ) {
+      if (dashboardFiltersMatch(prev, next, { years: yearOptions, months: appliedMonthOptions, accounts: [], payers: [], divided: [] })) {
         return prev;
       }
 
@@ -2590,19 +271,13 @@ function DashboardView(props) {
     (async () => {
       try {
         const rollingPairsLoaded = dashboardRollingPairs(lastAppliedPair.year, lastAppliedPair.month, 13);
-        const rollingComparePairsLoaded = dashboardRollingPairs(lastAppliedPair.year - 1, lastAppliedPair.month, 13);
-        const [rollingRowsLoaded, rollingCompareRowsLoaded] = await Promise.all([
-          dashboardFetchRowsForPairs(rollingPairsLoaded),
-          dashboardFetchRowsForPairs(rollingComparePairsLoaded)
-        ]);
+        const rollingRowsLoaded = await dashboardFetchRowsForPairs(rollingPairsLoaded);
         if (!alive) return;
         setRollingRows(rollingRowsLoaded);
-        setRollingCompareRows(rollingCompareRowsLoaded);
       } catch (timelineError) {
         console.warn('[dashboard] erro ao carregar ciclo anual', timelineError);
         if (alive) {
           setRollingRows([]);
-          setRollingCompareRows([]);
         }
       }
     })();
@@ -2644,15 +319,16 @@ function DashboardView(props) {
     setAppliedFilters((prev) => {
       const next = {
         ...prev,
-        years: dashboardNormalizeSelection(prev.years, appliedFilterOptions.years),
-        months: dashboardNormalizeSelection(prev.months, appliedFilterOptions.months),
-        divided: dashboardNormalizeSelection(prev.divided, appliedFilterOptions.divided)
+        ...dashboardNormalizeFilters(prev, {
+          years: appliedFilterOptions.years,
+          months: appliedFilterOptions.months,
+          accounts: [],
+          payers: [],
+          divided: appliedFilterOptions.divided
+        })
       };
 
-      if (
-        dashboardFiltersKey(prev, { years: appliedFilterOptions.years, months: appliedFilterOptions.months, accounts: [], payers: [], divided: appliedFilterOptions.divided })
-        === dashboardFiltersKey(next, { years: appliedFilterOptions.years, months: appliedFilterOptions.months, accounts: [], payers: [], divided: appliedFilterOptions.divided })
-      ) {
+      if (dashboardFiltersMatch(prev, next, { years: appliedFilterOptions.years, months: appliedFilterOptions.months, accounts: [], payers: [], divided: appliedFilterOptions.divided })) {
         return prev;
       }
 
@@ -2660,13 +336,10 @@ function DashboardView(props) {
     });
   }, [appliedFilterOptions]);
 
-  const normalizedAppliedFilters = React.useMemo(() => ({
-    years: dashboardNormalizeSelection(appliedFilters.years, appliedFilterOptions.years),
-    months: dashboardNormalizeSelection(appliedFilters.months, appliedFilterOptions.months),
-    accounts: dashboardNormalizeSelection(appliedFilters.accounts, appliedFilterOptions.accounts),
-    payers: dashboardNormalizeSelection(appliedFilters.payers, appliedFilterOptions.payers),
-    divided: dashboardNormalizeSelection(appliedFilters.divided, appliedFilterOptions.divided)
-  }), [appliedFilters, appliedFilterOptions]);
+  const normalizedAppliedFilters = React.useMemo(
+    () => dashboardNormalizeFilters(appliedFilters, appliedFilterOptions),
+    [appliedFilters, appliedFilterOptions]
+  );
 
   const hasPendingChanges = React.useMemo(
     () => JSON.stringify(normalizedDraftFilters) !== JSON.stringify(normalizedAppliedFilters),
@@ -2686,27 +359,22 @@ function DashboardView(props) {
     () => dashboardFilterRows(rollingRows, normalizedAppliedFilters),
     [rollingRows, normalizedAppliedFilters]
   );
-  const filteredRollingCompareRows = React.useMemo(
-    () => dashboardFilterRows(rollingCompareRows, normalizedAppliedFilters),
-    [rollingCompareRows, normalizedAppliedFilters]
-  );
   const resolvedAppliedAccounts = React.useMemo(() => dashboardResolveSelection(normalizedAppliedFilters.accounts, appliedFilterOptions.accounts), [normalizedAppliedFilters.accounts, appliedFilterOptions.accounts]);
   const yearsSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.years, yearOptions, 'Todos'), [normalizedAppliedFilters.years, yearOptions]);
   const monthsSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.months, appliedMonthOptions, 'Todos'), [normalizedAppliedFilters.months, appliedMonthOptions]);
   const accountsSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.accounts, appliedContasDisponiveis, 'Todas'), [normalizedAppliedFilters.accounts, appliedContasDisponiveis]);
   const payersSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.payers, appliedPagadoresDisponiveis, 'Todos'), [normalizedAppliedFilters.payers, appliedPagadoresDisponiveis]);
-  const dividedSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.divided, dividedOptions, 'Sim e Não'), [normalizedAppliedFilters.divided, dividedOptions]);
-  const emptyFilterLabels = React.useMemo(() => (
-    [
+  const dividedSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.divided, dividedOptions, 'Sim e Nao'), [normalizedAppliedFilters.divided, dividedOptions]);
+  const emptyFilterLabels = React.useMemo(
+    () => dashboardBuildEmptyFilterLabels([
       { label: 'ano', summary: yearsSummary },
-      { label: 'mês', summary: monthsSummary },
+      { label: 'mes', summary: monthsSummary },
       { label: 'conta', summary: accountsSummary },
       { label: 'pagador', summary: payersSummary },
-      { label: 'divisão', summary: dividedSummary }
-    ]
-      .filter((item) => item.summary === 'Nenhum')
-      .map((item) => item.label)
-  ), [yearsSummary, monthsSummary, accountsSummary, payersSummary, dividedSummary]);
+      { label: 'divisao', summary: dividedSummary }
+    ]),
+    [yearsSummary, monthsSummary, accountsSummary, payersSummary, dividedSummary]
+  );
   const hasEmptyAppliedFilters = emptyFilterLabels.length > 0;
   const totalPeriodo = React.useMemo(() => dashboardSum(filteredRows), [filteredRows]);
   const totalDividido = React.useMemo(() => dashboardSum(filteredRows.filter((row) => row.dividida)), [filteredRows]);
@@ -2752,6 +420,18 @@ function DashboardView(props) {
     () => new Set(donutSegments.filter((segment) => segment.name !== 'Outros').map((segment) => segment.name)),
     [donutSegments]
   );
+  const rankingCategoryNames = React.useMemo(
+    () => rankingCategorias.map((item) => item.name),
+    [rankingCategorias]
+  );
+  const cycleCategoryNames = React.useMemo(() => {
+    if (!rankingCategorias.length || !filteredRollingRows.length) return [];
+
+    const rollingNameSet = new Set(filteredRollingRows.map((row) => row.nome));
+    return rankingCategorias
+      .map((item) => item.name)
+      .filter((name) => rollingNameSet.has(name));
+  }, [rankingCategorias, filteredRollingRows]);
 
   React.useEffect(() => {
     if (!trendAccounts.length) {
@@ -2771,26 +451,21 @@ function DashboardView(props) {
         label: dashboardPairLabel(rollingPairs[index], true)
       }))
   ), [filteredRollingRows, rollingPairs, focusedTrendAccount]);
-  const trendCompareSeries = React.useMemo(() => (
-    dashboardMakeSeries(filteredRollingCompareRows, rollingPairs, focusedTrendAccount)
-      .map((point, index) => ({
-        ...point,
-        label: dashboardPairLabel(rollingPairs[index], true)
-      }))
-  ), [filteredRollingCompareRows, rollingPairs, focusedTrendAccount]);
   const trendAverageValue = React.useMemo(() => {
     if (!trendSeries.length) return 0;
     return trendSeries.reduce((sum, point) => sum + Number(point.value || 0), 0) / trendSeries.length;
   }, [trendSeries]);
   const categoriasTimeline = React.useMemo(() => (
-    dashboardCategorySeries(filteredRollingRows, rollingPairs, 999).map((group) => ({
+    dashboardCategorySeries(filteredRollingRows, rollingPairs, 999, {
+      orderedNames: cycleCategoryNames
+    }).map((group) => ({
       ...group,
       points: group.points.map((point, index) => ({
         ...point,
         label: dashboardPairLabel(rollingPairs[index], true)
       }))
     }))
-  ), [filteredRollingRows, rollingPairs]);
+  ), [filteredRollingRows, rollingPairs, cycleCategoryNames]);
   const singleMonthComparison = React.useMemo(() => (
     dashboardBuildAccountComparison(filteredRows, filteredPreviousMonthRows, filteredCompareRows)
   ), [filteredRows, filteredPreviousMonthRows, filteredCompareRows]);
@@ -2814,48 +489,51 @@ function DashboardView(props) {
     setSelectedCategory('');
   }
 
-  function focusDashboardAccount(name) {
-    if (!name || name === 'Outros') return;
-    if (!rankingCategorias.some((item) => item.name === name)) return;
-    setSelectedCategory(name);
+  function focusDashboardAccount(name, options = {}) {
+    const nextSelectedCategory = dashboardResolveFocusedAccount({
+      name,
+      currentName: selectedCategory,
+      validNames: rankingCategoryNames,
+      toggleIfSame: options.toggleIfSame !== false
+    });
+
+    if (nextSelectedCategory !== selectedCategory) {
+      setSelectedCategory(nextSelectedCategory);
+    }
   }
 
   React.useEffect(() => {
-    if (singleMonthPage > singleMonthPageCount - 1) setSingleMonthPage(0);
+    const nextPage = dashboardClampPage(singleMonthPage, singleMonthPageCount);
+    if (nextPage !== singleMonthPage) setSingleMonthPage(nextPage);
   }, [singleMonthPage, singleMonthPageCount]);
 
   React.useEffect(() => {
-    if (timelinePage > timelinePageCount - 1) setTimelinePage(0);
+    const nextPage = dashboardClampPage(timelinePage, timelinePageCount);
+    if (nextPage !== timelinePage) setTimelinePage(nextPage);
   }, [timelinePage, timelinePageCount]);
 
   React.useEffect(() => {
-    if (rankingPage > rankingPageCount - 1) setRankingPage(0);
+    const nextPage = dashboardClampPage(rankingPage, rankingPageCount);
+    if (nextPage !== rankingPage) setRankingPage(nextPage);
   }, [rankingPage, rankingPageCount]);
 
   React.useEffect(() => {
-    if (!selectedCategory) return;
-    const trendIndex = trendAccounts.indexOf(selectedCategory);
-    if (trendIndex >= 0 && trendIndex !== trendAccountIndex) {
-      setTrendAccountIndex(trendIndex);
-    }
+    const nextLinkedState = dashboardBuildLinkedFocusState({
+      selectedName: selectedCategory,
+      trendAccounts,
+      singleMonthItems: singleMonthComparison,
+      rankingItems,
+      timelineItems: categoriasTimeline,
+      trendAccountIndex,
+      singleMonthPage,
+      rankingPage,
+      timelinePage
+    });
 
-    const singleMonthIndex = singleMonthComparison.findIndex((item) => item.name === selectedCategory);
-    if (singleMonthIndex >= 0) {
-      const nextSingleMonthPage = Math.floor(singleMonthIndex / 3);
-      if (nextSingleMonthPage !== singleMonthPage) setSingleMonthPage(nextSingleMonthPage);
-    }
-
-    const rankingIndex = rankingItems.findIndex((item) => item.name === selectedCategory);
-    if (rankingIndex >= 0) {
-      const nextRankingPage = Math.floor(rankingIndex / 5);
-      if (nextRankingPage !== rankingPage) setRankingPage(nextRankingPage);
-    }
-
-    const timelineIndex = categoriasTimeline.findIndex((group) => group.name === selectedCategory);
-    if (timelineIndex >= 0) {
-      const nextTimelinePage = Math.floor(timelineIndex / 3);
-      if (nextTimelinePage !== timelinePage) setTimelinePage(nextTimelinePage);
-    }
+    if (nextLinkedState.trendAccountIndex !== trendAccountIndex) setTrendAccountIndex(nextLinkedState.trendAccountIndex);
+    if (nextLinkedState.singleMonthPage !== singleMonthPage) setSingleMonthPage(nextLinkedState.singleMonthPage);
+    if (nextLinkedState.rankingPage !== rankingPage) setRankingPage(nextLinkedState.rankingPage);
+    if (nextLinkedState.timelinePage !== timelinePage) setTimelinePage(nextLinkedState.timelinePage);
   }, [selectedCategory, trendAccounts, trendAccountIndex, singleMonthComparison, singleMonthPage, rankingItems, rankingPage, categoriasTimeline, timelinePage]);
 
   const primeiraPessoa = rankingPagadores[0] || null;
@@ -2863,46 +541,40 @@ function DashboardView(props) {
   const cardsPrincipais = [
     {
       key: 'total',
-      label: appliedSelectedPairs.length > 1 ? 'Total do período' : 'Total do mês',
+      label: appliedSelectedPairs.length > 1 ? 'Total do periodo' : 'Total do mes',
       value: dashboardBrl(totalPeriodo),
-      detail: `${filteredRows.length} contas pagas neste período filtrado.`,
+      detail: `${filteredRows.length} contas pagas neste periodo filtrado.`,
       tooltip: 'Soma de todos os valores do período filtrado no dashboard.'
     },
     {
       key: 'split',
       label: 'Valor total dividido',
       value: dashboardBrl(totalDividido),
-      detail: `${splitPct}% do total do período.`,
+      detail: `${splitPct}% do total do periodo.`,
       tooltip: 'Soma das contas marcadas como divididas dentro do período filtrado.'
     },
     {
       key: 'payer-1',
       label: primeiraPessoa ? `Pago por ${primeiraPessoa.name}` : 'Pago por',
       value: dashboardBrl(primeiraPessoa ? primeiraPessoa.total : 0),
-      detail: primeiraPessoa ? 'Maior pagador do período.' : 'Aguardando dados.',
+      detail: primeiraPessoa ? 'Maior pagador do periodo.' : 'Aguardando dados.',
       tooltip: 'Maior pagador no período filtrado.'
     },
     {
       key: 'payer-2',
       label: segundaPessoa ? `Pago por ${segundaPessoa.name}` : 'Qtd. de contas pagas',
       value: segundaPessoa ? dashboardBrl(segundaPessoa.total) : String(filteredRows.length),
-      detail: segundaPessoa ? 'Segundo maior pagador do período.' : 'Contas pagas no período filtrado.',
+      detail: segundaPessoa ? 'Segundo maior pagador do periodo.' : 'Contas pagas no periodo filtrado.',
       tooltip: segundaPessoa
         ? 'Segundo maior pagador no período filtrado.'
         : 'Quantidade de contas pagas visíveis após aplicar os filtros.'
     }
   ];
 
-  const filterTabs = [
-    { id: 'period', label: 'Período' },
-    { id: 'accounts', label: 'Contas' },
-    { id: 'meta', label: 'Pagador e divisão' }
-  ];
-  const renderLegacyFilterPanel = false;
   const singleMonthMode = appliedSelectedPairs.length <= 1;
   const previousMonthLabel = `${dashboardMonthNamePT(previousMonthPair.month)} ${previousMonthPair.year}`;
   const previousYearLabel = `${dashboardMonthNamePT(lastAppliedPair.month)} ${lastAppliedPair.year - 1}`;
-  const emptyStateMessage = `Selecione ao menos uma opção em ${emptyFilterLabels.join(', ')} e clique em Atualizar dashboard.`;
+  const emptyStateMessage = `Selecione ao menos uma opcao em ${emptyFilterLabels.join(', ')} e clique em Atualizar dashboard.`;
 
   function applyDraftFilters() {
     setAppliedFilters(normalizedDraftFilters);
@@ -2934,154 +606,6 @@ function DashboardView(props) {
         appliedDividedSummary={dividedSummary}
         appliedRowCount={filteredRows.length}
       />
-
-      {renderLegacyFilterPanel ? (
-      <div className="card overflow-hidden">
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <div className="text-xs uppercase tracking-[0.24em] opacity-60">Guia</div>
-            <div className="brand" style={{ fontSize: '1.65rem', lineHeight: 1.05 }}>
-              Dashboard
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex flex-wrap gap-2">
-              {filterTabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={`btn ${activeFilterTab === tab.id ? 'primary' : 'ghost'}`}
-                  onClick={() => setActiveFilterTab(tab.id)}
-                  data-dash-filter-tab={tab.id}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                className="btn ghost lg:hidden"
-                type="button"
-                onClick={() => setShowFilters((prev) => !prev)}
-                data-dash-action="toggle-filters"
-              >
-                {showFilters ? 'Ocultar filtros' : 'Mostrar filtros'}
-              </button>
-              <button
-                className="btn ghost"
-                type="button"
-                onClick={resetDraftFilters}
-                data-dash-action="reset-filters"
-              >
-                Restaurar padrao
-              </button>
-              <button
-                className="btn primary"
-                type="button"
-                onClick={applyDraftFilters}
-                data-dash-action="apply-filters"
-                disabled={!hasPendingChanges || previewLoading}
-              >
-                Atualizar dashboard
-              </button>
-            </div>
-          </div>
-
-          <div className={showFilters ? 'block' : 'hidden lg:block'}>
-            {activeFilterTab === 'period' ? (
-              <div className="grid gap-5 xl:grid-cols-2">
-                <DashboardFilterChecklist
-                  label="Anos"
-                  helperText="Padrao: ano atual."
-                  selection={draftFilters.years}
-                  onChange={(years) => setDraftFilters((prev) => ({ ...prev, years }))}
-                  options={yearOptions}
-                  allLabel="Todos"
-                  searchable={false}
-                  columns={2}
-                  testId="years"
-                  tooltip="Escolha um ou mais anos disponiveis no banco para montar o recorte."
-                />
-                <DashboardFilterChecklist
-                  label="Meses"
-                  helperText="Padrao: mes atual."
-                  selection={draftFilters.months}
-                  onChange={(months) => setDraftFilters((prev) => ({ ...prev, months }))}
-                  options={draftMonthOptions}
-                  allLabel="Todos"
-                  searchable={false}
-                  columns={3}
-                  testId="months"
-                  tooltip="Os meses exibidos acompanham os anos selecionados na aba de periodo."
-                />
-              </div>
-            ) : null}
-
-            {activeFilterTab === 'accounts' ? (
-              <DashboardFilterChecklist
-                label="Tipos de conta"
-                helperText="Categorias unicas encontradas no periodo selecionado."
-                selection={draftFilters.accounts}
-                onChange={(accounts) => setDraftFilters((prev) => ({ ...prev, accounts }))}
-                options={contasDisponiveis}
-                allLabel="Todas"
-                maxHeight={300}
-                testId="accounts"
-                tooltip="A lista de contas depende apenas do periodo selecionado na primeira aba."
-              />
-            ) : null}
-
-            {activeFilterTab === 'meta' ? (
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-                <DashboardFilterChecklist
-                  label="Pagadores"
-                  helperText="Pagadores encontrados no recorte atual de periodo e contas."
-                  selection={draftFilters.payers}
-                  onChange={(payers) => setDraftFilters((prev) => ({ ...prev, payers }))}
-                  options={pagadoresDisponiveis}
-                  allLabel="Todos"
-                  maxHeight={300}
-                  testId="payers"
-                  tooltip="A lista de pagadores acompanha o periodo e as contas selecionadas."
-                />
-                <DashboardFilterChecklist
-                  label="Divididas"
-                  helperText="Marque Sim, Nao ou ambas."
-                  selection={draftFilters.divided}
-                  onChange={(divided) => setDraftFilters((prev) => ({ ...prev, divided }))}
-                  options={dividedOptions}
-                  allLabel="Sim e Nao"
-                  columns={2}
-                  testId="divided"
-                  tooltip="Filtra apenas contas divididas, apenas nao divididas ou ambas."
-                />
-              </div>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="badge">Dashboard aplicado</div>
-            <div className="badge" data-dash-filter-summary="years">Anos: {yearsSummary}</div>
-            <div className="badge" data-dash-filter-summary="months">Meses: {monthsSummary}</div>
-            <div className="badge" data-dash-filter-summary="accounts">Contas: {accountsSummary}</div>
-            <div className="badge" data-dash-filter-summary="payers">Pagadores: {payersSummary}</div>
-            <div className="badge" data-dash-filter-summary="divided">Divididas: {dividedSummary}</div>
-            <div className="badge" data-dash-count="rows">Lancamentos: {filteredRows.length}</div>
-            {previewLoading ? <div className="badge">Atualizando opcoes...</div> : null}
-            {loading ? <div className="badge">Atualizando dashboard...</div> : null}
-            {hasPendingChanges ? <div className="badge">Alteracoes pendentes</div> : null}
-          </div>
-
-          {hasPendingChanges ? (
-            <div className="text-sm opacity-70" data-dash-pending-message="true">
-              Aplique os filtros e clique em Atualizar dashboard para refletir as mudancas abaixo.
-            </div>
-          ) : null}
-        </div>
-      </div>
-      ) : null}
 
       {error ? <div className="card border-red-500 text-red-200">{error}</div> : null}
 
@@ -3118,14 +642,14 @@ function DashboardView(props) {
             <DashboardMetricCard
               label="Maior categoria"
               value={topCategoria ? topCategoria.name : 'Sem dados'}
-              detail={topCategoria && totalPeriodo > 0 ? `${Math.round((topCategoria.total / totalPeriodo) * 100)}% do total do período.` : 'Aguardando movimentação'}
+              detail={topCategoria && totalPeriodo > 0 ? `${Math.round((topCategoria.total / totalPeriodo) * 100)}% do total do periodo.` : 'Aguardando movimentacao'}
               tooltip="Categoria com maior valor somado depois da aplicação de todos os filtros."
               testId="top-category"
             />
             <DashboardMetricCard
               label="Qtd. de contas pagas"
               value={String(filteredRows.length)}
-              detail={filteredRows.length ? 'Contas pagas no período filtrado.' : 'Nenhuma conta paga neste período.'}
+              detail={filteredRows.length ? 'Contas pagas no periodo filtrado.' : 'Nenhuma conta paga neste periodo.'}
               tooltip="Quantidade de contas pagas visíveis após a aplicação do filtro."
               testId="count"
             />
@@ -3134,8 +658,8 @@ function DashboardView(props) {
           <DashboardSection
             title="Pareto das contas"
             subtitle={singleMonthMode
-              ? 'Categorias do mês filtrado em ordem de impacto.'
-              : 'Categorias agregadas do período filtrado com curva acumulada.'}
+              ? 'Categorias do mes filtrado em ordem de impacto.'
+              : 'Categorias agregadas do periodo filtrado com curva acumulada.'}
             tooltip="Ordena as categorias do maior para o menor valor e mostra como o acumulado do período se forma. Clique em uma barra para destacar a mesma categoria nos demais gráficos."
             testId="pareto"
           >
@@ -3150,7 +674,7 @@ function DashboardView(props) {
           {singleMonthMode ? (
             <DashboardSection
               title="Comparativo por conta"
-              subtitle="Mês atual contra mês anterior e mesmo mês do ano anterior."
+              subtitle="Mes atual contra mes anterior e mesmo mes do ano anterior."
               tooltip="Mostra as contas do mês atual em blocos de três, ordenadas pelo maior valor do mês selecionado."
               testId="trend-single"
             >
@@ -3160,7 +684,10 @@ function DashboardView(props) {
                     <button
                       type="button"
                       className="btn ghost"
-                      onClick={() => setSingleMonthPage((prev) => (prev <= 0 ? singleMonthPageCount - 1 : prev - 1))}
+                      onClick={() => {
+                        clearLinkedFocus();
+                        setSingleMonthPage((prev) => dashboardCyclePage(prev, singleMonthPageCount, -1));
+                      }}
                       data-dash-action="single-prev"
                     >
                       &lt;
@@ -3171,7 +698,10 @@ function DashboardView(props) {
                     <button
                       type="button"
                       className="btn ghost"
-                      onClick={() => setSingleMonthPage((prev) => (prev >= singleMonthPageCount - 1 ? 0 : prev + 1))}
+                      onClick={() => {
+                        clearLinkedFocus();
+                        setSingleMonthPage((prev) => dashboardCyclePage(prev, singleMonthPageCount, 1));
+                      }}
                       data-dash-action="single-next"
                     >
                       &gt;
@@ -3190,7 +720,7 @@ function DashboardView(props) {
             </DashboardSection>
           ) : (
             <DashboardSection
-              title="Evolução por conta"
+              title="Evolucao por conta"
               subtitle={annualCycleSubtitle}
               tooltip="Mostra o ciclo anual da conta selecionada, do mesmo mês do ano anterior até o mês final do período filtrado. A média do ciclo atual aparece como referência no topo do gráfico."
               testId="trend-period"
@@ -3202,8 +732,8 @@ function DashboardView(props) {
                     className="btn ghost"
                     onClick={() => {
                       if (!trendAccounts.length) return;
-                      const nextIndex = trendAccountIndex <= 0 ? Math.max(trendAccounts.length - 1, 0) : trendAccountIndex - 1;
-                      focusDashboardAccount(trendAccounts[nextIndex]);
+                      const nextIndex = dashboardCycleIndex(trendAccountIndex, trendAccounts.length, -1);
+                      focusDashboardAccount(trendAccounts[nextIndex], { toggleIfSame: false });
                     }}
                     data-dash-action="trend-prev"
                     disabled={!trendAccounts.length}
@@ -3216,12 +746,12 @@ function DashboardView(props) {
                     className="btn ghost"
                     onClick={() => {
                       if (!trendAccounts.length) return;
-                      const nextIndex = trendAccountIndex >= trendAccounts.length - 1 ? 0 : trendAccountIndex + 1;
-                      focusDashboardAccount(trendAccounts[nextIndex]);
+                      const nextIndex = dashboardCycleIndex(trendAccountIndex, trendAccounts.length, 1);
+                      focusDashboardAccount(trendAccounts[nextIndex], { toggleIfSame: false });
                     }}
                     data-dash-action="trend-next"
                     disabled={!trendAccounts.length}
-                    aria-label="Próxima conta"
+                    aria-label="Proxima conta"
                   >
                     &gt;
                   </button>
@@ -3276,7 +806,7 @@ function DashboardView(props) {
                       onClick={() => setRankingMode('average')}
                       data-dash-ranking-mode="average"
                     >
-                      Média/mês
+                      Media/mes
                     </button>
                   </div>
                 ) : null,
@@ -3287,7 +817,7 @@ function DashboardView(props) {
                       className="btn ghost"
                       onClick={() => {
                         clearLinkedFocus();
-                        setRankingPage((prev) => (prev <= 0 ? rankingPageCount - 1 : prev - 1));
+                        setRankingPage((prev) => dashboardCyclePage(prev, rankingPageCount, -1));
                       }}
                       data-dash-action="ranking-prev"
                     >
@@ -3301,7 +831,7 @@ function DashboardView(props) {
                       className="btn ghost"
                       onClick={() => {
                         clearLinkedFocus();
-                        setRankingPage((prev) => (prev >= rankingPageCount - 1 ? 0 : prev + 1));
+                        setRankingPage((prev) => dashboardCyclePage(prev, rankingPageCount, 1));
                       }}
                       data-dash-action="ranking-next"
                     >
@@ -3333,7 +863,7 @@ function DashboardView(props) {
             <DashboardSection
               title="Ciclo anual"
               subtitle={annualCycleSubtitle}
-              tooltip="Mostra, para cada conta, o ciclo anual do mesmo mês do ano anterior até o mês final do período filtrado. Clique numa barra para ver o valor daquele mês e use as setas para navegar de três em três contas."
+              tooltip="Mostra, para cada conta presente no periodo filtrado, o ciclo anual do mesmo mes do ano anterior ate o mes final do recorte. Clique numa barra para ver o valor daquele mes e use as setas para navegar de tres em tres contas."
               testId="category-trends"
             >
               {timelinePageCount > 1 ? (
@@ -3343,7 +873,7 @@ function DashboardView(props) {
                     className="btn ghost"
                     onClick={() => {
                       clearLinkedFocus();
-                      setTimelinePage((prev) => (prev <= 0 ? timelinePageCount - 1 : prev - 1));
+                      setTimelinePage((prev) => dashboardCyclePage(prev, timelinePageCount, -1));
                     }}
                     data-dash-action="timeline-prev"
                     aria-label="Bloco anterior"
@@ -3358,7 +888,7 @@ function DashboardView(props) {
                     className="btn ghost"
                     onClick={() => {
                       clearLinkedFocus();
-                      setTimelinePage((prev) => (prev >= timelinePageCount - 1 ? 0 : prev + 1));
+                      setTimelinePage((prev) => dashboardCyclePage(prev, timelinePageCount, 1));
                     }}
                     data-dash-action="timeline-next"
                     aria-label="Proximo bloco"

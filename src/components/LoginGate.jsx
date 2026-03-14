@@ -1,9 +1,10 @@
-// ===========================================
-// 🔐 LoginGate - autenticação com Supabase
-// agora com modos: login | signup
-// ===========================================
+const {
+  buildAuthSnapshot: appShellBuildAuthSnapshot,
+  commitAuthSnapshot: appShellCommitAuthSnapshot
+} = window.AppShellRuntime;
+
 function LoginGate({ onLogged }) {
-  const [mode, setMode] = React.useState('login'); // 'login' | 'signup'
+  const [mode, setMode] = React.useState('login');
   const [email, setEmail] = React.useState('');
   const [pwd, setPwd] = React.useState('');
   const [pwd2, setPwd2] = React.useState('');
@@ -11,20 +12,28 @@ function LoginGate({ onLogged }) {
   const [err, setErr] = React.useState('');
   const [okMsg, setOkMsg] = React.useState('');
 
-  async function handleLogin(e) {
-    e.preventDefault();
+  function resetMessages() {
     setErr('');
     setOkMsg('');
+  }
+
+  function commitLoggedUser(user) {
+    const authSnapshot = appShellCommitAuthSnapshot(appShellBuildAuthSnapshot(user));
+    onLogged?.(authSnapshot);
+  }
+
+  async function handleLogin(event) {
+    event.preventDefault();
+    resetMessages();
     setLoading(true);
 
     try {
       const { supabase } = window.SupabaseClient || {};
-      if (!supabase) throw new Error('Supabase client não disponível');
+      if (!supabase) throw new Error('Supabase client nao disponivel');
 
-      // 1️⃣ tenta login real no Supabase
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password: pwd,
+        password: pwd
       });
 
       if (error) {
@@ -33,48 +42,42 @@ function LoginGate({ onLogged }) {
         return;
       }
 
-      const user = data.user;
+      if (!data?.user) {
+        setErr('Falha ao autenticar.');
+        return;
+      }
 
-      // 2️⃣ espelha no mock para compatibilidade com o app existente
-      window.MOCK_AUTH = {
-        user_id: user.id,
-        email: user.email,
-      };
-      window.SupabaseClient = window.SupabaseClient || {};
-      window.SupabaseClient.__lastAuthUid = user.id;
-      console.log('[Auth] logado como', user.id);
-      // 3️⃣ notifica o App.jsx que o login foi feito
-      onLogged?.(window.MOCK_AUTH);
-    } catch (e) {
-      console.error(e);
+      console.log('[Auth] logado como', data.user.id);
+      commitLoggedUser(data.user);
+    } catch (error) {
+      console.error(error);
       setErr('Falha ao autenticar.');
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleSignup(e) {
-    e.preventDefault();
-    setErr('');
-    setOkMsg('');
+  async function handleSignup(event) {
+    event.preventDefault();
+    resetMessages();
+
     if (!email || !pwd || !pwd2) {
       setErr('Preencha todos os campos.');
       return;
     }
     if (pwd !== pwd2) {
-      setErr('As senhas não conferem.');
+      setErr('As senhas nao conferem.');
       return;
     }
 
     setLoading(true);
     try {
       const { supabase } = window.SupabaseClient || {};
-      if (!supabase) throw new Error('Supabase client não disponível');
+      if (!supabase) throw new Error('Supabase client nao disponivel');
 
-      // 1️⃣ cria usuário no supabase
       const { data, error } = await supabase.auth.signUp({
         email,
-        password: pwd,
+        password: pwd
       });
 
       if (error) {
@@ -83,29 +86,16 @@ function LoginGate({ onLogged }) {
         return;
       }
 
-      // dependendo das settings do projeto, o Supabase pode:
-      // - já autenticar o usuário
-      // - ou exigir confirmação de e-mail
-      const user = data.user;
-
-      if (user) {
-        // já veio autenticado 👍
-        window.MOCK_AUTH = {
-          user_id: user.id,
-          email: user.email,
-        };
-        window.SupabaseClient = window.SupabaseClient || {};
-        window.SupabaseClient.__lastAuthUid = user.id;
-        console.log('[Auth] cadastrado e logado como', user.id);
-        onLogged?.(window.MOCK_AUTH);
-      } else {
-        // veio sem user -> provavelmente exige confirmação
-        setOkMsg('Cadastro criado. Verifique seu e-mail para confirmar.');
-        // fica no modo login
-        setMode('login');
+      if (data?.user) {
+        console.log('[Auth] cadastrado e logado como', data.user.id);
+        commitLoggedUser(data.user);
+        return;
       }
-    } catch (e) {
-      console.error(e);
+
+      setOkMsg('Cadastro criado. Verifique seu e-mail para confirmar.');
+      setMode('login');
+    } catch (error) {
+      console.error(error);
       setErr('Falha ao cadastrar.');
     } finally {
       setLoading(false);
@@ -118,7 +108,7 @@ function LoginGate({ onLogged }) {
         <h1 className="brand mb-4 flex items-center gap-3 relative">
           <img
             src="./icons/icon-512.png"
-            alt="Ícone Controle de Contas"
+            alt={'\u00cdcone Controle de Contas'}
             width="62"
             height="62"
             className="absolute left-0 translate-x-[-20%] md:translate-x-[-20%] rounded-full shadow-md"
@@ -126,20 +116,23 @@ function LoginGate({ onLogged }) {
           <span className="w-full text-center block">Controle de Contas</span>
         </h1>
 
-
-
-        {/* toggle de modo */}
         <div className="flex mb-4 gap-2">
           <button
             type="button"
-            onClick={() => { setMode('login'); setErr(''); setOkMsg(''); }}
+            onClick={() => {
+              setMode('login');
+              resetMessages();
+            }}
             className={`flex-1 py-2 rounded text-sm ${mode === 'login' ? 'bg-white/10' : 'bg-black/10'}`}
           >
             Entrar
           </button>
           <button
             type="button"
-            onClick={() => { setMode('signup'); setErr(''); setOkMsg(''); }}
+            onClick={() => {
+              setMode('signup');
+              resetMessages();
+            }}
             className={`flex-1 py-2 rounded text-sm ${mode === 'signup' ? 'bg-white/10' : 'bg-black/10'}`}
           >
             Criar conta
@@ -154,7 +147,7 @@ function LoginGate({ onLogged }) {
                 className="w-full input"
                 type="email"
                 value={email}
-                onChange={e=>setEmail(e.target.value)}
+                onChange={(event) => setEmail(event.target.value)}
                 placeholder="voce@exemplo.com"
                 required
               />
@@ -165,15 +158,15 @@ function LoginGate({ onLogged }) {
                 className="w-full input"
                 type="password"
                 value={pwd}
-                onChange={e=>setPwd(e.target.value)}
-                placeholder="••••••••"
+                onChange={(event) => setPwd(event.target.value)}
+                placeholder={'\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022'}
                 required
               />
             </div>
-            {err && <div className="text-sm text-red-400">{err}</div>}
-            {okMsg && <div className="text-sm text-emerald-400">{okMsg}</div>}
+            {err ? <div className="text-sm text-red-400">{err}</div> : null}
+            {okMsg ? <div className="text-sm text-emerald-400">{okMsg}</div> : null}
             <button className="btn primary w-full" type="submit" disabled={loading}>
-              {loading ? 'Entrando…' : 'Entrar'}
+              {loading ? 'Entrando...' : 'Entrar'}
             </button>
           </form>
         ) : (
@@ -184,7 +177,7 @@ function LoginGate({ onLogged }) {
                 className="w-full input"
                 type="email"
                 value={email}
-                onChange={e=>setEmail(e.target.value)}
+                onChange={(event) => setEmail(event.target.value)}
                 placeholder="voce@exemplo.com"
                 required
               />
@@ -195,8 +188,8 @@ function LoginGate({ onLogged }) {
                 className="w-full input"
                 type="password"
                 value={pwd}
-                onChange={e=>setPwd(e.target.value)}
-                placeholder="mín. 6 caracteres"
+                onChange={(event) => setPwd(event.target.value)}
+                placeholder={'m\u00edn. 6 caracteres'}
                 required
               />
             </div>
@@ -206,15 +199,15 @@ function LoginGate({ onLogged }) {
                 className="w-full input"
                 type="password"
                 value={pwd2}
-                onChange={e=>setPwd2(e.target.value)}
+                onChange={(event) => setPwd2(event.target.value)}
                 placeholder="repita a senha"
                 required
               />
             </div>
-            {err && <div className="text-sm text-red-400">{err}</div>}
-            {okMsg && <div className="text-sm text-emerald-400">{okMsg}</div>}
+            {err ? <div className="text-sm text-red-400">{err}</div> : null}
+            {okMsg ? <div className="text-sm text-emerald-400">{okMsg}</div> : null}
             <button className="btn primary w-full" type="submit" disabled={loading}>
-              {loading ? 'Criando…' : 'Criar conta'}
+              {loading ? 'Criando...' : 'Criar conta'}
             </button>
           </form>
         )}

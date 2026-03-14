@@ -21,18 +21,46 @@ Tudo isso usando os mesmos dados do app principal, sem backend novo e sem custo 
 
 ---
 
-## Arquivo principal
+## Arquivos principais
 
+- `helpers.js`
+- `orchestration.js`
 - `DashboardView.jsx`
+- `legacy/DashboardViewLegacy.jsx`
+- `components/DashboardInfoTooltip.jsx`
+- `components/DashboardShell.jsx`
+- `components/DashboardFilters.jsx`
+- `components/DashboardTrendCharts.jsx`
+- `components/DashboardRankingPanels.jsx`
+- `components/DashboardCompositionCharts.jsx`
 
-Esse arquivo hoje concentra:
+Responsabilidades por camada:
 
-- shell da tela
-- filtros em abas
-- KPIs
-- blocos graficos
-- sincronias entre visuais
-- estados de foco e pagina
+- `helpers.js`
+  - formatacao
+  - selecao de filtros
+  - construcao de series e agregacoes
+  - regras analiticas reutilizaveis
+- `orchestration.js`
+  - transicoes de estado do BI
+  - sincronias de foco compartilhado
+  - normalizacao de filtros e paginacao
+- `components/*`
+  - tooltip contextual
+  - shell visual compartilhada do BI
+  - toolbar e checklists de filtro
+  - graficos de tendencia e comparativos reutilizaveis
+  - paineis de ranking e pagadores
+  - composicao do recorte e Pareto
+- `DashboardView.jsx`
+  - orquestracao de estado
+  - carregamento dos recortes
+  - composicao da tela final
+  - manutencao da integracao entre os blocos do BI
+- `legacy/DashboardViewLegacy.jsx`
+  - referencia congelada da iteracao anterior do dashboard
+  - preservada fora da tela ativa para consulta e comparacao segura
+  - mantida em arquivo, sem necessidade de carga no bootstrap ativo
 
 ---
 
@@ -60,6 +88,8 @@ Alguns graficos conversam entre si sem alterar o filtro real. Esse foco temporar
 
 Isso permite navegacao de estilo BI sem baguncar o recorte principal.
 
+No bloco `Ciclo anual`, a ordem das contas deve respeitar o peso delas no periodo filtrado. O historico do ciclo entra para contextualizar essas mesmas contas, sem antecipar categorias que nao aparecem no recorte principal.
+
 ---
 
 ## Blocos atuais
@@ -79,11 +109,14 @@ Isso permite navegacao de estilo BI sem baguncar o recorte principal.
 ## Regras arquiteturais
 
 - preferir componentes e helpers novos dentro de `src/dashboard/`
+- manter referencias historicas do BI em `src/dashboard/legacy/`
 - evitar empurrar logica analitica para `ReportsModal.jsx`
 - preservar a navegacao atual do app
 - tratar filtros do topo como fonte de verdade
 - tratar sincronias entre graficos como foco temporario
+- remover blocos mortos da tela ativa quando ja estiverem preservados em `legacy/`
 - nao alterar contratos globais do app sem necessidade real
+- manter `window.DashboardHelpers` e `window.DashboardOrchestration` como contratos de runtime pequenos e documentados para a camada BI
 
 ---
 

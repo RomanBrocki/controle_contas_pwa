@@ -3,19 +3,19 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="manifest" href="./manifest.json?v=2026-03-12-5" />
+  <link rel="manifest" href="./manifest.json?v=2026-03-14-5" />
   <meta name="theme-color" content="#0f172a" />
 
   <title>Controle de Contas</title>
 
-  <!-- Tailwind (utilitÃ¡rios como flex/grid/gap/...) -->
+  <!-- Tailwind (utilitarios como flex/grid/gap/...) -->
   <script src="https://cdn.tailwindcss.com"></script>
 
   <!-- React 18 + ReactDOM (UMD) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 
-  <!-- Babel para transformar JSX no navegador (apenas para protÃ³tipo) -->
+  <!-- Babel para transformar JSX no navegador (apenas para prototipo) -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
@@ -31,9 +31,40 @@
 <body>
   <div id="root"></div>
 
+  <script src="./src/shared/date-utils.js"></script>
+  <script src="./src/app-shell/runtime.js"></script>
+  <script src="./src/post-login/helpers.js"></script>
+  <script src="./src/post-login/runtime.js"></script>
+  <script src="./src/post-login/data.js"></script>
+  <script src="./src/post-login/workflows.js"></script>
+  <script src="./src/post-login/controller.js"></script>
+  <script src="./src/dashboard/helpers.js"></script>
+  <script src="./src/dashboard/orchestration.js"></script>
+  <script src="./src/reports/helpers.js"></script>
+  <script src="./src/reports/dom.js"></script>
+  <script src="./src/reports/renderers.js"></script>
+  <script src="./src/reports/pdf-builders.js"></script>
+  <script src="./src/reports/workflows.js"></script>
+
   <!-- novo: carregar o componente antes do script principal -->
   <script type="text/babel" src="./src/components/StyleTag.jsx"></script>
   <script type="text/babel" src="./src/components/SelectPopoverField.jsx"></script>
+  <script type="text/babel" src="./src/components/app-shell/AppChrome.jsx"></script>
+  <script type="text/babel" src="./src/components/shared/InfoTooltip.jsx"></script>
+  <script type="text/babel" src="./src/components/shared/MonthPickerBlocks.jsx"></script>
+  <script type="text/babel" src="./src/components/reports/ReportsPanels.jsx"></script>
+  <script type="text/babel" src="./src/components/post-login/PendingAccountsOverlay.jsx"></script>
+  <script type="text/babel" src="./src/components/post-login/ControlMonthSummary.jsx"></script>
+  <script type="text/babel" src="./src/components/post-login/SelfChatModal.jsx"></script>
+  <script type="text/babel" src="./src/components/post-login/PostLoginHeader.jsx"></script>
+  <script type="text/babel" src="./src/components/post-login/PostLoginToast.jsx"></script>
+  <script type="text/babel" src="./src/components/post-login/MonthlyAccountsPanel.jsx"></script>
+  <script type="text/babel" src="./src/dashboard/components/DashboardInfoTooltip.jsx"></script>
+  <script type="text/babel" src="./src/dashboard/components/DashboardShell.jsx"></script>
+  <script type="text/babel" src="./src/dashboard/components/DashboardFilters.jsx"></script>
+  <script type="text/babel" src="./src/dashboard/components/DashboardTrendCharts.jsx"></script>
+  <script type="text/babel" src="./src/dashboard/components/DashboardRankingPanels.jsx"></script>
+  <script type="text/babel" src="./src/dashboard/components/DashboardCompositionCharts.jsx"></script>
   <script type="text/babel" src="./src/components/PostLoginMock.jsx"></script>
   <script type="text/babel" src="./src/components/ContaCard.jsx"></script>
   <script type="text/babel" src="./src/components/EditPopup.jsx"></script>
@@ -49,10 +80,6 @@
     function parseBRL(str){
       const s = String(str).replace(/[^\d,]/g, '').replace(/\.(?=\d)/g,'');
       return Number(s.replace(',', '.')) || 0;
-    }
-
-    function monthNamePT(m){
-      return new Date(2025, m-1, 1).toLocaleString('pt-BR', { month:'long' }).replace(/^./, c=>c.toUpperCase());
     }
 
     function todayISO(){
@@ -83,7 +110,7 @@
       );
     }
     // Top 10 tipos de conta (mock)
-    const COMMON_TYPES = ['Luz','Internet','CondomÃ­nio','Escola','Celular','Empregada','Mercado','CartÃ£o de CrÃ©dito','GÃ¡s'];
+    const COMMON_TYPES = ['Luz','Internet','Condom\u00ednio','Escola','Celular','Empregada','Mercado','Cart\u00e3o de Cr\u00e9dito','G\u00e1s'];
 
     
     // ====== Mount App ======
@@ -108,13 +135,13 @@
   syncTheme();
   new MutationObserver(syncTheme).observe(rootEl, { attributes:true, childList:true, subtree:true });
   </script>
-    <!-- === GrÃ¡ficos === -->
+    <!-- === Graficos === -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
 
   <script type="module" src="./src/features/charts.js"></script>
 
-  <!-- jsPDF para exportar mÃºltiplos grÃ¡ficos em PDF -->
+  <!-- jsPDF para exportar multiplos graficos em PDF -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <!-- PDF features -->
   <script src="./src/features/pdf.js"></script>
@@ -122,7 +149,7 @@
 
 
   <script type="module" src="./src/router.js"></script>
-  <!-- novo: boot do router como mÃ³dulo -->
+  <!-- novo: boot do router como modulo -->
   <script type="module" src="./src/data-adapter.js"></script>
 
   <script type="module">
@@ -130,21 +157,21 @@
     window.Router = Router; // ðŸ‘ˆ torna global p/ o JSX
 
     Router.register('#/', () => {
-      // rota default: cai na tela do mÃªs atual (sem mudar estado)
+      // rota default: cai na tela do mes atual (sem mudar estado)
       Router.go('#/mes');
     });
 
     Router.register('#/mes', (params) => {
       // aplica ano/mes na UI se vierem na URL
-      window.AppRoutes?.mes(params);
+      window.PostLoginRuntime?.invokeRoute?.('mes', params);
     });
 
     Router.register('#/relatorios', () => {
-      window.AppRoutes?.relatorios();
+      window.PostLoginRuntime?.invokeRoute?.('relatorios');
     });
 
     Router.register('#/dashboard', () => {
-      window.AppRoutes?.dashboard();
+      window.PostLoginRuntime?.invokeRoute?.('dashboard');
     });
 
     Router.start();
@@ -171,7 +198,7 @@
       });
 
       try {
-        const registration = await navigator.serviceWorker.register("./sw.js?v=2026-03-12-5");
+        const registration = await navigator.serviceWorker.register("./sw.js?v=2026-03-14-5");
         watchInstallingWorker(registration.installing);
         registration.addEventListener("updatefound", function () {
           watchInstallingWorker(registration.installing);
