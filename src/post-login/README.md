@@ -4,7 +4,7 @@ Esta pasta concentra helpers de dominio do fluxo principal depois do login.
 
 Objetivo:
 
-- tirar regras pequenas e repetidas de `PostLoginMock.jsx`
+- centralizar regras pequenas e repetidas do fluxo principal
 - documentar o contrato do shell principal sem misturar com a camada visual
 - manter transformacoes de dados e estados de edicao em um ponto previsivel
 

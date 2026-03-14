@@ -2,7 +2,7 @@
 
 **Controle de Contas** é uma aplicação **Progressive Web App (PWA)** feita em **React UMD + Tailwind + Supabase**, voltada para controle financeiro mensal, relatórios formais em PDF e leitura analítica via dashboard BI.
 
-O projeto roda **100% client-side**, sem build tool e sem backend próprio. A ideia central é manter tudo simples para operar em **Supabase free + GitHub Pages**, preservando o fluxo principal do app e acrescentando novas camadas de valor sem quebrar o legado.
+O projeto roda **100% client-side**, sem build tool e sem backend próprio. A ideia central é manter tudo simples para operar em **Supabase free + GitHub Pages**, preservando o fluxo principal do app e acrescentando novas camadas de valor sem aumentar a complexidade operacional.
 
 ---
 
@@ -75,7 +75,7 @@ Na prática, isso evita que o filtro de data vire uma barreira para lançar cont
 
 O sistema compara o mês atual com o mês anterior e aponta contas que ainda não foram relançadas.
 
-Esse fluxo existe para acelerar o preenchimento recorrente do mês e continua sendo parte do legado funcional.
+Esse fluxo existe para acelerar o preenchimento recorrente do mês e continua sendo parte central do controle mensal.
 
 ### 3. Relatórios
 
@@ -86,11 +86,11 @@ O modal de relatórios hoje expõe:
 
 Os mesmos seletores de data do fluxo principal são reaproveitados aqui, preservando o comportamento de ano editável com confirmação explícita e meses completos.
 
-Os comparativos antigos continuam existindo no código legado, mas o dashboard passou a concentrar a leitura analítica mais rica e interativa, fora do modal principal de relatórios.
+O modal continua cobrindo os relatórios formais, enquanto o dashboard concentra a leitura analítica mais rica e interativa em rota própria.
 
 ### 4. Dashboard BI
 
-O dashboard foi criado para coexistir com o legado, não para substituir o controle mensal.
+O dashboard organiza a leitura analítica em uma rota própria, sem interferir no fluxo principal do controle mensal.
 
 Ele entra por:
 
@@ -107,7 +107,7 @@ O topo da aplicação segue um padrão mais explícito de separação entre nave
 - **Ações no controle**: `Nova conta`, `Relatórios` e `Configurações`
 - **Ações no dashboard**: `Relatórios` e `Configurações`
 
-Esse desenho preserva o fluxo legado do controle mensal e, ao mesmo tempo, deixa claro quando o usuário está trocando de área e quando está apenas abrindo um modal de ação.
+Esse desenho preserva o fluxo principal do controle mensal e, ao mesmo tempo, deixa claro quando o usuário está trocando de área e quando está apenas abrindo um modal de ação.
 
 Para reforçar essa leitura sem transformar a interface em manual, a home também oferece ajudas contextuais pontuais:
 
@@ -121,7 +121,7 @@ Na prática, `Relatórios` segue sendo a entrada para a geração dos relatório
 
 ## 📊 Dashboard BI
 
-A camada de BI fica isolada em `src/dashboard/` e foi pensada para não misturar regra analítica nova com o fluxo legado do controle e dos relatórios formais.
+A camada de BI fica isolada em `src/dashboard/` e foi pensada para não misturar análise, controle mensal e relatórios formais na mesma área.
 
 Para manter referência técnica sem poluir a tela ativa, implementações anteriores do dashboard ficam congeladas em `src/dashboard/legacy/`.
 
@@ -213,7 +213,7 @@ Na prática, isso reforça a leitura de que:
 ├─ sw.js
 ├─ docs/
 │  ├─ architecture-map.md
-│  ├─ professionalization-roadmap.md
+│  ├─ evolution-roadmap.md
 │  └─ regression-checklist.md
 ├─ icons/
 │  ├─ icon-192.png
@@ -363,7 +363,7 @@ Contratos importantes em `window`:
 
 Isso significa que a ordem de carga no HTML funciona como cola de integração entre a parte Babel e os módulos ES.
 
-Na branch profissional, o caminho ativo da UI já consome as camadas novas de runtime, dados e workflows. Os globais legados continuam existindo como espelho de compatibilidade do ambiente híbrido, mas deixaram de ser lidos diretamente pelos componentes principais.
+No estado atual do projeto, o caminho ativo da UI já consome as camadas novas de runtime, dados e workflows. Os globais de compatibilidade continuam existindo como parte do ambiente híbrido, mas deixaram de ser lidos diretamente pelos componentes principais.
 
 ### Shell da aplicação
 
@@ -382,7 +382,7 @@ Arquivos centrais:
 
 Responsabilidades:
 
-- espelhar a sessão do Supabase no runtime legado
+- sincronizar a sessão do Supabase com o runtime da aplicação
 - resolver o hash atual da área principal
 - carregar o profile global do usuário
 - renderizar o chrome autenticado
@@ -421,7 +421,7 @@ Responsabilidades:
 
 1. `LoginGate.jsx` usa `supabase.auth.signInWithPassword()` para autenticação.
 2. Em cadastro, usa `signUp()`.
-3. O app mantém a sessão em `window.AppShellRuntime` e espelha o usuário autenticado em `window.MOCK_AUTH` apenas por compatibilidade com o legado.
+3. O app mantém a sessão em `window.AppShellRuntime` e espelha o usuário autenticado em `window.MOCK_AUTH` apenas por compatibilidade do ambiente híbrido.
 4. `window.AppShellRuntime` preserva `window.SupabaseClient.__lastAuthUid`.
 5. O profile do usuário é carregado depois do login.
 6. Após autenticar, o fluxo padrão de entrada vai para `#/mes`.
@@ -531,9 +531,9 @@ Gera um PDF com:
 - gráficos de linha por conta
 - tabelas segmentadas por mês
 
-### Comparativos legados
+### Comparativos auxiliares
 
-Os comparativos continuam no código, mas deixaram de ser o caminho principal na UI.
+Os comparativos continuam disponíveis no modal, mas deixaram de ser o caminho principal de leitura analítica.
 
 O motivo é simples: o dashboard BI cobre melhor a leitura exploratória sem duplicar tanta navegação.
 
@@ -679,7 +679,7 @@ https://<usuario>.github.io/controle_contas_pwa/
 - o projeto mistura JSX Babel e módulos ES
 - globais em `window` fazem parte da arquitetura atual
 - mudanças novas devem ser preferencialmente aditivas
-- `ReportsModal.jsx` ainda concentra parte importante do legado de relatorios
+- `ReportsModal.jsx` ainda concentra boa parte da orquestracao de relatorios
 - `PostLoginMock.jsx` ja atua mais como shell de composicao, apoiado por `src/post-login/controller.js`
 - a shell principal agora tambem usa `src/post-login/controller.js` para estados e efeitos da tela autenticada
 - a area de relatorios agora tambem usa `src/reports/` para DOM auxiliar, renderers locais e workflows
@@ -688,7 +688,7 @@ https://<usuario>.github.io/controle_contas_pwa/
 - o caminho ativo da UI nao depende mais diretamente de `window.MOCK_AUTH`, `window.AppRoutes`, `window.SupabaseQueries`, `window.AppState` ou `window.PDFHelpers`
 - o dashboard deve continuar isolado em `src/dashboard/`
 - se adicionar arquivos carregados pela app, atualize `index.html` e `sw.js`
-- os mapas técnicos complementares estão em `docs/architecture-map.md` e `docs/professionalization-roadmap.md`
+- os mapas técnicos complementares estão em `docs/architecture-map.md` e `docs/evolution-roadmap.md`
 - o checklist de regressão para consolidação da branch está em `docs/regression-checklist.md`
 
 ---

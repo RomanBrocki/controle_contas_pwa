@@ -2,7 +2,7 @@
 
 Esta pasta concentra a camada de BI do projeto.
 
-O objetivo aqui nao e substituir o legado do controle mensal nem empurrar a analise para dentro do modal de relatorios. A proposta e manter uma area separada, testavel e iterativa para leitura executiva e exploracao dos dados.
+O objetivo aqui e manter a leitura analitica em uma area dedicada, separada do controle mensal e dos relatorios formais.
 
 ---
 
@@ -58,8 +58,8 @@ Responsabilidades por camada:
   - composicao da tela final
   - manutencao da integracao entre os blocos do BI
 - `legacy/DashboardViewLegacy.jsx`
-  - referencia congelada da iteracao anterior do dashboard
-  - preservada fora da tela ativa para consulta e comparacao segura
+  - snapshot tecnico preservado para consulta interna
+  - mantido fora da tela ativa para referencia de implementacao
   - mantida em arquivo, sem necessidade de carga no bootstrap ativo
 
 ---
@@ -140,4 +140,5 @@ Melhorias futuras provaveis:
 - drillthrough controlado para detalhe
 - refinamento fino de responsividade
 
-O principio continua o mesmo: evolucao incremental, com baixo risco para o legado.
+O principio continua o mesmo: evolucao incremental, com baixo risco operacional.
+O principio continua o mesmo: evolucao incremental, com baixo risco para a experiencia do usuario e para a manutencao do produto.

@@ -1,8 +1,8 @@
 # Mapa de Arquitetura
 
-Este documento descreve como o app esta organizado hoje e quais fronteiras devemos preservar enquanto profissionalizamos o codigo.
+Este documento descreve como o app esta organizado hoje e quais fronteiras devemos preservar para manter a arquitetura clara e sustentavel.
 
-O principio central e simples: melhorar a estrutura interna sem mudar a UX, os fluxos do produto ou a compatibilidade com GitHub Pages + Supabase free.
+O principio central e simples: manter a estrutura interna clara, a UX estavel e a compatibilidade com GitHub Pages + Supabase free.
 
 ---
 
@@ -57,9 +57,9 @@ Contratos atuais em `window`:
 Por que isso existe:
 
 - o projeto mistura scripts Babel com modulos ES
-- parte do legado consome dependencias por globais, nao por import/export
+- parte da aplicacao consome dependencias por globais, nao por import/export
 - a ordem de carga no HTML funciona como cola de integracao
-- na branch profissional, esses globais permanecem como contratos de runtime e espelhos de compatibilidade, nao como dependencia direta dos componentes principais
+- no estado atual, esses globais permanecem como contratos de runtime e espelhos de compatibilidade, nao como dependencia direta dos componentes principais
 
 Diretriz profissional:
 
@@ -116,7 +116,7 @@ Arquivos:
 
 Responsabilidades:
 
-- sessao espelhada entre Supabase e runtime legado
+- sessao sincronizada entre Supabase e runtime da aplicacao
 - sessao e autenticacao
 - chrome global da area autenticada
 - header, logout e acoes globais
@@ -137,7 +137,7 @@ Ponto de atencao:
 - a shell principal ja compartilha pequenos helpers em `src/post-login/helpers.js`
 - leituras e mutacoes do fluxo principal passam a ser concentradas em `src/post-login/data.js`
 - o caminho ativo de `App.jsx`, `SettingsModal.jsx` e `ReportsModal.jsx` passou a consumir runtime/dados novos, em vez de globais legadas diretas
-- a profissionalizacao deve quebrar esse arquivo em partes menores sem alterar o comportamento externo
+- a manutencao desta area deve continuar priorizando modulos pequenos e contratos explicitos
 
 ---
 
@@ -174,7 +174,7 @@ Ponto de atencao:
 - a area de relatorios agora ja delega renderers locais, DOM auxiliar, builders formais de PDF e workflows de comparativo para `src/reports/*.js`
 - no dashboard, a maior parte dos blocos visuais ja foi extraida para `src/dashboard/components/*.jsx`
 - o estado compartilhado do dashboard passa a ser consolidado em `src/dashboard/orchestration.js`
-- a referencia anterior do dashboard fica congelada em `src/dashboard/legacy/`, evitando misturar historico com a tela ativa e sem precisar entrar no bootstrap atual
+- o snapshot tecnico do dashboard fica arquivado em `src/dashboard/legacy/`, sem entrar no bootstrap atual
 - a melhoria desejada agora e continuar reduzindo estados auxiliares e responsabilidades residuais sem quebrar a compatibilidade do runtime
 
 ---
@@ -201,7 +201,7 @@ O que nao fazer:
 
 ## 7. Definicao de sucesso
 
-Uma etapa conta como profissionalizacao valida quando:
+Uma mudanca conta como evolucao saudavel quando:
 
 - a interface continua igual para o usuario
 - os fluxos principais continuam funcionando

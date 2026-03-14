@@ -1,8 +1,8 @@
-# Roadmap da Branch Profissional
+# Roadmap de Evolucao
 
-Este roadmap define como vamos elevar o projeto para um nivel mais profissional sem perder o legado funcional.
+Este roadmap define prioridades de evolucao para manter o projeto organizado, previsivel e facil de sustentar.
 
-O `main` continua sendo a referencia estavel. Esta branch existe para reorganizar o codigo, fortalecer a documentacao e reduzir acoplamentos internos sem mudar a UX.
+O foco aqui e orientar manutencao, modularizacao adicional e validacao continua sem alterar a UX.
 
 ---
 
@@ -48,7 +48,7 @@ Entregas tipicas:
 
 Meta:
 
-- extrair regras comuns do legado para modulos menores
+- consolidar regras comuns em modulos menores e reutilizaveis
 
 Entregas tipicas:
 
@@ -134,9 +134,9 @@ Entregas tipicas:
 
 ## Quando consolidar no main
 
-So vale consolidar quando:
+So vale publicar ou consolidar quando:
 
-- a branch estiver funcionalmente equivalente ao legado
+- a versao estiver funcionalmente equivalente ao comportamento esperado do produto
 - a documentacao refletir a nova organizacao
 - as etapas de validacao manual estiverem fechadas
-- os pontos mais arriscados do legado estiverem mais claros e menores
+- os pontos mais sensiveis da arquitetura estiverem claros e controlados

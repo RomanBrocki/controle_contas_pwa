@@ -1,10 +1,10 @@
 # Checklist de Regressao
 
-Este documento consolida a validacao manual recomendada antes de consolidar a branch profissional no `main`.
+Este documento consolida a validacao manual recomendada antes de publicar ou consolidar uma nova versao no `main`.
 
 Objetivo:
 
-- confirmar paridade funcional com o legado
+- confirmar paridade funcional com o comportamento esperado do produto
 - validar que a reorganizacao interna nao alterou UX
 - reduzir risco de regressao nas areas mais sensiveis do app
 
@@ -117,7 +117,7 @@ Objetivo:
 
 ## 9. Gate de consolidacao
 
-A branch fica pronta para consolidacao no `main` quando:
+A versao fica pronta para consolidacao no `main` quando:
 
 - todos os fluxos acima estiverem validados
 - o README principal refletir a arquitetura atual

@@ -2,7 +2,11 @@
 
 Esta pasta concentra blocos especificos da shell principal depois do login.
 
-O objetivo aqui e tirar responsabilidades visuais e de composicao de `PostLoginMock.jsx` sem mudar o comportamento do app.
+Objetivo:
+
+- organizar a camada visual da area autenticada
+- concentrar header, resumo mensal, pendencias, chat e notificacoes em componentes claros
+- manter o fluxo principal do controle previsivel e facil de evoluir
 
 Arquivos atuais:
 
