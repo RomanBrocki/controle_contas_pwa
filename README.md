@@ -6,6 +6,18 @@ O projeto roda **100% client-side**, sem build tool e sem backend próprio. A id
 
 ---
 
+## Demonstração
+
+### Controle, configurações e relatórios
+
+![Demonstração do fluxo principal da aplicação](./cont_1.gif)
+
+### Dashboard BI
+
+![Demonstração do dashboard BI](./cont_2.gif)
+
+---
+
 ## 🚀 Visão Geral
 
 O app foi desenhado para registrar contas por usuário autenticado, separando cada lançamento por:
@@ -44,7 +56,6 @@ Com esse modelo, o sistema consegue:
 - **Ajuda contextual na home e no modal de Nova conta**
 - **Navegação dedicada entre Controle e Dashboard**
 - **Dashboard BI em rota própria** (`#/dashboard`)
-- **Gráfico de Pareto** com curva acumulada e foco cruzado
 - **Funcionamento offline básico** com Service Worker
 - **Instalação como PWA**
 
