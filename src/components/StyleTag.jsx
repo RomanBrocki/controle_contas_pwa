@@ -267,6 +267,22 @@ body.theme-gunmetal .modal.solid {
   overflow-wrap: anywhere;
 }
 
+.login-screen {
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
+@media (max-width: 767.98px) and (orientation: portrait) {
+  .login-panel {
+    width: min(100%, 32rem);
+    height: auto;
+    max-height: calc(100svh - 2rem);
+    border-radius: 20px;
+    padding: 20px;
+    overflow: auto;
+  }
+}
+
 
 
 `}</style>

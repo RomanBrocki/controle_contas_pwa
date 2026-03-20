@@ -103,8 +103,8 @@ function LoginGate({ onLogged }) {
   }
 
   return (
-    <div className="min-h-screen theme-gunmetal flex items-center justify-center p-6">
-      <div className="modal solid max-w-md w-full md:max-w-lg">
+    <div className="login-screen theme-gunmetal flex items-center justify-center p-4 sm:p-6">
+      <div className="modal solid login-panel max-w-md w-full md:max-w-lg">
         <h1 className="brand mb-4 flex items-center gap-3 relative">
           <img
             src="./icons/icon-512.png"

@@ -21,6 +21,15 @@ function SettingsModal({ onClose, initial, contasDisponiveis, onSave }) {
     setChartSel(new Set(initial?.chart_accounts || []));
   }, [initial]);
 
+  React.useEffect(() => {
+    function handleKey(event) {
+      if (event.key === 'Escape') onClose();
+    }
+
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
   const toggleConta = (nome) => {
     setChartSel((prev) => {
       const next = new Set(prev);
@@ -31,7 +40,7 @@ function SettingsModal({ onClose, initial, contasDisponiveis, onSave }) {
   };
 
   return (
-    <div className="overlay" onClick={onClose}>
+    <div className="overlay">
       <div className="modal glass max-w-2xl w-full pop" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 mb-3">
           <h3 className="text-lg font-semibold">Configuracoes</h3>

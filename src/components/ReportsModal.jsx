@@ -189,7 +189,7 @@ function ReportsModal({
   }
 
   return (
-    <div className="overlay" onClick={onClose}>
+    <div className="overlay">
       <div
         className={`modal glass ${tab === 'home' ? 'max-w-md' : 'max-w-3xl'} w-full pop`}
         role="dialog"

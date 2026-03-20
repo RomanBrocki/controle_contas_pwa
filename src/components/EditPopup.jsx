@@ -45,14 +45,15 @@ function EditPopupInfoTooltip({ content }) {
 
 function EditPopup({ data, payers, typeOpts = [], onClose, onSave, onDelete }) {
       const { mode, item: initial } = data;
-      // Fecha o modal ao pressionar Esc (desktop apenas)
       React.useEffect(() => {
-        const handleKey = (e) => {
-          if (e.key === 'Escape') onClose();
-        };
+        function handleKey(event) {
+          if (event.key === 'Escape') onClose();
+        }
+
         window.addEventListener('keydown', handleKey);
         return () => window.removeEventListener('keydown', handleKey);
-      }, []);
+      }, [onClose]);
+
       const [form, setForm] = React.useState(()=>({
         nome: initial.nome || '',
         valor: initial.valor || '',
@@ -116,7 +117,7 @@ function EditPopup({ data, payers, typeOpts = [], onClose, onSave, onDelete }) {
 
 
       return (
-        <div className="overlay" onClick={onClose}>
+        <div className="overlay">
           <div className="modal max-w-lg w-full pop" role="dialog" aria-modal="true" aria-labelledby="edit-title" onClick={e=>e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between gap-2">
               <h3 id="edit-title" className="text-lg font-semibold">{mode==='new' ? 'Nova Conta' : 'Editar Conta'}</h3>

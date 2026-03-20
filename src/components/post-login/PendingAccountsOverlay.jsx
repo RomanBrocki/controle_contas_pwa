@@ -8,10 +8,21 @@ function PendingAccountsOverlay(props) {
     onLaunchItem
   } = props;
 
+  React.useEffect(() => {
+    if (!open) return undefined;
+
+    function handleKey(event) {
+      if (event.key === 'Escape') onClose();
+    }
+
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   return (
-    <div className="overlay hard" onClick={onClose}>
+    <div className="overlay hard">
       <div className="modal solid w-full md:max-w-2xl" onClick={(event) => event.stopPropagation()}>
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
           <img
