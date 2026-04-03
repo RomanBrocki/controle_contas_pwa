@@ -541,10 +541,11 @@ Gera um PDF com:
 Gera um PDF com:
 
 - capa executiva com gráfico mensal do recorte
+- meses de contexto adicionais quando o recorte tem menos de 13 meses
 - destaque visual dos meses realmente selecionados quando existe contexto adicional
 - Top 5 contas acumulado no período
-- card de outras contas quando necessário
-- gráficos de linha por conta
+- card de outras contas quando necessário, com capacidade expandida para detalhar mais itens na capa
+- comparativos por conta em PDF usando colunas, linha de tendência e média da conta
 - tabelas segmentadas por mês
 
 ### Comparativos auxiliares
@@ -564,15 +565,15 @@ Tipos utilizados no sistema:
 - pizza e rosca de composição
 - barras comparativas
 - barras de tendência mensal
-- linhas de comparativo por conta
+- comparativos por conta em PDF de período com colunas, linha de tendência e média
 - Pareto
 - composições analíticas do dashboard
 
 ### Regra prática de leitura visual
 
 - os gráficos executivos de barras e os visuais principais do dashboard priorizam leitura absoluta do gasto
-- os comparativos de linha por conta priorizam leitura de variação dentro do próprio recorte
-- os valores absolutos desses comparativos continuam explícitos em labels e tooltips, para evitar leitura enganosa só pela inclinação da linha
+- os comparativos por conta no PDF de período equilibram magnitude absoluta e tendência local usando colunas em zero, linha de conexão e linha média
+- os valores absolutos desses comparativos continuam explícitos em labels, para evitar leitura enganosa só pela inclinação da linha ou pela altura relativa da coluna
 
 No dashboard, parte da visualização é feita de forma mais leve e customizada, sem depender de uma nova biblioteca pesada de BI.
 

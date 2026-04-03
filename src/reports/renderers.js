@@ -3,46 +3,6 @@
     return globalObject.ReportsDom?.appTextColor?.() || '#e5e7eb';
   }
 
-  function computeLineScaleBounds(values) {
-    const numericValues = (values || [])
-      .map((value) => Number(value))
-      .filter((value) => Number.isFinite(value));
-
-    if (!numericValues.length) {
-      return { min: 0, max: 1 };
-    }
-
-    const minValue = Math.min(...numericValues);
-    const maxValue = Math.max(...numericValues);
-    const average = numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length;
-    const range = maxValue - minValue;
-    const reference = Math.max(Math.abs(average), Math.abs(maxValue), 1);
-
-    if (range <= 0.000001) {
-      const halfBand = Math.max(reference * 0.06, 1);
-      return {
-        min: Math.max(0, average - halfBand),
-        max: average + halfBand,
-      };
-    }
-
-    const shouldAnchorAtZero = minValue <= 0 || (range / reference) >= 0.35;
-    if (shouldAnchorAtZero) {
-      const topPadding = Math.max(range * 0.14, reference * 0.06, 1);
-      return {
-        min: 0,
-        max: maxValue + topPadding,
-      };
-    }
-
-    const center = (minValue + maxValue) / 2;
-    const halfBand = Math.max((range * 1.35) / 2, reference * 0.05, 1);
-    return {
-      min: Math.max(0, center - halfBand),
-      max: center + halfBand,
-    };
-  }
-
   function buildPizzaSlices(labels, valores, maxPrimarySlices = 10) {
     const entries = [];
 
@@ -479,13 +439,6 @@
   }
 
   function renderLinhaPeriodoLocal(canvas, { nome, meses, valores }) {
-    const Chart = globalObject.Chart;
-    const Datalabels = globalObject.ChartDataLabels;
-    if (!Chart) {
-      console.error('Chart.js nao carregado para linhas.');
-      return null;
-    }
-
     if (canvas._chart) {
       try { canvas._chart.destroy(); } catch (error) {}
     }
@@ -494,14 +447,14 @@
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, canvas.width, canvas.height);
 
+    const numericValues = (valores || []).map((value) => Number(value || 0));
+    const pointCount = Math.max(1, meses?.length || 0);
     const media = (
-      valores.reduce((accumulator, value) => accumulator + value, 0) /
-      Math.max(1, valores.length)
+      numericValues.reduce((accumulator, value) => accumulator + value, 0) /
+      Math.max(1, numericValues.length)
     ) || 0;
-    const scaleBounds = computeLineScaleBounds(valores);
-    const mediaArr = new Array(valores.length).fill(media);
-    const chartInsetX = Math.max(28, Math.round((canvas.width || 1100) * 0.05));
-
+    const maxValue = Math.max(1, media, ...numericValues);
+    const scaleMax = Math.max(1, maxValue * 1.12);
     const inicio = meses[0];
     const fim = meses[meses.length - 1];
     const titulo = `Comparativo de conta '${nome}' \u2014 ${inicio} a ${fim}`;
@@ -509,137 +462,173 @@
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
+    const denseChart = pointCount >= 10;
+    const veryDenseChart = pointCount >= 14;
+    const rotateValueLabels = pointCount > 12;
+    const valueLabelRotation = rotateValueLabels ? 45 : 0;
+    const valueLabelRotationRadians = (valueLabelRotation * Math.PI) / 180;
+    const tickRotation = veryDenseChart ? 50 : denseChart ? 42 : 0;
+    const tickAreaHeight = tickRotation > 0 ? 92 : 58;
+    const plotLeft = 46;
+    const plotRight = canvas.width - 24;
+    const plotTop = 106;
+    const plotBottom = canvas.height - tickAreaHeight - 24;
+    const plotWidth = Math.max(plotRight - plotLeft, 1);
+    const plotHeight = Math.max(plotBottom - plotTop, 1);
+    const slotWidth = plotWidth / pointCount;
+    const barWidth = Math.max(
+      veryDenseChart ? 18 : denseChart ? 22 : 26,
+      Math.min(
+        veryDenseChart ? 24 : denseChart ? 28 : 34,
+        slotWidth * (veryDenseChart ? 0.46 : denseChart ? 0.52 : 0.58)
+      )
+    );
+    const labelFontSize = veryDenseChart ? 9 : 10;
+    const valueLabelOffset = veryDenseChart ? 8 : 10;
+    const tickFontSize = veryDenseChart ? 10 : 11;
 
-    const xBaselinePlugin = {
-      id: 'xBaseline',
-      afterDraw(chart) {
-        const { ctx, chartArea } = chart;
-        if (!chartArea) return;
-
-        ctx.save();
-        ctx.strokeStyle = globalObject.__PDF_MODE
-          ? (getComputedStyle(document.documentElement).getPropertyValue('--chart-line-pdf') || '#4b5563')
-          : 'rgba(255,255,255,0.35)';
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.moveTo(chartArea.left, chartArea.bottom);
-        ctx.lineTo(chartArea.right, chartArea.bottom);
-        ctx.stroke();
-        ctx.restore();
-      },
-    };
-
-    if (Datalabels && !Chart.registry.plugins.get('datalabels')) {
-      try { Chart.register(Datalabels); } catch (error) {}
+    function formatValueLabel(value) {
+      return `R$ ${Number(value || 0).toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
     }
 
-    const chart = new Chart(context, {
-      type: 'line',
-      data: {
-        labels: meses,
-        datasets: [
-          {
-            label: nome,
-            data: valores,
-            borderColor: 'rgba(59,130,246,1)',
-            backgroundColor: 'rgba(59,130,246,0.12)',
-            tension: 0,
-            pointRadius: 4,
-            pointHoverRadius: 5,
-            fill: false,
-          },
-          {
-            label: mediaTxt,
-            data: mediaArr,
-            borderColor: 'rgba(148,163,184,0.95)',
-            borderDash: [6, 4],
-            pointRadius: 0,
-            borderWidth: 2,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          title: {
-            display: true,
-            text: titulo,
-            font: { size: 18, weight: 'bold' },
-            padding: { top: 10, bottom: 6 },
-            color: globalObject.__PDF_MODE
-              ? (getComputedStyle(document.documentElement).getPropertyValue('--chart-text-pdf') || '#111827')
-              : appTextColor(),
-          },
-          legend: {
-            position: 'top',
-            labels: {
-              color: globalObject.__PDF_MODE
-                ? (getComputedStyle(document.documentElement).getPropertyValue('--chart-text-pdf') || '#111827')
-                : appTextColor(),
-              font: { size: 12 },
-              filter: (item) => item.datasetIndex === 1,
-            },
-          },
-          tooltip: {
-            callbacks: {
-              label: (ctx) =>
-                `R$ ${ctx.parsed.y.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            },
-          },
-          datalabels: {
-            display: (ctx) => ctx.datasetIndex === 0,
-            align: 'top',
-            anchor: 'end',
-            color: globalObject.__PDF_MODE ? '#111827' : '#e5e7eb',
-            font: { size: 10, weight: '500' },
-            formatter: (value) =>
-              `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
-            offset: 6,
-            clamp: true,
-            clip: false,
-          },
-          xBaseline: {},
-        },
-        scales: {
-          x: {
-            grid: { display: false },
-            ticks: {
-              color: globalObject.__PDF_MODE
-                ? (getComputedStyle(document.documentElement).getPropertyValue('--chart-text-pdf') || '#111827')
-                : appTextColor(),
-              maxRotation: 45,
-              minRotation: 45,
-            },
-            border: { display: false },
-          },
-          y: {
-            min: scaleBounds.min,
-            max: scaleBounds.max,
-            display: false,
-            grid: { display: false },
-            border: { display: false },
-          },
-        },
-        layout: {
-          padding: {
-            left: chartInsetX,
-            right: chartInsetX + 24,
-            top: 14,
-            bottom: 0,
-          },
-        },
-      },
-      plugins: [Datalabels, xBaselinePlugin].filter(Boolean),
+    function drawRoundedBar(x, y, width, height, radius = 6) {
+      const rr = Math.min(radius, Math.abs(width) / 2, Math.abs(height) / 2);
+      context.beginPath();
+      context.moveTo(x, y + height);
+      context.lineTo(x, y + rr);
+      context.quadraticCurveTo(x, y, x + rr, y);
+      context.lineTo(x + width - rr, y);
+      context.quadraticCurveTo(x + width, y, x + width, y + rr);
+      context.lineTo(x + width, y + height);
+      context.closePath();
+    }
+
+    context.fillStyle = '#111827';
+    context.font = 'bold 18px Arial';
+    context.textAlign = 'center';
+    context.textBaseline = 'alphabetic';
+    context.fillText(titulo, canvas.width / 2, 40);
+
+    const legendTextWidth = context.measureText(mediaTxt).width;
+    const legendLineWidth = 34;
+    const legendGap = 12;
+    const legendGroupWidth = legendLineWidth + legendGap + legendTextWidth;
+    let legendStartX = (canvas.width - legendGroupWidth) / 2;
+
+    context.strokeStyle = 'rgba(107, 114, 128, 0.92)';
+    context.lineWidth = 2;
+    context.setLineDash([7, 6]);
+    context.beginPath();
+    context.moveTo(legendStartX, 76);
+    context.lineTo(legendStartX + legendLineWidth, 76);
+    context.stroke();
+    context.setLineDash([]);
+
+    context.fillStyle = '#374151';
+    context.font = '13px Arial';
+    context.textAlign = 'left';
+    context.fillText(mediaTxt, legendStartX + legendLineWidth + legendGap, 80);
+
+    const averageY = plotBottom - ((media / scaleMax) * plotHeight);
+    context.strokeStyle = 'rgba(107, 114, 128, 0.92)';
+    context.lineWidth = 1.4;
+    context.setLineDash([6, 6]);
+    context.beginPath();
+    context.moveTo(plotLeft, averageY);
+    context.lineTo(plotRight, averageY);
+    context.stroke();
+    context.setLineDash([]);
+
+    context.strokeStyle = '#4b5563';
+    context.lineWidth = 1.6;
+    context.beginPath();
+    context.moveTo(plotLeft, plotBottom);
+    context.lineTo(plotRight, plotBottom);
+    context.stroke();
+
+    context.beginPath();
+    numericValues.forEach((value, index) => {
+      const centerX = plotLeft + (slotWidth * (index + 0.5));
+      const pointY = plotBottom - ((value / scaleMax) * plotHeight);
+      if (index === 0) {
+        context.moveTo(centerX, pointY);
+      } else {
+        context.lineTo(centerX, pointY);
+      }
+    });
+    context.strokeStyle = 'rgba(75, 85, 99, 0.94)';
+    context.lineWidth = 1.8;
+    context.stroke();
+
+    numericValues.forEach((value, index) => {
+      const centerX = plotLeft + (slotWidth * (index + 0.5));
+      const pointY = plotBottom - ((value / scaleMax) * plotHeight);
+      const barHeight = Math.max(0, (value / scaleMax) * plotHeight);
+      const barLeft = centerX - (barWidth / 2);
+      const barTop = plotBottom - barHeight;
+
+      context.fillStyle = 'rgba(59, 130, 246, 0.22)';
+      context.strokeStyle = 'rgba(59, 130, 246, 0.35)';
+      context.lineWidth = 1;
+      drawRoundedBar(barLeft, barTop, barWidth, barHeight, 6);
+      context.fill();
+      context.stroke();
+
+      context.fillStyle = 'rgba(75, 85, 99, 0.94)';
+      context.beginPath();
+      context.arc(centerX, pointY, 3.5, 0, Math.PI * 2);
+      context.fill();
+
+      const valueLabel = formatValueLabel(value);
+      context.fillStyle = '#374151';
+      context.font = `${labelFontSize}px Arial`;
+      const labelWidth = context.measureText(valueLabel).width;
+      const minCenter = plotLeft + (labelWidth / 2) + 4;
+      const maxCenter = plotRight - (labelWidth / 2) - 4;
+      const labelCenterX = Math.min(Math.max(centerX, minCenter), maxCenter);
+      const rotatedHalfHeight = rotateValueLabels
+        ? ((labelWidth * Math.sin(valueLabelRotationRadians)) + (labelFontSize * Math.cos(valueLabelRotationRadians))) / 2
+        : 0;
+      const labelY = Math.max(
+        Math.min(barTop, pointY) - (rotateValueLabels ? valueLabelOffset + 4 : valueLabelOffset),
+        plotTop + (rotateValueLabels ? rotatedHalfHeight + 4 : labelFontSize + 2)
+      );
+
+      if (rotateValueLabels) {
+        context.save();
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.translate(labelCenterX, labelY);
+        context.rotate((-valueLabelRotation * Math.PI) / 180);
+        context.fillText(valueLabel, 0, 0);
+        context.restore();
+      } else {
+        context.textAlign = 'center';
+        context.textBaseline = 'bottom';
+        context.fillText(valueLabel, labelCenterX, labelY);
+      }
+
+      context.fillStyle = '#374151';
+      context.font = `${tickFontSize}px Arial`;
+      context.textAlign = 'center';
+      context.textBaseline = 'top';
+      if (tickRotation > 0) {
+        context.save();
+        context.translate(centerX, plotBottom + 14);
+        context.rotate((-tickRotation * Math.PI) / 180);
+        context.fillText(meses[index], 0, 0);
+        context.restore();
+      } else {
+        context.fillText(meses[index], centerX, plotBottom + 12);
+      }
     });
 
-    if (globalObject.__PDF_MODE && globalObject.ChartFeatures?.applyPdfTheme) {
-      globalObject.ChartFeatures.applyPdfTheme(chart);
-    }
-
     globalObject.ReportsDom?.forceWhiteBackground?.(canvas);
-    canvas._chart = chart;
-    return chart;
+    canvas._chart = null;
+    return null;
   }
 
   globalObject.ReportsRenderers = {

@@ -1047,6 +1047,9 @@
     const usesSelectionWindow = payload.monthlyTotals.some((item) => typeof item.isSelected === 'boolean');
     const denseChart = pointCount > 13;
     const veryDenseChart = pointCount > 18;
+    const rotateValueLabels = pointCount > 24;
+    const valueLabelRotation = rotateValueLabels ? 45 : 0;
+    const valueLabelRotationRadians = (valueLabelRotation * Math.PI) / 180;
     const tickRotation = pointCount <= 13 ? 0 : computePdfTickRotation(pointCount);
     const tickFontSize = veryDenseChart ? 8 : denseChart ? 9 : 10;
     const valueLabelFontSize = veryDenseChart ? 8 : denseChart ? 9 : 10;
@@ -1162,14 +1165,31 @@
         const valueLabel = formatCompactBrlValue(value);
         context.fillStyle = '#111827';
         context.font = `bold ${valueLabelFontSize}px Arial`;
-        context.textAlign = 'center';
-        context.textBaseline = 'bottom';
         const valueLabelWidth = context.measureText(valueLabel).width;
         const minCenter = plotLeft + (valueLabelWidth / 2) + 4;
         const maxCenter = plotRight - (valueLabelWidth / 2) - 4;
         const labelCenterX = Math.min(Math.max(barCenterX, minCenter), maxCenter);
-        const labelY = Math.max(barTop - 10, plotTop + valueLabelFontSize + 3);
-        context.fillText(valueLabel, labelCenterX, labelY);
+        const rotatedHalfHeight = rotateValueLabels
+          ? ((valueLabelWidth * Math.sin(valueLabelRotationRadians)) + (valueLabelFontSize * Math.cos(valueLabelRotationRadians))) / 2
+          : 0;
+        const labelY = Math.max(
+          barTop - (rotateValueLabels ? 14 : 10),
+          plotTop + (rotateValueLabels ? rotatedHalfHeight + 4 : valueLabelFontSize + 3)
+        );
+
+        if (rotateValueLabels) {
+          context.save();
+          context.textAlign = 'center';
+          context.textBaseline = 'middle';
+          context.translate(labelCenterX, labelY);
+          context.rotate((-valueLabelRotation * Math.PI) / 180);
+          context.fillText(valueLabel, 0, 0);
+          context.restore();
+        } else {
+          context.textAlign = 'center';
+          context.textBaseline = 'bottom';
+          context.fillText(valueLabel, labelCenterX, labelY);
+        }
       }
 
       context.fillStyle = '#374151';
@@ -1276,13 +1296,14 @@
     const topFive = payload.rankingAccounts.slice(0, 5);
     const others = payload.rankingAccounts.slice(5);
     const othersTotal = others.reduce((accumulator, item) => accumulator + item.total, 0);
-    const maxVisibleOthers = 10;
+    const maxVisibleOthers = 20;
     const visibleOthers = others.slice(0, maxVisibleOthers);
     const hiddenOthers = Math.max(others.length - visibleOthers.length, 0);
-    const splitOthersInColumns = visibleOthers.length > 5;
+    const splitOthersInColumns = visibleOthers.length > 10;
+    const compactSingleColumn = !splitOthersInColumns && visibleOthers.length > 7;
     const leftX = 48;
     const leftWidth = 602;
-    const rightX = 690;
+    const rightX = 670;
     const rightWidth = width - rightX - 48;
     const barHeight = 24;
     const rowGap = 30;
@@ -1334,21 +1355,22 @@
     context.fillText(`${others.length} conta${others.length === 1 ? '' : 's'} fora do Top 5`, rightX + 20, 124);
     context.fillText(`Total: ${formatBrlValue(othersTotal)}`, rightX + 20, 144);
 
-    const othersFontSize = splitOthersInColumns ? 11 : 12;
-    const othersLineHeight = splitOthersInColumns ? 18 : 22;
-    const othersColumnGap = splitOthersInColumns ? 16 : 0;
+    const othersFontSize = visibleOthers.length > 12 ? 10 : splitOthersInColumns ? 11 : compactSingleColumn ? 11 : 12;
+    const othersLineHeight = visibleOthers.length > 12 ? 16 : splitOthersInColumns ? 18 : compactSingleColumn ? 18 : 22;
+    const othersColumnGap = splitOthersInColumns ? 14 : 0;
     const othersInnerWidth = rightWidth - 40;
     const othersColumnWidth = splitOthersInColumns
       ? Math.floor((othersInnerWidth - othersColumnGap) / 2)
       : othersInnerWidth;
     const rowsPerColumn = splitOthersInColumns ? Math.ceil(visibleOthers.length / 2) : visibleOthers.length;
+    const othersStartY = compactSingleColumn ? 170 : 176;
 
     visibleOthers.forEach((item, index) => {
       const columnIndex = splitOthersInColumns ? Math.floor(index / rowsPerColumn) : 0;
       const rowIndex = splitOthersInColumns ? (index % rowsPerColumn) : index;
       const columnX = rightX + 20 + columnIndex * (othersColumnWidth + othersColumnGap);
-      const rowY = 176 + rowIndex * othersLineHeight;
-      const valueWidth = splitOthersInColumns ? 92 : 104;
+      const rowY = othersStartY + rowIndex * othersLineHeight;
+      const valueWidth = splitOthersInColumns ? 72 : 92;
       const nameMaxWidth = othersColumnWidth - valueWidth - 10;
 
       context.fillStyle = '#111827';
@@ -1359,6 +1381,7 @@
         rowY
       );
       context.textAlign = 'right';
+      context.font = `${Math.max(othersFontSize - 1, 9)}px Arial`;
       context.fillText(
         formatBrlValue(item.total),
         columnX + othersColumnWidth,
@@ -1443,7 +1466,7 @@
       const pontosNaoZero = valores.filter((value) => value > 0.001).length;
       if (pontosNaoZero < 1) continue;
 
-      const lineCanvas = addCanvas(host, 600, 1100);
+      const lineCanvas = addCanvas(host, 700, 1100);
       renderLinhaPeriodoLocal(lineCanvas, {
         nome: conta,
         meses: monthLabels,
@@ -1745,7 +1768,7 @@
         const pontosNaoZero = valores.filter((value) => value > 0.001).length;
         if (pontosNaoZero < 1) continue;
 
-        const lineCanvas = addCanvas(host, '600px', '1100px');
+        const lineCanvas = addCanvas(host, '700px', '1100px');
         renderLinhaPeriodoLocal(lineCanvas, {
           nome: conta,
           meses: monthLabels,
