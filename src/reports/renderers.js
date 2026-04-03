@@ -3,6 +3,46 @@
     return globalObject.ReportsDom?.appTextColor?.() || '#e5e7eb';
   }
 
+  function computeLineScaleBounds(values) {
+    const numericValues = (values || [])
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value));
+
+    if (!numericValues.length) {
+      return { min: 0, max: 1 };
+    }
+
+    const minValue = Math.min(...numericValues);
+    const maxValue = Math.max(...numericValues);
+    const average = numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length;
+    const range = maxValue - minValue;
+    const reference = Math.max(Math.abs(average), Math.abs(maxValue), 1);
+
+    if (range <= 0.000001) {
+      const halfBand = Math.max(reference * 0.06, 1);
+      return {
+        min: Math.max(0, average - halfBand),
+        max: average + halfBand,
+      };
+    }
+
+    const shouldAnchorAtZero = minValue <= 0 || (range / reference) >= 0.35;
+    if (shouldAnchorAtZero) {
+      const topPadding = Math.max(range * 0.14, reference * 0.06, 1);
+      return {
+        min: 0,
+        max: maxValue + topPadding,
+      };
+    }
+
+    const center = (minValue + maxValue) / 2;
+    const halfBand = Math.max((range * 1.35) / 2, reference * 0.05, 1);
+    return {
+      min: Math.max(0, center - halfBand),
+      max: center + halfBand,
+    };
+  }
+
   function buildPizzaSlices(labels, valores, maxPrimarySlices = 10) {
     const entries = [];
 
@@ -458,6 +498,7 @@
       valores.reduce((accumulator, value) => accumulator + value, 0) /
       Math.max(1, valores.length)
     ) || 0;
+    const scaleBounds = computeLineScaleBounds(valores);
     const mediaArr = new Array(valores.length).fill(media);
     const chartInsetX = Math.max(28, Math.round((canvas.width || 1100) * 0.05));
 
@@ -502,7 +543,7 @@
             data: valores,
             borderColor: 'rgba(59,130,246,1)',
             backgroundColor: 'rgba(59,130,246,0.12)',
-            tension: 0.28,
+            tension: 0,
             pointRadius: 4,
             pointHoverRadius: 5,
             fill: false,
@@ -537,7 +578,7 @@
                 ? (getComputedStyle(document.documentElement).getPropertyValue('--chart-text-pdf') || '#111827')
                 : appTextColor(),
               font: { size: 12 },
-              filter: () => true,
+              filter: (item) => item.datasetIndex === 1,
             },
           },
           tooltip: {
@@ -554,6 +595,7 @@
             font: { size: 10, weight: '500' },
             formatter: (value) =>
               `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            offset: 6,
             clamp: true,
             clip: false,
           },
@@ -572,6 +614,8 @@
             border: { display: false },
           },
           y: {
+            min: scaleBounds.min,
+            max: scaleBounds.max,
             display: false,
             grid: { display: false },
             border: { display: false },
@@ -581,7 +625,7 @@
           padding: {
             left: chartInsetX,
             right: chartInsetX + 24,
-            top: 8,
+            top: 14,
             bottom: 0,
           },
         },

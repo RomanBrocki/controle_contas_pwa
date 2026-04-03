@@ -52,6 +52,46 @@ function __appText() {
   return __isLightTheme() ? '#0b1220' : '#e5e7eb';
 }
 
+function __computeLineScaleBounds(values) {
+  const numericValues = (values || [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+
+  if (!numericValues.length) {
+    return { min: 0, max: 1 };
+  }
+
+  const minValue = Math.min(...numericValues);
+  const maxValue = Math.max(...numericValues);
+  const average = numericValues.reduce((sum, value) => sum + value, 0) / numericValues.length;
+  const range = maxValue - minValue;
+  const reference = Math.max(Math.abs(average), Math.abs(maxValue), 1);
+
+  if (range <= 0.000001) {
+    const halfBand = Math.max(reference * 0.06, 1);
+    return {
+      min: Math.max(0, average - halfBand),
+      max: average + halfBand,
+    };
+  }
+
+  const shouldAnchorAtZero = minValue <= 0 || (range / reference) >= 0.35;
+  if (shouldAnchorAtZero) {
+    const topPadding = Math.max(range * 0.14, reference * 0.06, 1);
+    return {
+      min: 0,
+      max: maxValue + topPadding,
+    };
+  }
+
+  const center = (minValue + maxValue) / 2;
+  const halfBand = Math.max((range * 1.35) / 2, reference * 0.05, 1);
+  return {
+    min: Math.max(0, center - halfBand),
+    max: center + halfBand,
+  };
+}
+
 // === Paleta "PDF-friendly" ===
 export function applyPdfTheme(chart) {
   const css = getComputedStyle(document.documentElement);
@@ -614,6 +654,135 @@ export function renderLinhaContaPeriodo(canvas, data) {
   return chart;
 }
 
+function renderLinhaContaPeriodoRuntime(canvas, data) {
+  if (!window.Chart) return console.error('Chart.js não carregado.');
+  if (!data || !data.meses?.length) return console.warn('Sem dados para linhas.');
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  if (canvas._chart) canvas._chart.destroy();
+
+  const __TXT = __appText();
+  const media = data.valores.reduce((a, b) => a + b, 0) / Math.max(1, data.valores.length);
+  const scaleBounds = __computeLineScaleBounds(data.valores);
+  const mediaArr = Array(data.valores.length).fill(media);
+  const ini = data.meses[0];
+  const fim = data.meses[data.meses.length - 1];
+  const titulo = `Comparativo de conta '${data.nome}' - ${ini} a ${fim}`;
+  const mediaTxt = `Média da conta: R$ ${media.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const xBaselinePlugin = {
+    id: 'xBaseline',
+    afterDraw(chart, _args, opts) {
+      const { ctx, chartArea } = chart;
+      if (!chartArea) return;
+      ctx.save();
+      ctx.strokeStyle = (opts && opts.color) || 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = (opts && opts.width) || 1.5;
+      ctx.beginPath();
+      ctx.moveTo(chartArea.left, chartArea.bottom);
+      ctx.lineTo(chartArea.right, chartArea.bottom);
+      ctx.stroke();
+      ctx.restore();
+    }
+  };
+
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.meses,
+      datasets: [
+        {
+          label: data.nome,
+          data: data.valores,
+          borderColor: 'rgba(59,130,246,1)',
+          backgroundColor: 'rgba(59,130,246,0.15)',
+          tension: 0,
+          pointRadius: 4,
+          pointHoverRadius: 5,
+          fill: false,
+        },
+        {
+          label: mediaTxt,
+          data: mediaArr,
+          borderColor: 'rgba(148,163,184,0.95)',
+          borderDash: [6, 4],
+          pointRadius: 0,
+          borderWidth: 2,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'nearest', intersect: false },
+      plugins: {
+        title: {
+          display: true,
+          text: titulo,
+          font: { size: 18, weight: 'bold' },
+          padding: { top: 12, bottom: 8 },
+          color: __TXT,
+        },
+        legend: {
+          position: 'top',
+          labels: {
+            color: __TXT,
+            font: { size: 12 },
+            filter: (item) => item.datasetIndex === 1
+          }
+        },
+        tooltip: {
+          mode: 'nearest',
+          intersect: true,
+          callbacks: {
+            label: (tooltipContext) => `R$ ${tooltipContext.parsed.y.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+          }
+        },
+        datalabels: {
+          display: (labelContext) => labelContext.datasetIndex === 0,
+          align: 'top',
+          anchor: 'end',
+          color: '#e5e7eb',
+          font: { size: 11 },
+          formatter: (value) => `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+          offset: 6,
+          clamp: true,
+          clip: false
+        },
+        xBaseline: { color: 'rgba(255,255,255,0.4)', width: 1.5 }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: {
+            color: __TXT,
+            maxRotation: 45,
+            minRotation: 45
+          },
+          border: { display: false }
+        },
+        y: {
+          min: scaleBounds.min,
+          max: scaleBounds.max,
+          display: false,
+          grid: { display: false },
+          border: { display: false }
+        }
+      },
+      elements: {
+        line: { borderWidth: 3 },
+        point: { backgroundColor: 'rgba(59,130,246,1)' }
+      },
+      layout: { padding: { top: 14, right: 8, bottom: 0, left: 8 } }
+    },
+    plugins: [window.ChartDataLabels, xBaselinePlugin].filter(Boolean)
+  });
+
+  canvas._chart = chart;
+  return chart;
+}
+
 
 
 
@@ -622,7 +791,7 @@ window.ChartFeatures = {
   setupChartDefaults,
   renderPizzaMensal,
   renderBarrasComparativas,
-  renderLinhaContaPeriodo,
+  renderLinhaContaPeriodo: renderLinhaContaPeriodoRuntime,
   applyPdfTheme,
 };
 

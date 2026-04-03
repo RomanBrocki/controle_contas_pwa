@@ -85,25 +85,92 @@
       .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   }
 
+  function totalsMapToRankedEntries(totalsMap) {
+    return Array.from(totalsMap.entries())
+      .map(([name, total]) => ({ name, total }))
+      .sort((left, right) => right.total - left.total);
+  }
+
+  function buildSafeTotalsMap(items, resolveKey) {
+    const totals = new Map();
+
+    (items || []).forEach((item) => {
+      const key = resolveKey(item) || '-';
+      totals.set(key, (totals.get(key) || 0) + parseBRLnum(item.valor));
+    });
+
+    return totals;
+  }
+
+  function normalizeMonthItems(monthItemsRaw, year, month) {
+    return (monthItemsRaw || []).map((item) => ({
+      ...item,
+      ano: Number(item.ano || year),
+      mes: Number(item.mes || month),
+    }));
+  }
+
   async function loadPeriodSource(monthsList) {
     const itemsByMonth = new Map();
     const allItems = [];
+    const monthEntries = [];
+    const batchSize = 4;
 
-    for (const { y, m } of monthsList) {
-      const key = periodMonthKey(y, m);
-      const monthItemsRaw = await fetchMes(y, m) || [];
+    for (let startIndex = 0; startIndex < monthsList.length; startIndex += batchSize) {
+      const batch = monthsList.slice(startIndex, startIndex + batchSize);
+      const batchEntries = await Promise.all(
+        batch.map(async ({ y, m }) => {
+          const key = periodMonthKey(y, m);
+          const monthItemsRaw = await fetchMes(y, m) || [];
 
-      const monthItems = monthItemsRaw.map((item) => ({
-        ...item,
-        ano: Number(item.ano || y),
-        mes: Number(item.mes || m),
-      }));
+          return {
+            key,
+            monthItems: normalizeMonthItems(monthItemsRaw, y, m),
+          };
+        })
+      );
 
-      itemsByMonth.set(key, monthItems);
-      allItems.push(...monthItems);
+      monthEntries.push(...batchEntries);
     }
 
+    monthEntries.forEach(({ key, monthItems }) => {
+      itemsByMonth.set(key, monthItems);
+      allItems.push(...monthItems);
+    });
+
     return { itemsByMonth, allItems };
+  }
+
+  function buildMonthAccountTotalsLookup(monthsList, itemsByMonth) {
+    const accountTotalsByMonth = new Map();
+
+    monthsList.forEach(({ y, m }) => {
+      const monthKey = periodMonthKey(y, m);
+      const monthItems = itemsByMonth.get(monthKey) || [];
+      accountTotalsByMonth.set(
+        monthKey,
+        buildSafeTotalsMap(monthItems, (item) => normalizeContaName(item?.nome))
+      );
+    });
+
+    return accountTotalsByMonth;
+  }
+
+  function buildAccountTimelineValues(monthsList, accountTotalsByMonth, conta) {
+    const targetAccount = normalizeContaName(conta);
+
+    return monthsList.map(({ y, m }) => {
+      const monthKey = periodMonthKey(y, m);
+      const monthTotals = accountTotalsByMonth.get(monthKey);
+      return monthTotals?.get(targetAccount) || 0;
+    });
+  }
+
+  function hasItemsInPeriodMonths(monthsList, itemsByMonth) {
+    return monthsList.some(({ y, m }) => {
+      const monthItems = itemsByMonth.get(periodMonthKey(y, m)) || [];
+      return monthItems.length > 0;
+    });
   }
 
   function buildPeriodAggregateData(monthsList, itemsByMonth, allItems) {
@@ -139,12 +206,8 @@
       labelLong: `${monthNamePT(m)} / ${y}`,
       value: monthTotals.get(periodMonthKey(y, m)) || 0,
     }));
-    const rankingAccounts = Array.from(accountTotals.entries())
-      .map(([name, total]) => ({ name, total }))
-      .sort((left, right) => right.total - left.total);
-    const rankingPayers = Array.from(payerTotals.entries())
-      .map(([name, total]) => ({ name, total }))
-      .sort((left, right) => right.total - left.total);
+    const rankingAccounts = totalsMapToRankedEntries(accountTotals);
+    const rankingPayers = totalsMapToRankedEntries(payerTotals);
 
     return {
       contasAll,
@@ -496,28 +559,23 @@
   }
 
   function buildMonthlyAccountComparison(itemsMes, itemsAnt, itemsAnoAnt, chartAccounts) {
-    const contasAll = Array.from(new Set(itemsMes.map((item) => item.nome)))
+    const currentTotals = buildSafeTotalsMap(itemsMes, (item) => item?.nome);
+    const previousTotals = buildSafeTotalsMap(itemsAnt, (item) => item?.nome);
+    const previousYearTotals = buildSafeTotalsMap(itemsAnoAnt, (item) => item?.nome);
+    const contasAll = Array.from(currentTotals.keys())
       .sort((a, b) => a.localeCompare(b, 'pt-BR'));
-    const valoresAll = contasAll.map((conta) =>
-      itemsMes
-        .filter((item) => item.nome === conta)
-        .reduce((accumulator, item) => accumulator + parseBRLnum(item.valor), 0)
-    );
+    const valoresAll = contasAll.map((conta) => currentTotals.get(conta) || 0);
     const contasBarras = chartAccounts?.length ? chartAccounts : contasAll;
-    const sumByConta = (items, contasSel) =>
-      contasSel.map((conta) =>
-        items
-          .filter((item) => item.nome === conta)
-          .reduce((accumulator, item) => accumulator + parseBRLnum(item.valor), 0)
-      );
+    const sumByConta = (totalsMap, contasSel) =>
+      contasSel.map((conta) => totalsMap.get(conta) || 0);
 
     return {
       contasAll,
       valoresAll,
       contasBarras,
-      curVals: sumByConta(itemsMes, contasBarras),
-      antVals: sumByConta(itemsAnt, contasBarras),
-      anoAntVals: sumByConta(itemsAnoAnt, contasBarras),
+      curVals: sumByConta(currentTotals, contasBarras),
+      antVals: sumByConta(previousTotals, contasBarras),
+      anoAntVals: sumByConta(previousYearTotals, contasBarras),
     };
   }
 
@@ -1376,15 +1434,11 @@
       ? payload.configuredChartAccounts
       : payload.contasAll;
     const contasLinhas = contasLinhasBase.slice(0, 7);
+    const accountTotalsByMonth = buildMonthAccountTotalsLookup(payload.monthsList, payload.itemsByMonth);
+    const monthLabels = payload.monthsList.map(({ y, m }) => `${String(m).padStart(2, '0')}/${y}`);
 
     for (const conta of contasLinhas) {
-      const valores = payload.monthsList.map(({ y, m }) => {
-        const monthItems = payload.itemsByMonth.get(periodMonthKey(y, m)) || [];
-        const alvo = normalizeContaName(conta);
-        return monthItems
-          .filter((item) => normalizeContaName(item.nome) === alvo)
-          .reduce((accumulator, item) => accumulator + parseBRLnum(item.valor), 0);
-      });
+      const valores = buildAccountTimelineValues(payload.monthsList, accountTotalsByMonth, conta);
 
       const pontosNaoZero = valores.filter((value) => value > 0.001).length;
       if (pontosNaoZero < 1) continue;
@@ -1392,17 +1446,14 @@
       const lineCanvas = addCanvas(host, 600, 1100);
       renderLinhaPeriodoLocal(lineCanvas, {
         nome: conta,
-        meses: payload.monthsList.map(({ y, m }) => `${String(m).padStart(2, '0')}/${y}`),
+        meses: monthLabels,
         valores,
       });
       await flushRender();
       canvases.push(lineCanvas);
     }
 
-    const listingMarkersInserted = payload.monthsList.some(({ y, m }) => {
-      const current = payload.itemsByMonth.get(periodMonthKey(y, m)) || [];
-      return current.length > 0;
-    });
+    const listingMarkersInserted = hasItemsInPeriodMonths(payload.monthsList, payload.itemsByMonth);
 
     if (listingMarkersInserted) {
       canvases.push(buildPageBreakMarker());
@@ -1645,19 +1696,11 @@
         return;
       }
 
-      const allItems = [];
-      for (const { y, m } of monthsList) {
-        const monthItems = await fetchMes(y, m) || [];
-        allItems.push(...monthItems);
-      }
-
-      const contasAll = Array.from(new Set(allItems.map((item) => item.nome)))
-        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
-      const valoresAll = contasAll.map((conta) =>
-        allItems
-          .filter((item) => item.nome === conta)
-          .reduce((accumulator, item) => accumulator + parseBRLnum(item.valor), 0)
-      );
+      const { itemsByMonth, allItems } = await loadPeriodSource(monthsList);
+      const aggregate = buildPeriodAggregateData(monthsList, itemsByMonth, allItems);
+      const accountTotalsByMonth = buildMonthAccountTotalsLookup(monthsList, itemsByMonth);
+      const contasAll = aggregate.contasAll;
+      const valoresAll = aggregate.valoresAll;
 
       const rotPeriodo = `${String(startMonth).padStart(2, '0')}/${startYear} a ${String(endMonth).padStart(2, '0')}/${endYear}`;
       const pizzaCanvas = addCanvas(host, '560px', '900px');
@@ -1673,7 +1716,7 @@
       forceWhiteBackground(pizzaCanvas);
       canvases.push(pizzaCanvas);
 
-      const totalPeriodo = valoresAll.reduce((accumulator, value) => accumulator + value, 0);
+      const totalPeriodo = aggregate.totalPeriodo;
       const totalCanvas = addCanvas(host, '80px', '900px');
       {
         const context2d = totalCanvas.getContext('2d');
@@ -1694,17 +1737,10 @@
 
       const contasLinhasBase = configuredChartAccounts.length ? configuredChartAccounts : contasAll;
       const contasLinhas = contasLinhasBase.slice(0, 7);
+      const monthLabels = monthsList.map(({ y, m }) => `${String(m).padStart(2, '0')}/${y}`);
 
       for (const conta of contasLinhas) {
-        const valores = [];
-        for (const { y, m } of monthsList) {
-          const monthItems = await fetchMes(y, m) || [];
-          const alvo = normalizeContaName(conta);
-          const soma = monthItems
-            .filter((item) => normalizeContaName(item.nome) === alvo)
-            .reduce((accumulator, item) => accumulator + parseBRLnum(item.valor), 0);
-          valores.push(soma);
-        }
+        const valores = buildAccountTimelineValues(monthsList, accountTotalsByMonth, conta);
 
         const pontosNaoZero = valores.filter((value) => value > 0.001).length;
         if (pontosNaoZero < 1) continue;
@@ -1712,7 +1748,7 @@
         const lineCanvas = addCanvas(host, '600px', '1100px');
         renderLinhaPeriodoLocal(lineCanvas, {
           nome: conta,
-          meses: monthsList.map(({ y, m }) => `${String(m).padStart(2, '0')}/${y}`),
+          meses: monthLabels,
           valores,
         });
         await flushRender();
@@ -1720,17 +1756,14 @@
         canvases.push(lineCanvas);
       }
 
-      const listingMarkersInserted = monthsList.some(({ y, m }) => {
-        const current = allItems.filter((item) => Number(item.ano) === Number(y) && Number(item.mes) === Number(m));
-        return current.length > 0;
-      });
+      const listingMarkersInserted = hasItemsInPeriodMonths(monthsList, itemsByMonth);
 
       if (listingMarkersInserted) {
         canvases.push(buildPageBreakMarker());
       }
 
       for (const { y, m } of monthsList) {
-        const monthItems = await fetchMes(y, m) || [];
+        const monthItems = itemsByMonth.get(periodMonthKey(y, m)) || [];
         if (!monthItems.length) continue;
 
         canvases.push(buildPageBreakMarker());
