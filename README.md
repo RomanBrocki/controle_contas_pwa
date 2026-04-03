@@ -163,19 +163,17 @@ O comportamento é:
 
 ### Blocos analíticos atuais
 
+- **Gráfico principal de gasto mensal do recorte**
 - **KPIs principais**
-  - total do período
+  - total do período ou mês
   - valor total dividido
-  - maiores pagadores do período
-- **Acerto entre pagadores**
-- **Maior categoria / maior conta do recorte**
-- **Quantidade de contas pagas**
-- **Pareto das contas**
-- **Evolução por conta**
+  - maior pagador do recorte
+  - acerto entre pagadores
 - **Top 5 contas + Outros**
 - **Ranking de gastos**
+- **Pareto das contas**
+- **Evolução por conta**
 - **Pagadores**
-- **Ciclo anual**
 - **Categorias ao longo do tempo**
 
 ### Interação entre blocos
@@ -186,13 +184,12 @@ Os blocos principais do dashboard conversam entre si por foco temporário:
 - `Top 5`
 - `Ranking`
 - `Evolução por conta`
-- `Ciclo anual`
 
 Ao selecionar uma conta em um desses blocos, os demais sincronizam o destaque dessa mesma conta, sem alterar os filtros reais do topo.
 
 No modo de mês único, esse foco compartilhado também reposiciona automaticamente a paginação do comparativo por conta para levar o usuário até o bloco onde a conta selecionada aparece.
 
-No bloco `Ciclo anual`, a ordenação das contas respeita o peso delas no período filtrado. O histórico do ciclo entra para contextualizar essas mesmas contas, sem antecipar categorias que não aparecem no recorte principal.
+O gráfico principal de gasto mensal trabalha com tooltip por clique: ele compara o mesmo mês do ano anterior e lista as contas que mais pesaram naquele mês, sem substituir os filtros reais do dashboard.
 
 ### Regras de UX do dashboard
 
@@ -315,7 +312,7 @@ Na prática, isso reforça a leitura de que:
 - `src/post-login/`
   - helpers, workflows e controller do fluxo principal
 - `src/reports/`
-  - dominio compartilhado da area de relatorios, preview, render local e builders de PDF
+  - domínio compartilhado da área de relatórios, preview, render local e builders de PDF
 - `src/shared/`
   - utilitários globais pequenos
 - `src/dashboard/`
@@ -533,16 +530,20 @@ A home do modal de relatórios foi simplificada para priorizar esses dois relat�
 
 Gera um PDF com:
 
-- pizza do mês
-- resumo por pagador
-- barras comparativas
-- listagem detalhada com links
+- capa executiva com gráfico mensal em barras
+- média do recorte recente e destaque visual do mês selecionado
+- Top 5 contas do mês
+- card de balanço/resumo do mês
+- páginas seguintes preservando o fluxo formal já existente
 
 ### Relatório por período
 
 Gera um PDF com:
 
-- pizza consolidada do período
+- capa executiva com gráfico mensal do recorte
+- destaque visual dos meses realmente selecionados quando existe contexto adicional
+- Top 5 contas acumulado no período
+- card de outras contas quando necessário
 - gráficos de linha por conta
 - tabelas segmentadas por mês
 
@@ -560,10 +561,18 @@ O app usa **Chart.js 3.9.1** e **chartjs-plugin-datalabels**.
 
 Tipos utilizados no sistema:
 
-- pizza
-- barras
-- linhas
+- pizza e rosca de composição
+- barras comparativas
+- barras de tendência mensal
+- linhas de comparativo por conta
+- Pareto
 - composições analíticas do dashboard
+
+### Regra prática de leitura visual
+
+- os gráficos executivos de barras e os visuais principais do dashboard priorizam leitura absoluta do gasto
+- os comparativos de linha por conta priorizam leitura de variação dentro do próprio recorte
+- os valores absolutos desses comparativos continuam explícitos em labels e tooltips, para evitar leitura enganosa só pela inclinação da linha
 
 No dashboard, parte da visualização é feita de forma mais leve e customizada, sem depender de uma nova biblioteca pesada de BI.
 
@@ -694,13 +703,13 @@ https://<usuario>.github.io/controle_contas_pwa/
 - o projeto mistura JSX Babel e módulos ES
 - globais em `window` fazem parte da arquitetura atual
 - mudanças novas devem ser preferencialmente aditivas
-- `ReportsModal.jsx` ainda concentra boa parte da orquestracao de relatorios
-- `PostLoginMock.jsx` ja atua mais como shell de composicao, apoiado por `src/post-login/controller.js`
-- a shell principal agora tambem usa `src/post-login/controller.js` para estados e efeitos da tela autenticada
-- a area de relatorios agora tambem usa `src/reports/` para DOM auxiliar, renderers locais e workflows
-- a area de relatorios agora tambem usa `src/reports/pdf-builders.js` para a montagem formal dos PDFs mensal e por periodo
-- a shell autenticada agora também usa `src/app-shell/` e `src/components/app-shell/`
-- o caminho ativo da UI nao depende mais diretamente de `window.MOCK_AUTH`, `window.AppRoutes`, `window.SupabaseQueries`, `window.AppState` ou `window.PDFHelpers`
+- `ReportsModal.jsx` ainda concentra boa parte da orquestração de relatórios
+- `PostLoginMock.jsx` já atua mais como shell de composição, apoiado por `src/post-login/controller.js`
+- a shell principal agora também usa `src/post-login/controller.js` para estados e efeitos da tela autenticada
+- a área de relatórios agora também usa `src/reports/` para DOM auxiliar, renderers locais e workflows
+- a área de relatórios usa `src/reports/pdf-builders.js` para a montagem formal dos PDFs mensal e por período
+- a shell autenticada também usa `src/app-shell/` e `src/components/app-shell/`
+- o caminho ativo da UI não depende mais diretamente de `window.MOCK_AUTH`, `window.AppRoutes`, `window.SupabaseQueries`, `window.AppState` ou `window.PDFHelpers`
 - o dashboard deve continuar isolado em `src/dashboard/`
 - se adicionar arquivos carregados pela app, atualize `index.html` e `sw.js`
 - os mapas técnicos complementares estão em `docs/architecture-map.md` e `docs/evolution-roadmap.md`

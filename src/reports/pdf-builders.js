@@ -66,10 +66,6 @@
     };
   }
 
-  function sumPeriodItems(items) {
-    return (items || []).reduce((accumulator, item) => accumulator + parseBRLnum(item.valor), 0);
-  }
-
   function groupTotalsByField(items, fieldName) {
     const totals = new Map();
 
@@ -81,6 +77,12 @@
     return Array.from(totals.entries())
       .map(([name, total]) => ({ name, total }))
       .sort((left, right) => right.total - left.total);
+  }
+
+  function totalsMapToSortedEntries(totalsMap) {
+    return Array.from(totalsMap.entries())
+      .map(([nome, valor]) => ({ nome, valor }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   }
 
   async function loadPeriodSource(monthsList) {
@@ -105,31 +107,44 @@
   }
 
   function buildPeriodAggregateData(monthsList, itemsByMonth, allItems) {
-    const contasAll = Array.from(new Set((allItems || []).map((item) => item.nome)))
-      .sort((a, b) => a.localeCompare(b, 'pt-BR'));
-    const valoresAll = contasAll.map((conta) =>
-      (allItems || [])
-        .filter((item) => item.nome === conta)
-        .reduce((accumulator, item) => accumulator + parseBRLnum(item.valor), 0)
-    );
+    const accountTotals = new Map();
+    const payerTotals = new Map();
+    const monthTotals = new Map();
+    let totalPeriodo = 0;
+    let totalDividido = 0;
 
-    const monthlyTotals = monthsList.map(({ y, m }) => {
-      const monthItems = itemsByMonth.get(periodMonthKey(y, m)) || [];
-      return {
-        year: y,
-        month: m,
-        label: `${String(m).padStart(2, '0')}/${String(y).slice(-2)}`,
-        labelLong: `${monthNamePT(m)} / ${y}`,
-        value: sumPeriodItems(monthItems),
-      };
+    (allItems || []).forEach((item) => {
+      const value = parseBRLnum(item.valor);
+      const accountName = item?.nome || '—';
+      const payerName = item?.quem || '—';
+      const monthKey = periodMonthKey(item.ano, item.mes);
+
+      totalPeriodo += value;
+      accountTotals.set(accountName, (accountTotals.get(accountName) || 0) + value);
+      payerTotals.set(payerName, (payerTotals.get(payerName) || 0) + value);
+      monthTotals.set(monthKey, (monthTotals.get(monthKey) || 0) + value);
+
+      if (item.dividida) {
+        totalDividido += value;
+      }
     });
 
-    const rankingAccounts = groupTotalsByField(allItems, 'nome');
-    const rankingPayers = groupTotalsByField(allItems, 'quem');
-    const totalPeriodo = rankingAccounts.reduce((accumulator, item) => accumulator + item.total, 0);
-    const totalDividido = (allItems || [])
-      .filter((item) => item.dividida)
-      .reduce((accumulator, item) => accumulator + parseBRLnum(item.valor), 0);
+    const contasAll = Array.from(accountTotals.keys())
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const valoresAll = contasAll.map((conta) => accountTotals.get(conta) || 0);
+    const monthlyTotals = monthsList.map(({ y, m }) => ({
+      year: y,
+      month: m,
+      label: `${String(m).padStart(2, '0')}/${String(y).slice(-2)}`,
+      labelLong: `${monthNamePT(m)} / ${y}`,
+      value: monthTotals.get(periodMonthKey(y, m)) || 0,
+    }));
+    const rankingAccounts = Array.from(accountTotals.entries())
+      .map(([name, total]) => ({ name, total }))
+      .sort((left, right) => right.total - left.total);
+    const rankingPayers = Array.from(payerTotals.entries())
+      .map(([name, total]) => ({ name, total }))
+      .sort((left, right) => right.total - left.total);
 
     return {
       contasAll,
@@ -293,8 +308,56 @@
     });
   }
 
-  function buildMonthlySummaryStats(items) {
-    const totalMes = items.reduce((accumulator, item) => accumulator + parseBRLnum(item.valor), 0);
+  function buildBalanceDeltaText(summary, copy) {
+    const {
+      porPagador,
+      porPagadorDividida,
+      totalDividida,
+    } = summary;
+
+    if (porPagadorDividida.length === 0) {
+      return copy.emptyDivided;
+    }
+
+    const pagadores = porPagador.map((payer) => payer.nome);
+    const porPagadorDivididaMap = new Map(
+      porPagadorDividida.map((payer) => [payer.nome, payer.valor])
+    );
+    const porPagadorDivididaFull = pagadores.map((nome) => ({
+      nome,
+      valor: porPagadorDivididaMap.get(nome) || 0,
+    }));
+
+    if (porPagadorDivididaFull.length === 2) {
+      const quota = totalDividida / 2;
+      const [payerA, payerB] = porPagadorDivididaFull;
+      const excessoA = payerA.valor - quota;
+      const excessoB = payerB.valor - quota;
+
+      if (excessoA > 0.009) {
+        return `${payerB.nome} deve R$ ${excessoA.toLocaleString('pt-BR', {
+          minimumFractionDigits: 2,
+        })} para ${payerA.nome}`;
+      }
+
+      if (excessoB > 0.009) {
+        return `${payerA.nome} deve R$ ${excessoB.toLocaleString('pt-BR', {
+          minimumFractionDigits: 2,
+        })} para ${payerB.nome}`;
+      }
+
+      return copy.balanced;
+    }
+
+    if (porPagadorDivididaFull.length === 1) {
+      return copy.singlePayer;
+    }
+
+    return copy.default;
+  }
+
+  function buildSharedBalanceSummaryStats(items, copy) {
+    let total = 0;
     let totalDividida = 0;
     const porPagadorGeral = new Map();
     const porPagadorDivididaMap = new Map();
@@ -303,6 +366,7 @@
       const value = parseBRLnum(item.valor);
       const payer = item.quem || '—';
 
+      total += value;
       porPagadorGeral.set(payer, (porPagadorGeral.get(payer) || 0) + value);
 
       if (item.dividida) {
@@ -311,119 +375,50 @@
       }
     });
 
-    const porPagador = Array.from(porPagadorGeral.entries())
-      .map(([nome, valor]) => ({ nome, valor }))
-      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-
-    const porPagadorDividida = Array.from(porPagadorDivididaMap.entries())
-      .map(([nome, valor]) => ({ nome, valor }))
-      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-
-    let deltaTexto = 'Acerto não calculado porque há número diferente de 2 pagadores.';
-    if (porPagadorDividida.length === 0) {
-      deltaTexto = 'Sem contas divididas neste mês.';
-    } else {
-      const pagadores = porPagador.map((payer) => payer.nome);
-      const porPagadorDivididaFull = pagadores.map((nome) => {
-        const current = porPagadorDividida.find((payer) => payer.nome === nome);
-        return { nome, valor: current ? current.valor : 0 };
-      });
-
-      if (porPagadorDivididaFull.length === 2) {
-        const quota = totalDividida / 2;
-        const [payerA, payerB] = porPagadorDivididaFull;
-        const excessoA = payerA.valor - quota;
-        const excessoB = payerB.valor - quota;
-
-        if (excessoA > 0.009) {
-          deltaTexto = `${payerB.nome} deve R$ ${excessoA.toLocaleString('pt-BR', {
-            minimumFractionDigits: 2,
-          })} para ${payerA.nome}`;
-        } else if (excessoB > 0.009) {
-          deltaTexto = `${payerA.nome} deve R$ ${excessoB.toLocaleString('pt-BR', {
-            minimumFractionDigits: 2,
-          })} para ${payerB.nome}`;
-        } else {
-          deltaTexto = 'Valores de divididas já estão equilibrados.';
-        }
-      } else if (porPagadorDivididaFull.length === 1) {
-        deltaTexto = 'Apenas 1 pagador com contas divididas.';
-      }
-    }
+    const summary = {
+      total,
+      totalDividida,
+      porPagador: totalsMapToSortedEntries(porPagadorGeral),
+      porPagadorDividida: totalsMapToSortedEntries(porPagadorDivididaMap),
+    };
 
     return {
-      totalMes,
-      totalDividida,
-      porPagador,
-      porPagadorDividida,
-      deltaTexto,
+      ...summary,
+      deltaTexto: buildBalanceDeltaText(summary, copy),
+    };
+  }
+
+  function buildMonthlySummaryStats(items) {
+    const summary = buildSharedBalanceSummaryStats(items, {
+      default: 'Acerto não calculado porque há número diferente de 2 pagadores.',
+      emptyDivided: 'Sem contas divididas neste mês.',
+      balanced: 'Valores de divididas já estão equilibrados.',
+      singlePayer: 'Apenas 1 pagador com contas divididas.',
+    });
+
+    return {
+      totalMes: summary.total,
+      totalDividida: summary.totalDividida,
+      porPagador: summary.porPagador,
+      porPagadorDividida: summary.porPagadorDividida,
+      deltaTexto: summary.deltaTexto,
     };
   }
 
   function buildPeriodBalanceSummaryStats(items) {
-    const totalPeriodo = items.reduce((accumulator, item) => accumulator + parseBRLnum(item.valor), 0);
-    let totalDividida = 0;
-    const porPagadorGeral = new Map();
-    const porPagadorDivididaMap = new Map();
-
-    items.forEach((item) => {
-      const value = parseBRLnum(item.valor);
-      const payer = item.quem || '—';
-
-      porPagadorGeral.set(payer, (porPagadorGeral.get(payer) || 0) + value);
-
-      if (item.dividida) {
-        totalDividida += value;
-        porPagadorDivididaMap.set(payer, (porPagadorDivididaMap.get(payer) || 0) + value);
-      }
+    const summary = buildSharedBalanceSummaryStats(items, {
+      default: 'Acerto não calculado porque há número diferente de 2 pagadores.',
+      emptyDivided: 'Sem contas divididas neste período.',
+      balanced: 'Valores de divididas já estão equilibrados no período.',
+      singlePayer: 'Apenas 1 pagador com contas divididas no período.',
     });
 
-    const porPagador = Array.from(porPagadorGeral.entries())
-      .map(([nome, valor]) => ({ nome, valor }))
-      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-
-    const porPagadorDividida = Array.from(porPagadorDivididaMap.entries())
-      .map(([nome, valor]) => ({ nome, valor }))
-      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-
-    let deltaTexto = 'Acerto não calculado porque há número diferente de 2 pagadores.';
-    if (porPagadorDividida.length === 0) {
-      deltaTexto = 'Sem contas divididas neste período.';
-    } else {
-      const pagadores = porPagador.map((payer) => payer.nome);
-      const porPagadorDivididaFull = pagadores.map((nome) => {
-        const current = porPagadorDividida.find((payer) => payer.nome === nome);
-        return { nome, valor: current ? current.valor : 0 };
-      });
-
-      if (porPagadorDivididaFull.length === 2) {
-        const quota = totalDividida / 2;
-        const [payerA, payerB] = porPagadorDivididaFull;
-        const excessoA = payerA.valor - quota;
-        const excessoB = payerB.valor - quota;
-
-        if (excessoA > 0.009) {
-          deltaTexto = `${payerB.nome} deve R$ ${excessoA.toLocaleString('pt-BR', {
-            minimumFractionDigits: 2,
-          })} para ${payerA.nome}`;
-        } else if (excessoB > 0.009) {
-          deltaTexto = `${payerA.nome} deve R$ ${excessoB.toLocaleString('pt-BR', {
-            minimumFractionDigits: 2,
-          })} para ${payerB.nome}`;
-        } else {
-          deltaTexto = 'Valores de divididas já estão equilibrados no período.';
-        }
-      } else if (porPagadorDivididaFull.length === 1) {
-        deltaTexto = 'Apenas 1 pagador com contas divididas no período.';
-      }
-    }
-
     return {
-      totalPeriodo,
-      totalDividida,
-      porPagador,
-      porPagadorDividida,
-      deltaTexto,
+      totalPeriodo: summary.total,
+      totalDividida: summary.totalDividida,
+      porPagador: summary.porPagador,
+      porPagadorDividida: summary.porPagadorDividida,
+      deltaTexto: summary.deltaTexto,
     };
   }
 

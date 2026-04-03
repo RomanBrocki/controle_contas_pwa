@@ -84,24 +84,24 @@ Alguns graficos conversam entre si sem alterar o filtro real. Esse foco temporar
 - `Top 5`
 - `Ranking`
 - `Evolucao por conta`
-- `Contas nos ultimos 12 meses`
+- `Pareto`
 
 Isso permite navegacao de estilo BI sem baguncar o recorte principal.
 
-No bloco `Ciclo anual`, a ordem das contas deve respeitar o peso delas no periodo filtrado. O historico do ciclo entra para contextualizar essas mesmas contas, sem antecipar categorias que nao aparecem no recorte principal.
+O grafico principal de gasto mensal do recorte usa tooltip por clique e contextualiza o mesmo mes do ano anterior sem alterar o foco real dos demais blocos.
 
 ---
 
 ## Blocos atuais
 
+- grafico principal de gasto mensal do recorte
 - cards de resumo
 - acerto entre pagadores
-- maior conta/categoria
 - pagadores
 - top 5 contas + outros
 - ranking paginado
+- Pareto
 - evolucao por conta
-- contas nos ultimos 12 meses
 - categorias ao longo do tempo
 
 ---

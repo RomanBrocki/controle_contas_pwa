@@ -17,8 +17,10 @@ Arquivos atuais:
 - `DashboardFilters.jsx`
   - filtros compactos, checklists e toolbar principal do dashboard
 - `DashboardTrendCharts.jsx`
-  - graficos e visuais de tendencia do dashboard
-  - inclui linha de referencia para a media do ciclo atual
+  - grafico principal de gasto mensal do recorte
+  - tooltip por clique com comparativo do mesmo mes no ano anterior
+  - visuais de tendencia e comparativos do dashboard
+  - inclui linha de referencia para a media do recorte exibido
 - `DashboardRankingPanels.jsx`
   - comparativos, ranking e painel de pagadores
 - `DashboardCompositionCharts.jsx`
