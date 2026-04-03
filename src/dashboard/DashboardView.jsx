@@ -2,6 +2,7 @@ const {
   monthNamePT: dashboardMonthNamePT,
   brl: dashboardBrl,
   sum: dashboardSum,
+  median: dashboardMedian,
   groupAndSort: dashboardGroupAndSort,
   filterRows: dashboardFilterRows,
   prevYearMonth: dashboardPrevYearMonth,
@@ -15,6 +16,7 @@ const {
   fetchRowsForPairs: dashboardFetchRowsForPairs,
   monthOptionsForYears: dashboardMonthOptionsForYears,
   makeSeries: dashboardMakeSeries,
+  buildMonthlyCyclePoints: dashboardBuildMonthlyCyclePoints,
   categorySeries: dashboardCategorySeries,
   buildTopFiveSegments: dashboardBuildTopFiveSegments,
   buildParetoItems: dashboardBuildParetoItems,
@@ -34,7 +36,7 @@ const {
 } = window.DashboardOrchestration;
 
 // Tela ativa do dashboard BI.
-// A referencia anterior permanece congelada em src/dashboard/legacy/DashboardViewLegacy.jsx.
+// A referência anterior permanece congelada em src/dashboard/legacy/DashboardViewLegacy.jsx.
 function DashboardView(props) {
   const monthsByYear = props.monthsByYear || {};
   const baseYear = Number(props.currentYear || new Date().getFullYear());
@@ -46,7 +48,7 @@ function DashboardView(props) {
   ), [props.years, baseYear]);
   const dividedOptions = React.useMemo(() => ([
     { value: 'yes', label: 'Sim' },
-    { value: 'no', label: 'Nao' }
+    { value: 'no', label: 'Não' }
   ]), []);
   const defaultFilters = React.useMemo(
     () => dashboardCreateDefaultFilters(baseYear, baseMonth),
@@ -60,6 +62,7 @@ function DashboardView(props) {
   const [compareRows, setCompareRows] = React.useState([]);
   const [previousMonthRows, setPreviousMonthRows] = React.useState([]);
   const [rollingRows, setRollingRows] = React.useState([]);
+  const [rollingCompareRows, setRollingCompareRows] = React.useState([]);
   const [previewLoading, setPreviewLoading] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
@@ -69,6 +72,20 @@ function DashboardView(props) {
   const [timelinePage, setTimelinePage] = React.useState(0);
   const [rankingPage, setRankingPage] = React.useState(0);
   const [rankingMode, setRankingMode] = React.useState('total');
+  const [viewportWidth, setViewportWidth] = React.useState(() => (
+    typeof window === 'undefined' ? 1280 : (window.innerWidth || 1280)
+  ));
+
+  React.useEffect(() => {
+    function handleResize() {
+      setViewportWidth(window.innerWidth || 1280);
+    }
+
+    window.addEventListener('resize', handleResize, { passive: true });
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
 
   function resetDraftFilters() {
     setDraftFilters(dashboardCreateDefaultFilters(baseYear, baseMonth));
@@ -254,7 +271,7 @@ function DashboardView(props) {
         setRows([]);
         setCompareRows([]);
         setPreviousMonthRows([]);
-        setError('Nao foi possivel carregar o dashboard agora.');
+        setError('Não foi possível carregar o dashboard agora.');
       } finally {
         if (alive) setLoading(false);
       }
@@ -270,14 +287,22 @@ function DashboardView(props) {
 
     (async () => {
       try {
-        const rollingPairsLoaded = dashboardRollingPairs(lastAppliedPair.year, lastAppliedPair.month, 13);
-        const rollingRowsLoaded = await dashboardFetchRowsForPairs(rollingPairsLoaded);
+        const rollingPairsLoaded = appliedSelectedPairs.length > 12
+          ? appliedSelectedPairs
+          : dashboardRollingPairs(lastAppliedPair.year, lastAppliedPair.month, 13);
+        const rollingComparePairsLoaded = rollingPairsLoaded.map((pair) => ({ year: pair.year - 1, month: pair.month }));
+        const [rollingRowsLoaded, rollingCompareRowsLoaded] = await Promise.all([
+          dashboardFetchRowsForPairs(rollingPairsLoaded),
+          dashboardFetchRowsForPairs(rollingComparePairsLoaded)
+        ]);
         if (!alive) return;
         setRollingRows(rollingRowsLoaded);
+        setRollingCompareRows(rollingCompareRowsLoaded);
       } catch (timelineError) {
         console.warn('[dashboard] erro ao carregar ciclo anual', timelineError);
         if (alive) {
           setRollingRows([]);
+          setRollingCompareRows([]);
         }
       }
     })();
@@ -285,7 +310,7 @@ function DashboardView(props) {
     return () => {
       alive = false;
     };
-  }, [lastAppliedPair]);
+  }, [appliedSelectedPairs, lastAppliedPair]);
 
   const appliedContasDisponiveis = React.useMemo(() => (
     Array.from(new Set(rows.map((row) => row.nome)))
@@ -350,28 +375,38 @@ function DashboardView(props) {
   const filteredCompareRows = React.useMemo(() => dashboardFilterRows(compareRows, normalizedAppliedFilters), [compareRows, normalizedAppliedFilters]);
   const filteredPreviousMonthRows = React.useMemo(() => dashboardFilterRows(previousMonthRows, normalizedAppliedFilters), [previousMonthRows, normalizedAppliedFilters]);
   const rollingPairs = React.useMemo(
-    () => dashboardRollingPairs(lastAppliedPair.year, lastAppliedPair.month, 13),
-    [lastAppliedPair]
+    () => (
+      appliedSelectedPairs.length > 12
+        ? appliedSelectedPairs
+        : dashboardRollingPairs(lastAppliedPair.year, lastAppliedPair.month, 13)
+    ),
+    [appliedSelectedPairs, lastAppliedPair]
   );
-  const annualCycleStartPair = rollingPairs[0] || lastAppliedPair;
-  const annualCycleSubtitle = `De ${dashboardPairLabelLong(annualCycleStartPair)} a ${dashboardPairLabelLong(lastAppliedPair)}`;
+  const usesFilteredTimeline = appliedSelectedPairs.length > 12;
+  const rollingRangeStartPair = rollingPairs[0] || lastAppliedPair;
+  const rollingRangeSubtitle = `De ${dashboardPairLabelLong(rollingRangeStartPair)} a ${dashboardPairLabelLong(lastAppliedPair)}`;
+  const rollingStartLabel = dashboardPairLabelLong(rollingRangeStartPair);
   const filteredRollingRows = React.useMemo(
     () => dashboardFilterRows(rollingRows, normalizedAppliedFilters),
     [rollingRows, normalizedAppliedFilters]
+  );
+  const filteredRollingCompareRows = React.useMemo(
+    () => dashboardFilterRows(rollingCompareRows, normalizedAppliedFilters),
+    [rollingCompareRows, normalizedAppliedFilters]
   );
   const resolvedAppliedAccounts = React.useMemo(() => dashboardResolveSelection(normalizedAppliedFilters.accounts, appliedFilterOptions.accounts), [normalizedAppliedFilters.accounts, appliedFilterOptions.accounts]);
   const yearsSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.years, yearOptions, 'Todos'), [normalizedAppliedFilters.years, yearOptions]);
   const monthsSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.months, appliedMonthOptions, 'Todos'), [normalizedAppliedFilters.months, appliedMonthOptions]);
   const accountsSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.accounts, appliedContasDisponiveis, 'Todas'), [normalizedAppliedFilters.accounts, appliedContasDisponiveis]);
   const payersSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.payers, appliedPagadoresDisponiveis, 'Todos'), [normalizedAppliedFilters.payers, appliedPagadoresDisponiveis]);
-  const dividedSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.divided, dividedOptions, 'Sim e Nao'), [normalizedAppliedFilters.divided, dividedOptions]);
+  const dividedSummary = React.useMemo(() => dashboardSelectionSummary(normalizedAppliedFilters.divided, dividedOptions, 'Sim e Não'), [normalizedAppliedFilters.divided, dividedOptions]);
   const emptyFilterLabels = React.useMemo(
     () => dashboardBuildEmptyFilterLabels([
       { label: 'ano', summary: yearsSummary },
-      { label: 'mes', summary: monthsSummary },
+      { label: 'mês', summary: monthsSummary },
       { label: 'conta', summary: accountsSummary },
       { label: 'pagador', summary: payersSummary },
-      { label: 'divisao', summary: dividedSummary }
+      { label: 'divisão', summary: dividedSummary }
     ]),
     [yearsSummary, monthsSummary, accountsSummary, payersSummary, dividedSummary]
   );
@@ -381,7 +416,6 @@ function DashboardView(props) {
   const totalNaoDividido = Math.max(totalPeriodo - totalDividido, 0);
   const rankingCategorias = React.useMemo(() => dashboardGroupAndSort(filteredRows, 'nome'), [filteredRows]);
   const rankingPagadores = React.useMemo(() => dashboardGroupAndSort(filteredRows, 'quem'), [filteredRows]);
-  const topCategoria = rankingCategorias[0] || null;
   const donutData = React.useMemo(() => dashboardBuildTopFiveSegments(rankingCategorias), [rankingCategorias]);
   const donutSegments = donutData.segments;
   const donutTopValue = donutData.topFiveTotal;
@@ -451,6 +485,19 @@ function DashboardView(props) {
         label: dashboardPairLabel(rollingPairs[index], true)
       }))
   ), [filteredRollingRows, rollingPairs, focusedTrendAccount]);
+  const cycleOverviewPoints = React.useMemo(
+    () => dashboardBuildMonthlyCyclePoints(filteredRollingRows, rollingPairs, filteredRollingCompareRows, 5),
+    [filteredRollingRows, rollingPairs, filteredRollingCompareRows]
+  );
+  const cycleOverviewAverageValue = React.useMemo(() => {
+    if (!cycleOverviewPoints.length) return 0;
+    return cycleOverviewPoints.reduce((sum, point) => sum + Number(point.value || 0), 0) / cycleOverviewPoints.length;
+  }, [cycleOverviewPoints]);
+  const cycleOverviewMedianValue = React.useMemo(
+    () => dashboardMedian(cycleOverviewPoints.map((point) => Number(point.value || 0))),
+    [cycleOverviewPoints]
+  );
+  const showCycleOverviewMobileNote = viewportWidth < 640 && cycleOverviewPoints.length > 13;
   const trendAverageValue = React.useMemo(() => {
     if (!trendSeries.length) return 0;
     return trendSeries.reduce((sum, point) => sum + Number(point.value || 0), 0) / trendSeries.length;
@@ -536,45 +583,42 @@ function DashboardView(props) {
     if (nextLinkedState.timelinePage !== timelinePage) setTimelinePage(nextLinkedState.timelinePage);
   }, [selectedCategory, trendAccounts, trendAccountIndex, singleMonthComparison, singleMonthPage, rankingItems, rankingPage, categoriasTimeline, timelinePage]);
 
-  const primeiraPessoa = rankingPagadores[0] || null;
-  const segundaPessoa = rankingPagadores[1] || null;
+  const maiorPagador = rankingPagadores[0] || null;
   const cardsPrincipais = [
     {
       key: 'total',
-      label: appliedSelectedPairs.length > 1 ? 'Total do periodo' : 'Total do mes',
+      label: appliedSelectedPairs.length > 1 ? 'Total do período' : 'Total do mês',
       value: dashboardBrl(totalPeriodo),
-      detail: `${filteredRows.length} contas pagas neste periodo filtrado.`,
+      detail: `${filteredRows.length} contas pagas neste período filtrado.`,
       tooltip: 'Soma de todos os valores do período filtrado no dashboard.'
     },
     {
       key: 'split',
       label: 'Valor total dividido',
       value: dashboardBrl(totalDividido),
-      detail: `${splitPct}% do total do periodo.`,
+      detail: `${splitPct}% do total do período.`,
       tooltip: 'Soma das contas marcadas como divididas dentro do período filtrado.'
     },
     {
-      key: 'payer-1',
-      label: primeiraPessoa ? `Pago por ${primeiraPessoa.name}` : 'Pago por',
-      value: dashboardBrl(primeiraPessoa ? primeiraPessoa.total : 0),
-      detail: primeiraPessoa ? 'Maior pagador do periodo.' : 'Aguardando dados.',
+      key: 'top-payer',
+      label: maiorPagador ? `Pago por ${maiorPagador.name}` : 'Maior pagador',
+      value: dashboardBrl(maiorPagador ? maiorPagador.total : 0),
+      detail: maiorPagador ? 'Maior pagador do período filtrado.' : 'Aguardando dados.',
       tooltip: 'Maior pagador no período filtrado.'
     },
     {
-      key: 'payer-2',
-      label: segundaPessoa ? `Pago por ${segundaPessoa.name}` : 'Qtd. de contas pagas',
-      value: segundaPessoa ? dashboardBrl(segundaPessoa.total) : String(filteredRows.length),
-      detail: segundaPessoa ? 'Segundo maior pagador do periodo.' : 'Contas pagas no periodo filtrado.',
-      tooltip: segundaPessoa
-        ? 'Segundo maior pagador no período filtrado.'
-        : 'Quantidade de contas pagas visíveis após aplicar os filtros.'
+      key: 'settlement',
+      label: 'Acerto entre pagadores',
+      value: settlement.headline,
+      detail: settlement.detail,
+      tooltip: 'Estimativa simples de acerto considerando apenas as contas divididas do período filtrado.'
     }
   ];
 
   const singleMonthMode = appliedSelectedPairs.length <= 1;
   const previousMonthLabel = `${dashboardMonthNamePT(previousMonthPair.month)} ${previousMonthPair.year}`;
   const previousYearLabel = `${dashboardMonthNamePT(lastAppliedPair.month)} ${lastAppliedPair.year - 1}`;
-  const emptyStateMessage = `Selecione ao menos uma opcao em ${emptyFilterLabels.join(', ')} e clique em Atualizar dashboard.`;
+  const emptyStateMessage = `Selecione ao menos uma opção em ${emptyFilterLabels.join(', ')} e clique em Atualizar dashboard.`;
 
   function applyDraftFilters() {
     setAppliedFilters(normalizedDraftFilters);
@@ -631,35 +675,115 @@ function DashboardView(props) {
             ))}
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-3">
-            <DashboardMetricCard
-              label="Acerto entre pagadores"
-              value={settlement.headline}
-              detail={settlement.detail}
-              tooltip="Estimativa simples de acerto considerando apenas as contas divididas do período filtrado."
-              testId="settlement"
+          <DashboardSection
+            title={usesFilteredTimeline ? 'Gasto mensal no período filtrado' : 'Gasto mensal no ciclo anual'}
+            subtitle={rollingRangeSubtitle}
+            tooltip={usesFilteredTimeline
+              ? 'Mostra o gasto total de cada mês do período filtrado. O detalhe de cada barra compara com o mesmo mês do ano anterior, posiciona o mês dentro do período, mostra média e mediana e lista as 3 contas mais pesadas daquele mês.'
+              : 'Mostra o gasto total de cada mês do ciclo anual ancorado no fim do recorte filtrado. O detalhe de cada barra compara com o mesmo mês do ano anterior, posiciona o mês dentro do ciclo, mostra média e mediana e lista as 3 contas mais pesadas daquele mês.'}
+            testId="cycle-overview"
+            actions={showCycleOverviewMobileNote ? [
+              (
+                <div key="mobile-limit" className="badge">
+                  No mobile, exibindo os 13 meses mais recentes do recorte.
+                </div>
+              )
+            ] : undefined}
+          >
+            <DashboardMonthlyCycleBars
+              points={cycleOverviewPoints}
+              averageValue={cycleOverviewAverageValue}
+              medianValue={cycleOverviewMedianValue}
+              primaryLabel="Total gasto por mês"
+              averageLabel={usesFilteredTimeline ? 'Média mensal do período' : 'Média mensal do ciclo'}
+              medianLabel={usesFilteredTimeline ? 'Mediana mensal do período' : 'Mediana mensal do ciclo'}
+              periodLabel={usesFilteredTimeline ? 'período' : 'ciclo'}
+              referenceScopeLabel={usesFilteredTimeline ? 'período filtrado' : 'ciclo'}
+              positionCardDetailScope="no período"
             />
-            <DashboardMetricCard
-              label="Maior categoria"
-              value={topCategoria ? topCategoria.name : 'Sem dados'}
-              detail={topCategoria && totalPeriodo > 0 ? `${Math.round((topCategoria.total / totalPeriodo) * 100)}% do total do periodo.` : 'Aguardando movimentacao'}
-              tooltip="Categoria com maior valor somado depois da aplicação de todos os filtros."
-              testId="top-category"
-            />
-            <DashboardMetricCard
-              label="Qtd. de contas pagas"
-              value={String(filteredRows.length)}
-              detail={filteredRows.length ? 'Contas pagas no periodo filtrado.' : 'Nenhuma conta paga neste periodo.'}
-              tooltip="Quantidade de contas pagas visíveis após a aplicação do filtro."
-              testId="count"
-            />
+          </DashboardSection>
+
+          <div className="grid gap-4 xl:grid-cols-2">
+            <DashboardSection
+              title="Top 5 contas"
+              tooltip="Top 5 contas do período filtrado. Clique na legenda para destacar e abrir a fatia correspondente na rosca."
+              testId="composition"
+            >
+              <DashboardDonut
+                segments={donutSegments}
+                total={totalPeriodo}
+                topValue={donutTopValue}
+                onSelect={focusDashboardAccount}
+                selectedName={donutSelectableNames.has(focusedCategory) ? focusedCategory : ''}
+                pageSize={5}
+              />
+            </DashboardSection>
+
+            <DashboardSection
+              title="Ranking de gastos"
+              tooltip="Mostra todas as contas do período filtrado. Quando houver mais de um mês, você pode alternar entre total acumulado e média por mês."
+              testId="ranking"
+              actions={[
+                appliedSelectedPairs.length > 1 ? (
+                  <div key="ranking-mode" className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className={`btn ${rankingMode === 'total' ? 'primary' : 'ghost'}`}
+                      onClick={() => setRankingMode('total')}
+                      data-dash-ranking-mode="total"
+                    >
+                      Total
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${rankingMode === 'average' ? 'primary' : 'ghost'}`}
+                      onClick={() => setRankingMode('average')}
+                      data-dash-ranking-mode="average"
+                    >
+                      Média/mês
+                    </button>
+                  </div>
+                ) : null,
+                rankingPageCount > 1 ? (
+                  <div key="ranking-page" className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => {
+                        clearLinkedFocus();
+                        setRankingPage((prev) => dashboardCyclePage(prev, rankingPageCount, -1));
+                      }}
+                      data-dash-action="ranking-prev"
+                    >
+                      &lt;
+                    </button>
+                    <div className="badge">
+                      Itens {Math.min((rankingPage * 5) + 1, rankingItems.length)} a {Math.min((rankingPage * 5) + visibleRankingItems.length, rankingItems.length)} de {rankingItems.length}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn ghost"
+                      onClick={() => {
+                        clearLinkedFocus();
+                        setRankingPage((prev) => dashboardCyclePage(prev, rankingPageCount, 1));
+                      }}
+                      data-dash-action="ranking-next"
+                    >
+                      &gt;
+                    </button>
+                  </div>
+                ) : null
+              ].filter(Boolean)}
+            >
+              <DashboardBarList items={visibleRankingItems} onSelect={focusDashboardAccount} selectedName={focusedCategory} />
+            </DashboardSection>
           </div>
 
           <DashboardSection
             title="Pareto das contas"
             subtitle={singleMonthMode
-              ? 'Categorias do mes filtrado em ordem de impacto.'
-              : 'Categorias agregadas do periodo filtrado com curva acumulada.'}
+              ? 'Categorias do mês filtrado em ordem de impacto.'
+              : 'Categorias agregadas do período filtrado com curva acumulada.'}
             tooltip="Ordena as categorias do maior para o menor valor e mostra como o acumulado do período se forma. Clique em uma barra para destacar a mesma categoria nos demais gráficos."
             testId="pareto"
           >
@@ -674,7 +798,7 @@ function DashboardView(props) {
           {singleMonthMode ? (
             <DashboardSection
               title="Comparativo por conta"
-              subtitle="Mes atual contra mes anterior e mesmo mes do ano anterior."
+              subtitle="Mês atual contra mês anterior e mesmo mês do ano anterior."
               tooltip="Mostra as contas do mês atual em blocos de três, ordenadas pelo maior valor do mês selecionado."
               testId="trend-single"
             >
@@ -720,9 +844,11 @@ function DashboardView(props) {
             </DashboardSection>
           ) : (
             <DashboardSection
-              title="Evolucao por conta"
-              subtitle={annualCycleSubtitle}
-              tooltip="Mostra o ciclo anual da conta selecionada, do mesmo mês do ano anterior até o mês final do período filtrado. A média do ciclo atual aparece como referência no topo do gráfico."
+              title="Evolução por conta"
+              subtitle={rollingRangeSubtitle}
+              tooltip={usesFilteredTimeline
+                ? 'Mostra a evolução da conta selecionada ao longo de todo o período filtrado.'
+                : 'Mostra o ciclo anual da conta selecionada, do mesmo mês do ano anterior até o mês final do período filtrado.'}
               testId="trend-period"
             >
               <div className="space-y-3">
@@ -751,7 +877,7 @@ function DashboardView(props) {
                     }}
                     data-dash-action="trend-next"
                     disabled={!trendAccounts.length}
-                    aria-label="Proxima conta"
+                    aria-label="Próxima conta"
                   >
                     &gt;
                   </button>
@@ -762,88 +888,13 @@ function DashboardView(props) {
               </div>
               <DashboardSparkline
                 points={trendSeries}
-                primaryLabel="Ciclo anual atual"
+                primaryLabel={usesFilteredTimeline ? 'Período filtrado' : 'Ciclo anual atual'}
                 averageValue={trendAverageValue}
-                averageLabel="Média do ciclo atual"
+                averageLabel={usesFilteredTimeline ? 'Média do período' : 'Média do ciclo atual'}
                 ariaLabel={`Gráfico de evolução para ${focusedTrendAccount || 'conta selecionada'}`}
               />
             </DashboardSection>
           )}
-          <div className="grid gap-4 xl:grid-cols-2">
-            <DashboardSection
-              title="Top 5 contas"
-              tooltip="Top 5 contas do período filtrado. Clique na legenda para destacar e abrir a fatia correspondente na rosca."
-              testId="composition"
-            >
-              <DashboardDonut
-                segments={donutSegments}
-                total={totalPeriodo}
-                topValue={donutTopValue}
-                onSelect={focusDashboardAccount}
-                selectedName={donutSelectableNames.has(focusedCategory) ? focusedCategory : ''}
-                pageSize={5}
-              />
-            </DashboardSection>
-
-            <DashboardSection
-              title="Ranking de gastos"
-              tooltip="Mostra todas as contas do período filtrado. Quando houver mais de um mês, você pode alternar entre total acumulado e média por mês."
-              testId="ranking"
-              actions={[
-                appliedSelectedPairs.length > 1 ? (
-                  <div key="ranking-mode" className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className={`btn ${rankingMode === 'total' ? 'primary' : 'ghost'}`}
-                      onClick={() => setRankingMode('total')}
-                      data-dash-ranking-mode="total"
-                    >
-                      Total
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn ${rankingMode === 'average' ? 'primary' : 'ghost'}`}
-                      onClick={() => setRankingMode('average')}
-                      data-dash-ranking-mode="average"
-                    >
-                      Media/mes
-                    </button>
-                  </div>
-                ) : null,
-                rankingPageCount > 1 ? (
-                  <div key="ranking-page" className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      onClick={() => {
-                        clearLinkedFocus();
-                        setRankingPage((prev) => dashboardCyclePage(prev, rankingPageCount, -1));
-                      }}
-                      data-dash-action="ranking-prev"
-                    >
-                      &lt;
-                    </button>
-                    <div className="badge">
-                      Itens {Math.min((rankingPage * 5) + 1, rankingItems.length)} a {Math.min((rankingPage * 5) + visibleRankingItems.length, rankingItems.length)} de {rankingItems.length}
-                    </div>
-                    <button
-                      type="button"
-                      className="btn ghost"
-                      onClick={() => {
-                        clearLinkedFocus();
-                        setRankingPage((prev) => dashboardCyclePage(prev, rankingPageCount, 1));
-                      }}
-                      data-dash-action="ranking-next"
-                    >
-                      &gt;
-                    </button>
-                  </div>
-                ) : null
-              ].filter(Boolean)}
-            >
-              <DashboardBarList items={visibleRankingItems} onSelect={focusDashboardAccount} selectedName={focusedCategory} />
-            </DashboardSection>
-          </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
             <DashboardSection
@@ -861,9 +912,11 @@ function DashboardView(props) {
             </DashboardSection>
 
             <DashboardSection
-              title="Ciclo anual"
-              subtitle={annualCycleSubtitle}
-              tooltip="Mostra, para cada conta presente no periodo filtrado, o ciclo anual do mesmo mes do ano anterior ate o mes final do recorte. Clique numa barra para ver o valor daquele mes e use as setas para navegar de tres em tres contas."
+              title={usesFilteredTimeline ? 'Período filtrado' : 'Ciclo anual'}
+              subtitle={rollingRangeSubtitle}
+              tooltip={usesFilteredTimeline
+                ? 'Mostra, para cada conta presente no período filtrado, a evolução ao longo de todos os meses selecionados. Clique numa barra para ver o valor daquele mês e use as setas para navegar de três em três contas.'
+                : 'Mostra, para cada conta presente no período filtrado, o ciclo anual do mesmo mês do ano anterior até o mês final do recorte. Clique numa barra para ver o valor daquele mês e use as setas para navegar de três em três contas.'}
               testId="category-trends"
             >
               {timelinePageCount > 1 ? (

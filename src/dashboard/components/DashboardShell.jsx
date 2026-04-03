@@ -27,7 +27,9 @@ function DashboardSection(props) {
         <div className="flex items-start gap-3">
           <div>
             <h3 className="text-lg font-semibold">{props.title}</h3>
-            {props.subtitle ? <div className="text-sm opacity-70">{props.subtitle}</div> : null}
+            {props.subtitle ? (
+              <div className="text-sm opacity-70">{props.subtitle}</div>
+            ) : null}
           </div>
           {props.tooltip ? <DashboardInfoTooltip content={props.tooltip} testId={`section-${props.testId}`} /> : null}
         </div>

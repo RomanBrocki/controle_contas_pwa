@@ -44,10 +44,23 @@
     return (rows || []).reduce((total, row) => total + Number(row.valor || 0), 0);
   }
 
+  function median(values) {
+    const ordered = (values || [])
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value))
+      .sort((left, right) => left - right);
+
+    if (!ordered.length) return 0;
+
+    const middleIndex = Math.floor(ordered.length / 2);
+    if (ordered.length % 2 === 1) return ordered[middleIndex];
+    return (ordered[middleIndex - 1] + ordered[middleIndex]) / 2;
+  }
+
   function groupAndSort(rows, fieldName) {
     const groups = {};
     (rows || []).forEach((row) => {
-      const key = row[fieldName] || 'Nao informado';
+      const key = row[fieldName] || 'Não informado';
       groups[key] = (groups[key] || 0) + Number(row.valor || 0);
     });
 
@@ -59,7 +72,7 @@
   function groupTotalsMap(rows, fieldName) {
     const map = new Map();
     (rows || []).forEach((row) => {
-      const key = row[fieldName] || 'Nao informado';
+      const key = row[fieldName] || 'Não informado';
       map.set(key, (map.get(key) || 0) + Number(row.valor || 0));
     });
     return map;
@@ -239,16 +252,49 @@
 
   function makeSeries(rows, pairs, groupName) {
     return (pairs || []).map((pair) => {
-      const monthRows = (rows || []).filter((row) => {
-        if (row.ano !== pair.year || row.mes !== pair.month) return false;
-        if (groupName && row.nome !== groupName) return false;
-        return true;
-      });
+      const monthRows = rowsForPair(rows, pair, groupName);
 
       return {
         key: pairKey(pair),
         label: monthNamePT(pair.month, true),
         value: sum(monthRows)
+      };
+    });
+  }
+
+  function rowsForPair(rows, pair, groupName) {
+    return (rows || []).filter((row) => {
+      if (row.ano !== pair.year || row.mes !== pair.month) return false;
+      if (groupName && row.nome !== groupName) return false;
+      return true;
+    });
+  }
+
+  function buildMonthlyCyclePoints(rows, pairs, compareRows, topLimit = 3) {
+    return (pairs || []).map((pair, index, allPairs) => {
+      const currentRows = rowsForPair(rows, pair);
+      const comparePair = { year: pair.year - 1, month: pair.month };
+      const sameMonthPreviousYearRows = rowsForPair(compareRows, comparePair);
+      const total = sum(currentRows);
+      const compareTotal = sum(sameMonthPreviousYearRows);
+      const deltaValue = total - compareTotal;
+      const deltaPct = compareTotal > 0
+        ? (deltaValue / compareTotal) * 100
+        : null;
+
+      return {
+        key: pairKey(pair),
+        pair,
+        label: pairLabel(pair, true),
+        labelLong: pairLabelLong(pair),
+        value: total,
+        compareValue: compareTotal,
+        compareLabel: pairLabelLong(comparePair),
+        compareTopAccount: groupAndSort(sameMonthPreviousYearRows, 'nome')[0] || null,
+        deltaValue,
+        deltaPct,
+        isCurrentPeriod: index === (allPairs.length - 1),
+        topAccounts: groupAndSort(currentRows, 'nome').slice(0, Math.max(Number(topLimit) || 0, 0))
       };
     });
   }
@@ -378,7 +424,7 @@
     if (dividedRows.length === 0 || payers.length < 2) {
       return {
         headline: 'Sem acerto pendente',
-        detail: 'Nao ha base suficiente nas contas divididas deste recorte.'
+        detail: 'Não há base suficiente nas contas divididas deste recorte.'
       };
     }
 
@@ -449,6 +495,7 @@
     isoToBR,
     normalizeRow,
     sum,
+    median,
     groupAndSort,
     groupTotalsMap,
     filterRows,
@@ -467,6 +514,7 @@
     fetchRowsForPairs,
     monthOptionsForYears,
     makeSeries,
+    buildMonthlyCyclePoints,
     categorySeries,
     buildTopFiveSegments,
     buildParetoItems,

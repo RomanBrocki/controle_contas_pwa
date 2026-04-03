@@ -44,7 +44,7 @@ function ReportsMensalPanel(props) {
           idPrefix="mensal"
         />
         <div className="text-sm opacity-70" style={{ marginTop: 12 }}>
-          Gera: Pizza do mês + Resumo por pessoa + Balanço divididas + Listagem com links.
+          Gera: capa com gasto do mês, Top 5 contas, resumo/balanço, comparativos e listagem com links.
         </div>
       </div>
       <div className="footer flex gap-2 justify-end">
@@ -297,7 +297,7 @@ function ReportsComparativosPanel(props) {
             type="button"
             className="btn"
             onClick={onGenerateMensalPdf}
-            title="Gera PDF com Pizza do mês e Barras comparativas (mês anterior e mesmo mês do ano anterior, quando houver dados)."
+            title="Gera PDF mensal com capa de gasto do mês, Top 5 contas, resumo/balanço e comparativos com mês anterior e mesmo mês do ano anterior."
           >
             Relatório Mensal (PDF)
           </button>
