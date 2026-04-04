@@ -11,7 +11,7 @@ function DashboardComparisonBars(props) {
   ];
 
   if (!items.length) {
-    return <div className="text-sm opacity-70">Nao ha contas suficientes para comparar o mes atual com as referencias.</div>;
+    return <div className="text-sm opacity-70">Não há contas suficientes para comparar o mês atual com as referências.</div>;
   }
 
   return (
@@ -50,7 +50,7 @@ function DashboardComparisonBars(props) {
                   ? 'color-mix(in srgb, var(--primary) 10%, var(--surface))'
                   : undefined
               }}
-              title={`${item.name}: ${dashboardBrl(item.current)} no periodo atual.`}
+              title={`${item.name}: ${dashboardBrl(item.current)} no período atual.`}
             >
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div className="min-w-0">
@@ -108,7 +108,7 @@ function DashboardBarList(props) {
             className="w-full text-left rounded-2xl px-2 py-2 transition-colors"
             onClick={() => props.onSelect && props.onSelect(item.name)}
             title={item.rawTotal != null && item.rawTotal !== item.total
-              ? `${item.name}: ${dashboardBrl(item.total)} de media por mes (${dashboardBrl(item.rawTotal)} no total).`
+              ? `${item.name}: ${dashboardBrl(item.total)} de média por mês (${dashboardBrl(item.rawTotal)} no total).`
               : `${item.name}: ${dashboardBrl(item.total)}`}
             data-dash-bar={item.name}
             style={{
@@ -142,6 +142,12 @@ function DashboardBarList(props) {
 function DashboardPayersPanel(props) {
   const items = props.items || [];
   const maxValue = Math.max(1, ...items.map((item) => item.total));
+  const balances = props.settlement?.balances || [];
+  const transfers = props.settlement?.transfers || [];
+  const dividedByPayer = React.useMemo(
+    () => new Map(balances.map((item) => [item.payer, Number(item.paidDivided || 0)])),
+    [balances]
+  );
 
   if (!items.length) {
     return <div className="text-sm opacity-70">Sem pagadores suficientes neste recorte.</div>;
@@ -152,8 +158,12 @@ function DashboardPayersPanel(props) {
       <div className="space-y-3">
         {items.map((item) => {
           const width = Math.max((item.total / maxValue) * 100, 8);
+          const dividedValue = Number(dividedByPayer.get(item.name) || 0);
+          const dividedWidth = dividedValue > 0
+            ? Math.max((dividedValue / maxValue) * 100, 6)
+            : 0;
           return (
-            <div key={item.name} className="space-y-2" data-dash-payer-row={item.name}>
+            <div key={item.name} className="space-y-2.5" data-dash-payer-row={item.name}>
               <div className="flex items-center justify-between gap-3">
                 <span className="font-medium">{item.name}</span>
                 <span className="text-sm opacity-70">{dashboardBrl(item.total)}</span>
@@ -164,6 +174,19 @@ function DashboardPayersPanel(props) {
                   style={{
                     width: `${width}%`,
                     background: 'linear-gradient(90deg, var(--primary), var(--accent))'
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3 text-[11px] opacity-65">
+                <span>Em divididas</span>
+                <span>{dashboardBrl(dividedValue)}</span>
+              </div>
+              <div className="h-2 rounded-full" style={{ background: 'color-mix(in srgb, var(--chip) 85%, black 15%)' }}>
+                <div
+                  className="h-2 rounded-full"
+                  style={{
+                    width: `${dividedWidth}%`,
+                    background: 'linear-gradient(90deg, color-mix(in srgb, var(--accent) 85%, white 15%), var(--accent))'
                   }}
                 />
               </div>
@@ -179,14 +202,34 @@ function DashboardPayersPanel(props) {
           <div className="text-sm opacity-70">{props.splitPct}% do total</div>
         </div>
         <div className="rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--surface) 88%, black 12%)' }}>
-          <div className="text-xs uppercase tracking-[0.16em] opacity-60">Nao divididas</div>
+          <div className="text-xs uppercase tracking-[0.16em] opacity-60">Não divididas</div>
           <div className="text-lg font-semibold">{dashboardBrl(props.nonDividedTotal)}</div>
           <div className="text-sm opacity-70">{Math.max(100 - props.splitPct, 0)}% do total</div>
         </div>
         <div className="rounded-2xl border px-4 py-3 sm:col-span-2" style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--surface) 88%, black 12%)' }} data-dash-payers-settlement="true">
           <div className="text-xs uppercase tracking-[0.16em] opacity-60">Acerto entre pagadores</div>
-          <div className="text-lg font-semibold">{props.settlement.headline}</div>
-          <div className="text-sm opacity-70">{props.settlement.detail}</div>
+          {transfers.length ? (
+            <div className="mt-2 space-y-2">
+              {transfers.map((transfer) => (
+                <div
+                  key={`${transfer.from}-${transfer.to}`}
+                  className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2"
+                  style={{ borderColor: 'var(--border)', background: 'color-mix(in srgb, var(--surface) 92%, black 8%)' }}
+                >
+                  <span className="text-sm font-medium">{transfer.from} → {transfer.to}</span>
+                  <span className="text-sm font-semibold">{dashboardBrl(transfer.amount)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="text-lg font-semibold">{props.settlement.headline}</div>
+              <div className="text-sm opacity-70">{props.settlement.detail}</div>
+            </>
+          )}
+          {props.settlement?.note ? (
+            <div className="mt-2 text-xs opacity-60">{props.settlement.note}</div>
+          ) : null}
         </div>
       </div>
     </div>

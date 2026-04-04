@@ -584,6 +584,17 @@ function DashboardView(props) {
   }, [selectedCategory, trendAccounts, trendAccountIndex, singleMonthComparison, singleMonthPage, rankingItems, rankingPage, categoriasTimeline, timelinePage]);
 
   const maiorPagador = rankingPagadores[0] || null;
+  const settlementTransfers = settlement.transfers || [];
+  const settlementCardValue = settlementTransfers.length ? (
+    <div className="space-y-1">
+      {settlementTransfers.map((transfer) => (
+        <div key={`${transfer.from}-${transfer.to}`}>
+          {transfer.from} → {transfer.to} {dashboardBrl(transfer.amount)}
+        </div>
+      ))}
+    </div>
+  ) : settlement.headline;
+  const settlementCardDetail = settlementTransfers.length ? '' : settlement.detail;
   const cardsPrincipais = [
     {
       key: 'total',
@@ -609,9 +620,10 @@ function DashboardView(props) {
     {
       key: 'settlement',
       label: 'Acerto entre pagadores',
-      value: settlement.headline,
-      detail: settlement.detail,
-      tooltip: 'Estimativa simples de acerto considerando apenas as contas divididas do período filtrado.'
+      value: settlementCardValue,
+      detail: settlementCardDetail,
+      valueClassName: settlementTransfers.length ? 'text-sm md:text-base font-semibold leading-5' : undefined,
+      tooltip: 'Sugere os repasses das contas divididas assumindo divisão igual entre todos os pagadores visíveis no recorte.'
     }
   ];
 
@@ -669,6 +681,7 @@ function DashboardView(props) {
                 label={card.label}
                 value={card.value}
                 detail={card.detail}
+                valueClassName={card.valueClassName}
                 tooltip={card.tooltip}
                 testId={card.key}
               />
@@ -679,8 +692,8 @@ function DashboardView(props) {
             title={usesFilteredTimeline ? 'Gasto mensal no período filtrado' : 'Gasto mensal no ciclo anual'}
             subtitle={rollingRangeSubtitle}
             tooltip={usesFilteredTimeline
-              ? 'Mostra o gasto total de cada mês do período filtrado. O detalhe de cada barra compara com o mesmo mês do ano anterior, posiciona o mês dentro do período, mostra média e mediana e lista as 3 contas mais pesadas daquele mês.'
-              : 'Mostra o gasto total de cada mês do ciclo anual ancorado no fim do recorte filtrado. O detalhe de cada barra compara com o mesmo mês do ano anterior, posiciona o mês dentro do ciclo, mostra média e mediana e lista as 3 contas mais pesadas daquele mês.'}
+              ? 'Mostra o gasto total de cada mês do período filtrado. O detalhe de cada barra compara com o mesmo mês do ano anterior, posiciona o mês dentro do período e lista as 5 contas mais pesadas daquele mês.'
+              : 'Mostra o gasto total de cada mês do ciclo anual ancorado no fim do recorte filtrado. O detalhe de cada barra compara com o mesmo mês do ano anterior, posiciona o mês dentro do ciclo e lista as 5 contas mais pesadas daquele mês.'}
             testId="cycle-overview"
             actions={showCycleOverviewMobileNote ? [
               (
@@ -898,8 +911,8 @@ function DashboardView(props) {
 
           <div className="grid gap-4 xl:grid-cols-2">
             <DashboardSection
-              title="Pagadores"
-              tooltip="Mostra o maior pagador, os demais pagadores e o peso das contas divididas no período filtrado."
+              title="Balanço dos pagadores"
+              tooltip="Mostra quanto cada pagador desembolsou no total, quanto desse valor saiu em contas divididas e quais repasses equilibram a divisão igual entre todos os pagadores visíveis no recorte."
               testId="payers"
             >
               <DashboardPayersPanel

@@ -420,11 +420,17 @@
   function computeSettlement(rows) {
     const dividedRows = (rows || []).filter((row) => row.dividida);
     const payers = Array.from(new Set((rows || []).map((row) => row.quem).filter(Boolean)));
+    const note = 'O cálculo considera divisão igual entre todos os pagadores visíveis no recorte.';
 
     if (dividedRows.length === 0 || payers.length < 2) {
       return {
         headline: 'Sem acerto pendente',
-        detail: 'Não há base suficiente nas contas divididas deste recorte.'
+        detail: 'Não há base suficiente nas contas divididas deste recorte.',
+        note,
+        transfers: [],
+        balances: [],
+        totalDivided: 0,
+        fairShare: 0
       };
     }
 
@@ -436,31 +442,82 @@
 
     const totalDivided = sum(dividedRows);
     const fairShare = totalDivided / payers.length;
-    const balances = payers
-      .map((payer) => ({ payer, delta: Number((paidByPayer[payer] - fairShare).toFixed(2)) }))
-      .sort((left, right) => left.delta - right.delta);
+    const balances = payers.map((payer) => {
+      const paidDivided = Number(paidByPayer[payer] || 0);
+      const delta = Number((paidDivided - fairShare).toFixed(2));
+      return {
+        payer,
+        paidDivided,
+        fairShare,
+        delta
+      };
+    });
 
-    const debtor = balances[0];
-    const creditor = balances[balances.length - 1];
-    const amount = Math.min(Math.abs(debtor.delta), Math.abs(creditor.delta));
+    const debtors = balances
+      .filter((item) => item.delta < -0.01)
+      .map((item) => ({ ...item, remaining: Math.abs(item.delta) }))
+      .sort((left, right) => right.remaining - left.remaining);
+    const creditors = balances
+      .filter((item) => item.delta > 0.01)
+      .map((item) => ({ ...item, remaining: item.delta }))
+      .sort((left, right) => right.remaining - left.remaining);
+    const transfers = [];
 
-    if (amount <= 0.01) {
+    let debtorIndex = 0;
+    let creditorIndex = 0;
+    while (debtorIndex < debtors.length && creditorIndex < creditors.length) {
+      const debtor = debtors[debtorIndex];
+      const creditor = creditors[creditorIndex];
+      const amount = Number(Math.min(debtor.remaining, creditor.remaining).toFixed(2));
+
+      if (amount > 0.01) {
+        transfers.push({
+          from: debtor.payer,
+          to: creditor.payer,
+          amount
+        });
+      }
+
+      debtor.remaining = Number((debtor.remaining - amount).toFixed(2));
+      creditor.remaining = Number((creditor.remaining - amount).toFixed(2));
+
+      if (debtor.remaining <= 0.01) debtorIndex += 1;
+      if (creditor.remaining <= 0.01) creditorIndex += 1;
+    }
+
+    if (!transfers.length) {
       return {
         headline: 'Acerto equilibrado',
-        detail: 'Os pagadores estao praticamente compensados neste recorte.'
+        detail: 'Os pagadores estão praticamente compensados neste recorte.',
+        note,
+        transfers: [],
+        balances,
+        totalDivided,
+        fairShare
       };
     }
 
-    if (balances.length === 2) {
+    if (transfers.length === 1) {
+      const transfer = transfers[0];
       return {
-        headline: `${debtor.payer} deve ${brl(amount)}`,
-        detail: `para ${creditor.payer} nas contas divididas.`
+        headline: `${transfer.from} deve ${brl(transfer.amount)}`,
+        detail: `para ${transfer.to} nas contas divididas.`,
+        note,
+        transfers,
+        balances,
+        totalDivided,
+        fairShare
       };
     }
 
     return {
-      headline: `${debtor.payer} deve ${brl(amount)}`,
-      detail: `maior repasse estimado para ${creditor.payer}.`
+      headline: 'Repasses sugeridos',
+      detail: `Liquidação estimada entre ${payers.length} pagadores nas contas divididas.`,
+      note,
+      transfers,
+      balances,
+      totalDivided,
+      fairShare
     };
   }
 
