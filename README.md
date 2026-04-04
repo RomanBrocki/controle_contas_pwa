@@ -8,13 +8,29 @@ O projeto roda **100% client-side**, sem build tool e sem backend próprio. A id
 
 ## Demonstração
 
-### Controle, configurações e relatórios
+### Login
 
-![Demonstração do fluxo principal da aplicação](./cont_1.gif)
+![Demonstração do login](./README-assets/gifs/login_final_lite.gif)
+
+### Fluxo principal
+
+![Demonstração do fluxo principal da aplicação](./README-assets/gifs/fluxo_pricipal_final_lite.gif)
+
+### Configurações
+
+![Demonstração da área de configurações](./README-assets/gifs/config_final_lite.gif)
+
+### Relatórios
+
+![Demonstração dos relatórios](./README-assets/gifs/relatorios_final_lite.gif)
 
 ### Dashboard BI
 
-![Demonstração do dashboard BI](./cont_2.gif)
+![Demonstração do dashboard BI](./README-assets/gifs/dashboard_final_lite.gif)
+
+### Fale com Tosco
+
+![Demonstração do Fale com Tosco](./README-assets/gifs/fTosco_final_lite.gif)
 
 ---
 
@@ -168,12 +184,12 @@ O comportamento é:
   - total do período ou mês
   - valor total dividido
   - maior pagador do recorte
-  - acerto entre pagadores
+  - acerto entre pagadores com repasses sugeridos
 - **Top 5 contas + Outros**
 - **Ranking de gastos**
 - **Pareto das contas**
 - **Evolução por conta**
-- **Pagadores**
+- **Balanço dos pagadores**
 - **Categorias ao longo do tempo**
 
 ### Interação entre blocos
@@ -189,7 +205,15 @@ Ao selecionar uma conta em um desses blocos, os demais sincronizam o destaque de
 
 No modo de mês único, esse foco compartilhado também reposiciona automaticamente a paginação do comparativo por conta para levar o usuário até o bloco onde a conta selecionada aparece.
 
-O gráfico principal de gasto mensal trabalha com tooltip por clique: ele compara o mesmo mês do ano anterior e lista as contas que mais pesaram naquele mês, sem substituir os filtros reais do dashboard.
+O gráfico principal de gasto mensal trabalha com tooltip por clique: ele compara o mesmo mês do ano anterior, posiciona o mês dentro do recorte e lista as **5 contas** que mais pesaram naquele mês, sem substituir os filtros reais do dashboard.
+
+O card de **Acerto entre pagadores** considera divisão igual entre todos os pagadores visíveis no recorte para as contas marcadas como divididas. Quando houver mais de um repasse, ele lista diretamente as transferências sugeridas no próprio KPI.
+
+No bloco **Balanço dos pagadores**, cada pagador mostra:
+
+- total desembolsado no recorte
+- quanto desse valor saiu em contas divididas
+- detalhamento dos repasses necessários para equilibrar o recorte
 
 ### Regras de UX do dashboard
 
@@ -223,6 +247,14 @@ Na prática, isso reforça a leitura de que:
 │  ├─ architecture-map.md
 │  ├─ evolution-roadmap.md
 │  └─ regression-checklist.md
+├─ README-assets/
+│  └─ gifs/
+│     ├─ config_final_lite.gif
+│     ├─ dashboard_final_lite.gif
+│     ├─ fluxo_pricipal_final_lite.gif
+│     ├─ fTosco_final_lite.gif
+│     ├─ login_final_lite.gif
+│     └─ relatorios_final_lite.gif
 ├─ icons/
 │  ├─ icon-192.png
 │  ├─ icon-512.png
@@ -307,6 +339,9 @@ Na prática, isso reforça a leitura de que:
 
 - `docs/`
   - mapa técnico, roadmap e checklist final de regressão
+- `README-assets/`
+  - assets visuais da documentação
+  - GIFs e capturas usados no README
 - `src/app-shell/`
   - runtime pequeno da shell autenticada
 - `src/post-login/`
@@ -548,6 +583,8 @@ Gera um PDF com:
 - comparativos por conta em PDF usando colunas, linha de tendência e média da conta
 - tabelas segmentadas por mês
 
+No bloco `Outras contas`, a capa alterna dinamicamente entre uma ou duas colunas conforme o volume listado, preservando o espaço útil para nome e valor sem sacrificar legibilidade.
+
 ### Comparativos auxiliares
 
 Os comparativos continuam disponíveis no modal, mas deixaram de ser o caminho principal de leitura analítica.
@@ -574,6 +611,7 @@ Tipos utilizados no sistema:
 - os gráficos executivos de barras e os visuais principais do dashboard priorizam leitura absoluta do gasto
 - os comparativos por conta no PDF de período equilibram magnitude absoluta e tendência local usando colunas em zero, linha de conexão e linha média
 - os valores absolutos desses comparativos continuam explícitos em labels, para evitar leitura enganosa só pela inclinação da linha ou pela altura relativa da coluna
+- o gráfico principal do dashboard usa tooltip por clique e detalhe textual, em vez de depender de excesso de informação fixa na área do plot
 
 No dashboard, parte da visualização é feita de forma mais leve e customizada, sem depender de uma nova biblioteca pesada de BI.
 

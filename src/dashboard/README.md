@@ -88,7 +88,7 @@ Alguns graficos conversam entre si sem alterar o filtro real. Esse foco temporar
 
 Isso permite navegacao de estilo BI sem baguncar o recorte principal.
 
-O grafico principal de gasto mensal do recorte usa tooltip por clique e contextualiza o mesmo mes do ano anterior sem alterar o foco real dos demais blocos.
+O grafico principal de gasto mensal do recorte usa tooltip por clique, contextualiza o mesmo mes do ano anterior e lista as 5 contas mais pesadas daquele mes, sem alterar o foco real dos demais blocos.
 
 ---
 
@@ -97,12 +97,18 @@ O grafico principal de gasto mensal do recorte usa tooltip por clique e contextu
 - grafico principal de gasto mensal do recorte
 - cards de resumo
 - acerto entre pagadores
-- pagadores
+- balanco dos pagadores
 - top 5 contas + outros
 - ranking paginado
 - Pareto
 - evolucao por conta
 - categorias ao longo do tempo
+
+Detalhes do estado atual:
+
+- o KPI de `acerto entre pagadores` pode listar diretamente os repasses sugeridos no topo do dashboard
+- o bloco `balanco dos pagadores` mostra, para cada pagador, o total pago e quanto desse total saiu em contas divididas
+- a logica de acerto considera divisao igual entre todos os pagadores visiveis no recorte para as contas marcadas como divididas
 
 ---
 
@@ -126,7 +132,7 @@ O grafico principal de gasto mensal do recorte usa tooltip por clique e contextu
 2. validar filtros e resumo aplicado
 3. clicar em `Atualizar dashboard`
 4. validar cards, ranking, top 5 e visoes temporais
-5. validar sincronia entre ranking, top 5, evolucao e ultimos 12 meses
+5. validar sincronia entre ranking, top 5, evolucao e grafico principal do recorte
 6. voltar para `#/mes` e confirmar que o controle segue intacto
 
 ---
