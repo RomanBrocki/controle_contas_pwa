@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="manifest" href="./manifest.json?v=2026-04-03-14" />
+  <link rel="manifest" href="./manifest.json?v=2026-06-16-02" />
   <meta name="theme-color" content="#0f172a" />
 
   <title>Controle de Contas</title>
 
   <!-- Tailwind (utilitarios como flex/grid/gap/...) -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 
   <!-- React 18 + ReactDOM (UMD) -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
 
   <!-- Babel para transformar JSX no navegador (apenas para prototipo) -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
 
   <style>
     /* Evita flash branco ao carregar */
@@ -203,7 +203,7 @@
       });
 
       try {
-      const registration = await navigator.serviceWorker.register("./sw.js?v=2026-04-03-14");
+      const registration = await navigator.serviceWorker.register("./sw.js?v=2026-06-16-02");
         watchInstallingWorker(registration.installing);
         registration.addEventListener("updatefound", function () {
           watchInstallingWorker(registration.installing);

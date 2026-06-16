@@ -1,7 +1,7 @@
 // ===========================================
 // 🔌 Supabase Client - Controle de Contas PWA
 // ===========================================
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.108.2';
 
 const SUPABASE_URL = 'https://qfuzyueriamekyhqpgta.supabase.co';
 const SUPABASE_KEY =
